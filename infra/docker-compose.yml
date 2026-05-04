@@ -1,0 +1,94 @@
+name: nublestation
+
+networks:
+  nuble:
+    driver: bridge
+
+volumes:
+  postgres-data:
+  caddy-data:
+  caddy-config:
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      ORG_NAME: ${ORG_NAME}
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    networks:
+      - nuble
+    depends_on:
+      - console
+      - api
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:80"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  coredns:
+    image: coredns/coredns:1.11.3
+    restart: unless-stopped
+    ports:
+      - "53:53/udp"
+      - "53:53/tcp"
+    volumes:
+      - ./coredns/Corefile:/Corefile:ro
+    command: ["-conf", "/Corefile"]
+    networks:
+      - nuble
+    healthcheck:
+      test: ["CMD", "nslookup", "console.${ORG_NAME}.local", "127.0.0.1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - nuble
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  console:
+    image: nginx:alpine
+    restart: unless-stopped
+    volumes:
+      - ./placeholders/console:/usr/share/nginx/html:ro
+    networks:
+      - nuble
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:80"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  api:
+    image: nginx:alpine
+    restart: unless-stopped
+    volumes:
+      - ./placeholders/api:/usr/share/nginx/html:ro
+    networks:
+      - nuble
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:80"]
+      interval: 30s
+      timeout: 5s
+      retries: 3

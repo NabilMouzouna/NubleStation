@@ -1,0 +1,31 @@
+{
+    # Disable HTTPS for now — we're on HTTP for LAN simplicity
+    auto_https off
+}
+
+# Console — admin dashboard
+console.{$ORG_NAME}.local:80 {
+    reverse_proxy console:80
+    log {
+        output stdout
+    }
+}
+
+# API — single entry for all backend services
+api.{$ORG_NAME}.local:80 {
+    reverse_proxy api:80
+    log {
+        output stdout
+    }
+}
+
+# Wildcard for deployed app frontends (future)
+*.{$ORG_NAME}.local:80 {
+    @notReserved {
+        not host console.{$ORG_NAME}.local api.{$ORG_NAME}.local
+    }
+    handle @notReserved {
+        # Future: serve from /var/nuble/apps/{appname}/
+        respond "App not deployed yet" 404
+    }
+}
