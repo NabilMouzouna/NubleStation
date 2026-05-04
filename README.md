@@ -1,4 +1,4 @@
-# AppBase
+# NubleStation
 
 Self-hosted backend infrastructure for small organizations.
 
