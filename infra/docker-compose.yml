@@ -44,11 +44,6 @@ services:
     command: ["-conf", "/Corefile"]
     networks:
       - nuble
-    healthcheck:
-      test: ["CMD", "nslookup", "console.${ORG_NAME}.local", "127.0.0.1"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
 
   postgres:
     image: postgres:16-alpine
