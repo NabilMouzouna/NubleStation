@@ -51,7 +51,7 @@ echo
 POSTGRES_PASSWORD=$(openssl rand -hex 16)
 
 info "Writing .env..."
-cat > "$REPO_ROOT/.env" <<EOF
+cat > "$INFRA_DIR/.env" <<EOF
 ORG_NAME=$ORG_NAME
 HOST_IP=$HOST_IP
 ADMIN_PASSWORD=$ADMIN_PASSWORD
@@ -69,6 +69,12 @@ info "Generating CoreDNS config..."
 export ORG_NAME HOST_IP
 envsubst < "$INFRA_DIR/coredns/Corefile.template" > "$INFRA_DIR/coredns/Corefile"
 
+if grep -qE '\$\{?[A-Za-z_][A-Za-z0-9_]*\}?' "$INFRA_DIR/coredns/Corefile"; then
+    error "Corefile has unsubstituted variables — check Corefile.template syntax (use \${VAR}, not {\$VAR})"
+fi
+grep -q "^${ORG_NAME}\.local:53" "$INFRA_DIR/coredns/Corefile" || error "Corefile missing expected zone ${ORG_NAME}.local:53"
+grep -q "$HOST_IP" "$INFRA_DIR/coredns/Corefile" || error "Corefile missing expected host IP $HOST_IP"
+
 info "Adding /etc/hosts entries (requires sudo)..."
 HOSTS_LINE="$HOST_IP console.$ORG_NAME.local api.$ORG_NAME.local"
 if ! grep -q "$ORG_NAME.local" /etc/hosts 2>/dev/null; then
@@ -80,7 +86,7 @@ fi
 
 info "Starting NubleStation stack..."
 cd "$INFRA_DIR"
-docker compose --env-file "$REPO_ROOT/.env" up -d
+docker compose up -d
 
 info "Waiting for services to be healthy..."
 sleep 5
