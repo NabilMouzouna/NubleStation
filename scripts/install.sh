@@ -62,7 +62,6 @@ POSTGRES_DB=nuble
 
 NUBLE_API_IMAGE=nginx:alpine
 NUBLE_CONSOLE_IMAGE=nginx:alpine
-NUBLE_MDNS_IMAGE=nublestation/mdns-announcer:latest
 EOF
 
 info "Generating CoreDNS config..."

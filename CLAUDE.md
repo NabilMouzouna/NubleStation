@@ -48,7 +48,7 @@ This is a **Final Year Project (PFE)** in Network and Telecommunications Enginee
 3. **Apps are database rows, not containers.** Creating an app inserts a row + issues an API key. No process spawned.
 4. **Frontends are static files served by Caddy.** Devs build SPAs locally and upload `dist/` folders. No SSR.
 5. **PostgreSQL, not SQLite.** Multi-tenant concurrent writes need real concurrency.
-6. **DNS: mDNS primary, CoreDNS fallback.** mDNS handles ~85% of devices; CoreDNS covers Android/corporate networks via router DNS pointing at the host.
+6. **DNS: CoreDNS only.** Router DNS (or per-device hosts file) must point at the host. mDNS removed — every device requires LAN DNS configuration.
 7. **Caddy for reverse proxy.** Auto-HTTPS, simple config, built-in subdomain routing.
 8. **Custom org domain.** User picks org name at install; everything becomes `*.{org}.local`.
 9. **Authorization enforced at platform layer.** `user_app_access` table + middleware. Never delegated to developers.
@@ -66,7 +66,6 @@ LAN — *.nuble.local
       └── Docker Compose Stack
             ├── Caddy           (reverse proxy, port 80/443)
             ├── CoreDNS         (DNS authority for *.nuble.local, port 53)
-            ├── mDNS Announcer  (broadcasts on LAN)
             ├── API Server      (TypeScript: auth, db, storage, deploy modules in ONE container)
             ├── Console (UI)    (Next.js admin dashboard)
             └── PostgreSQL      (tenant-scoped data)
@@ -93,9 +92,10 @@ Phone → HTTP request (port 80) → Caddy → forwards to right container
 
 ### DNS Strategy on the LAN
 
-- **mDNS** for zero-config (Apple, Linux, Windows 10+)
-- **CoreDNS** for Android and corporate networks — requires router DNS pointed at host IP
-- **DHCP reservation** on router to lock host's IP to its MAC (one-time clinic IT setup)
+- **CoreDNS** is the sole resolver for `*.{org}.local` — every device must point at the host for DNS
+- **Router DNS** configured to forward queries to the host (or set as primary DNS via DHCP option 6) — one-time clinic IT setup, required for all devices
+- **DHCP reservation** on router to lock host's IP to its MAC — required so the address baked into Corefile stays valid
+- **Per-device fallback** (hosts file edit) only for testing or when router config isn't possible
 
 ---
 
@@ -139,7 +139,6 @@ These 4 services are **modules in the same TypeScript application**, not separat
 | Auth | Lucia or custom (sessions + API keys) |
 | Reverse proxy | Caddy 2 |
 | DNS | CoreDNS |
-| Service discovery | mDNS (Avahi-based) |
 | Container runtime | Docker + Compose |
 | Testing | Vitest + Playwright |
 | CI | GitHub Actions |
@@ -154,8 +153,7 @@ These 4 services are **modules in the same TypeScript application**, not separat
 nublestation/
 ├── apps/                        ← things that become Docker containers
 │   ├── api/                     ← TypeScript API server (auth/db/storage/deploy)
-│   ├── console/                 ← Next.js admin dashboard
-│   └── mdns-announcer/          ← small mDNS broadcaster
+│   └── console/                 ← Next.js admin dashboard
 ├── packages/                    ← things that become npm packages
 │   ├── sdk/                     ← @nuble/sdk — used by app developers
 │   ├── cli/                     ← @nuble/cli — the `nuble` command
@@ -191,7 +189,7 @@ nublestation/
 1. **Install** — `curl -sSL https://.../install.sh | bash`. Asks for org name + admin password. Detects host IP. Writes `.env`. Starts Compose. Prints `✅ Open http://console.{org}.local`.
 2. **Admin setup** — admin opens `console.{org}.local`, creates an app "tasks" → reserves `tasks.{org}.local` and issues an API key.
 3. **Developer build & deploy** — developer codes locally with `@nuble/sdk`, runs `nuble deploy --app tasks`. CLI zips `dist/` and uploads via API. Caddy serves it.
-4. **End user** — nurse opens `tasks.{org}.local` on tablet, mDNS resolves it, app loads, SSO works across all org apps.
+4. **End user** — nurse's tablet (configured to use the host as DNS, via router) opens `tasks.{org}.local`, CoreDNS resolves it, app loads, SSO works across all org apps.
 
 ---
 
@@ -213,7 +211,7 @@ nublestation/
 ## Working Style for Claude Code
 
 - **Be concise. No fluff, no over-explanation.** The developer is fast and understands the architecture — assume context.
-- **TypeScript only** unless infra requires another language (mDNS announcer might be Go).
+- **TypeScript only** for application code.
 - **Prefer pre-existing offline solutions** (e.g., Lucia for auth, not building from scratch).
 - **Mention limitations, costs, trade-offs upfront** before recommending an approach.
 - **Always update or create an ADR** in `docs/adr/` when making a significant choice — 2-3 sentences of rationale, named `00X-decision-name.md`.
@@ -226,7 +224,7 @@ nublestation/
 
 **Networking & DevOps shell** (Weeks 5-7 of project plan):
 1. Caddy reverse proxy + subdomain routing
-2. mDNS + CoreDNS for `*.local` resolution
+2. CoreDNS for `*.local` resolution (router DNS pointed at host)
 3. Docker Compose orchestrating the full stack with placeholders
 4. CLI scaffold (init, status, deploy)
 5. Health checks across services

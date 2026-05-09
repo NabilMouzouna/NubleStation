@@ -1,4 +1,4 @@
-# AppBase
+# NubleStation
 
 Self-hosted backend infrastructure for small organizations.
 
@@ -10,7 +10,7 @@ Coming soon — see `scripts/install.sh`.
 
 ## Repository structure
 
-- `apps/` — services that become Docker containers (API, Console, mDNS announcer)
+- `apps/` — services that become Docker containers (API, Console)
 - `packages/` — npm-publishable libraries (SDK, CLI, shared types)
 - `infra/` — infrastructure config (docker-compose, Caddy, CoreDNS)
 - `scripts/` — automation (install script)
