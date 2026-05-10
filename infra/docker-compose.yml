@@ -67,6 +67,7 @@ services:
       context: ..
       dockerfile: apps/console/Dockerfile
     image: nublestation/console:dev
+    pull_policy: never
     restart: unless-stopped
     environment:
       NODE_ENV: production
