@@ -77,7 +77,7 @@ EOF
 
 info "Generating CoreDNS config..."
 export ORG_NAME HOST_IP
-envsubst < "$INFRA_DIR/coredns/Corefile.template" > "$INFRA_DIR/coredns/Corefile"
+envsubst < "$INFRA_DIR/coredns/Corefile.template" | tr -d '\r' > "$INFRA_DIR/coredns/Corefile"
 
 if grep -qE '\$\{?[A-Za-z_][A-Za-z0-9_]*\}?' "$INFRA_DIR/coredns/Corefile"; then
     error "Corefile has unsubstituted variables — check Corefile.template syntax (use \${VAR}, not {\$VAR})"
