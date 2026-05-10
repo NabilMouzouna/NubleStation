@@ -3,9 +3,9 @@
     auto_https off
 }
 
-# Console — admin dashboard
+# Console — admin dashboard (Next.js standalone listens on 3000)
 console.{$ORG_NAME}.local:80 {
-    reverse_proxy console:80
+    reverse_proxy console:3000
     log {
         output stdout
     }

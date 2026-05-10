@@ -1,0 +1,41 @@
+/*
+ * NubleStation design tokens — shared across all consoles/apps.
+ * Source: ADR 002 (docs/adr/002-console-design-system.md).
+ * Consumers: apps import this file from their globals.css alongside `@import "tailwindcss"`.
+ */
+
+@theme {
+  /* Brand */
+  --color-primary: #0064e0;
+  --color-primary-deep: #0457cb;
+  --color-primary-foreground: #ffffff;
+
+  /* Surface */
+  --color-background: #ffffff;
+  --color-foreground: #0a1317;
+  --color-card: #ffffff;
+  --color-card-foreground: #1c1e21;
+  --color-muted: #f1f4f7;
+  --color-muted-foreground: #5d6c7b;
+
+  /* Lines & focus */
+  --color-border: #dee3e9;
+  --color-input: #ced0d4;
+  --color-ring: #0064e0;
+
+  /* Semantic */
+  --color-success: #31a24c;
+  --color-attention: #f2a918;
+  --color-warning: #f7b928;
+  --color-destructive: #e41e3f;
+  --color-destructive-foreground: #ffffff;
+
+  /* Radius (ADR 002 — pill + rounded-3xl card geometry are the signature) */
+  --radius-xs: 2px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 16px;
+  --radius-2xl: 24px;
+  --radius-3xl: 32px;
+}

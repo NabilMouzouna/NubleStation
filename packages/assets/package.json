@@ -1,0 +1,10 @@
+{
+  "name": "@repo/assets",
+  "version": "0.0.0",
+  "private": true,
+  "exports": {
+    "./logo.svg": "./logo.svg",
+    "./logo-light.svg": "./logo-light.svg",
+    "./icon.svg": "./icon.svg"
+  }
+}

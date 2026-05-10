@@ -1,0 +1,22 @@
+<svg width="680" height="320" viewBox="0 0 680 320" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="g1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1F4FE0"/>
+      <stop offset="100%" stop-color="#9B5BFF"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Cloud on a base: cloud, but grounded on your hardware -->
+  <g transform="translate(125, 105)">
+    <!-- cloud body -->
+    <path d="M 30 75 C 8 75, 5 50, 25 45 C 18 18, 55 10, 72 32 C 85 12, 120 18, 120 48 C 142 48, 148 75, 128 75 Z" fill="url(#g1)"/>
+    <!-- base -->
+    <line x1="5" y1="98" x2="148" y2="98" stroke="url(#g1)" stroke-width="6" stroke-linecap="round"/>
+    <!-- supports -->
+    <line x1="40" y1="78" x2="40" y2="98" stroke="url(#g1)" stroke-width="3" stroke-linecap="round"/>
+    <line x1="110" y1="78" x2="110" y2="98" stroke="url(#g1)" stroke-width="3" stroke-linecap="round"/>
+  </g>
+
+  <text x="305" y="175" style="font-family: -apple-system, system-ui, sans-serif; font-size: 44px; font-weight: 500; letter-spacing: -1px; fill: #0a1317;">Nuble<tspan style="font-weight: 400; fill: #5d6c7b;">Station</tspan></text>
+  <text x="307" y="208" style="font-family: -apple-system, system-ui, sans-serif; font-size: 11px; letter-spacing: 3.5px; fill: #5d6c7b;">PRIVATE · LOCAL · YOURS</text>
+</svg>
