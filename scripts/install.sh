@@ -25,6 +25,9 @@ if grep -qi microsoft /proc/version 2>/dev/null; then
     IS_WSL=1
 fi
 
+HOST_IFACE=""
+HOST_MAC=""
+
 if [ -n "${HOST_IP:-}" ]; then
     info "Using HOST_IP from environment: $HOST_IP"
 elif [ "$IS_WSL" = "1" ]; then
@@ -35,11 +38,19 @@ elif [ "$IS_WSL" = "1" ]; then
     fi
     warn "WSL2 limitation: port 53/UDP from CoreDNS may not be reachable from other LAN devices."
 else
-    HOST_IP=$(ip route get 1.1.1.1 2>/dev/null | awk '{print $7; exit}' || hostname -I 2>/dev/null | awk '{print $1}' || echo "")
+    ROUTE_INFO=$(ip route get 1.1.1.1 2>/dev/null || true)
+    if [ -n "$ROUTE_INFO" ]; then
+        HOST_IFACE=$(echo "$ROUTE_INFO" | awk '{for(i=1;i<=NF;i++) if($i=="dev"){print $(i+1); exit}}')
+        HOST_IP=$(echo "$ROUTE_INFO" | awk '{for(i=1;i<=NF;i++) if($i=="src"){print $(i+1); exit}}')
+    fi
+    [ -z "$HOST_IP" ] && HOST_IP=$(hostname -I 2>/dev/null | awk '{print $1}' || echo "")
+    if [ -n "$HOST_IFACE" ] && [ -r "/sys/class/net/$HOST_IFACE/address" ]; then
+        HOST_MAC=$(cat "/sys/class/net/$HOST_IFACE/address")
+    fi
 fi
 
 [ -z "$HOST_IP" ] && error "Could not detect host IP. Set it manually via HOST_IP env var."
-info "Host IP: $HOST_IP"
+info "Host IP: $HOST_IP${HOST_IFACE:+ (interface: $HOST_IFACE)}${HOST_MAC:+, MAC: $HOST_MAC}"
 
 read -p "Organization name (default: nuble): " ORG_NAME
 ORG_NAME=${ORG_NAME:-nuble}
@@ -100,5 +111,27 @@ echo "  Status:   docker compose -f $INFRA_DIR/docker-compose.yml ps"
 echo "  Logs:     docker compose -f $INFRA_DIR/docker-compose.yml logs -f"
 echo "  Stop:     docker compose -f $INFRA_DIR/docker-compose.yml down"
 echo
-warn "From other LAN devices, configure your router DNS to point at $HOST_IP"
-warn "Or add to each device's hosts file: $HOSTS_LINE"
+echo "─────────────────────────────────────────────────────────────"
+echo -e "${YELLOW}⚠ Router configuration required for LAN devices${NC}"
+echo "─────────────────────────────────────────────────────────────"
+echo
+echo "  All devices on the LAN must use this host as their DNS server."
+echo "  Configure both items below in your router's admin UI:"
+echo
+echo "  1. DHCP RESERVATION  (so this host's IP never changes)"
+echo "     IP address:  $HOST_IP"
+if [ -n "$HOST_MAC" ]; then
+    echo "     MAC address: $HOST_MAC"
+    [ -n "$HOST_IFACE" ] && echo "     Interface:   $HOST_IFACE"
+else
+    echo "     MAC address: (run \`ip link show\` on the host to find the MAC of the LAN interface)"
+fi
+echo
+echo "  2. DHCP DNS OPTION (so LAN devices resolve *.$ORG_NAME.local)"
+echo "     Primary DNS: $HOST_IP"
+echo "     (Look for: 'DHCP DNS', 'DNS server', or 'Option 6' in router settings)"
+echo
+echo "  Per-device fallback (no router access): add this line to each"
+echo "  device's hosts file:"
+echo "     $HOSTS_LINE"
+echo "─────────────────────────────────────────────────────────────"
