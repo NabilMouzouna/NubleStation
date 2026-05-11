@@ -7,7 +7,7 @@ ${ORG_NAME}.local:53 {
     errors
 }
 
-. :53 {
+.:53 {
     forward . 8.8.8.8 1.1.1.1
     cache 30
     log
