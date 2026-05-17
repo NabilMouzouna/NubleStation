@@ -212,6 +212,16 @@ SELECT * FROM tenant_data.tasks;  -- RLS auto-applies
 COMMIT;  -- variable cleared, connection safe
 ```
 
+### Missing Tenant Context: Fail Closed (Decided)
+
+If a query reaches a `tenant_data` table **without** `app.current_tenant`
+having been set, the RLS predicate `current_setting('app.current_tenant')::uuid`
+**raises an error** rather than returning zero rows. This is intentional and
+correct: a query with no tenant context is a *bug*, and a loud failure surfaces
+it immediately instead of masking it as an empty result. Use the graceful form
+`current_setting('app.current_tenant', true)` **only** in the rare places where
+a null tenant is a legitimate state — never on the tenant-isolation path.
+
 ---
 
 ## 6. The Developer Experience: Schema-as-Code
@@ -671,7 +681,7 @@ Avoid building from scratch where battle-tested OSS exists. Recommendations:
 
 | Component | Recommendation | Why |
 |---|---|---|
-| Web framework | **Hono** or **Fastify** | Hono is lighter (Cloudflare-grade perf); Fastify has wider plugin ecosystem |
+| Web framework | **Hono** (decided) | Minimal, zero-dep, web-standard `Request`/`Response` → SSE maps cleanly (Phase 5); first-class TS inference into the SDK. Fastify's plugin ecosystem unnecessary for one narrow gateway. |
 | Validation | **Zod** | Schema-first, generates TS types, integrates with Drizzle |
 | Auto-REST inspiration | Read **PostgREST** source | Don't embed it (Haskell), but its query syntax is the right reference |
 

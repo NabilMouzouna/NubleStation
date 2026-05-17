@@ -132,13 +132,14 @@ These 4 services are **modules in the same TypeScript application**, not separat
 | Language | TypeScript |
 | Package manager | pnpm |
 | Monorepo | Turborepo |
-| API framework | Hono or Fastify (TBD) |
+| API framework | Hono (decided — see ADR 003 / roadmap) |
 | Frontend (Console) | Next.js 14 |
 | Database | PostgreSQL 16 |
-| ORM | Drizzle or Prisma (TBD) |
+| ORM | Drizzle (decided — see ADR 003) |
+| Cache | Redis 7 (API-key resolution; see ADR 003 §15) |
 | Auth | Lucia or custom (sessions + API keys) |
 | Reverse proxy | Caddy 2 |
-| DNS | CoreDNS |
+| DNS | CoreDNS only (mDNS removed — decision #6) |
 | Container runtime | Docker + Compose |
 | Testing | Vitest + Playwright |
 | CI | GitHub Actions |
