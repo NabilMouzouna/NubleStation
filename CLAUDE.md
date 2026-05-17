@@ -66,8 +66,14 @@ LAN — *.nuble.local
       └── Docker Compose Stack
             ├── Caddy           (reverse proxy, port 80/443)
             ├── CoreDNS         (DNS authority for *.nuble.local, port 53)
-            ├── API Server      (TypeScript: auth, db, storage, deploy modules in ONE container)
+            ├── API Gateway     (the only service exposed on the LAN; auth/key resolution, routing)
+            ├── Auth Service    (own container — one process per container)
+            ├── DB Service      (own container)
+            ├── Storage Service (own container)
+            ├── Deploy Service  (own container)
             ├── Console (UI)    (Next.js admin dashboard)
+            ├── PgBouncer       (transaction-pooling in front of Postgres)
+            ├── Redis           (API-key cache, sub-ms lookups)
             └── PostgreSQL      (tenant-scoped data)
 ```
 
@@ -78,7 +84,7 @@ LAN — *.nuble.local
 | URL | Routes To |
 |---|---|
 | `console.{org}.local` | Admin dashboard (Next.js) |
-| `api.{org}.local` | API server (single entry point for all 4 services) |
+| `api.{org}.local` | API Gateway (single exposed entry point; routes to internal services) |
 | `{appname}.{org}.local` | Static files of deployed frontend |
 
 ### How Caddy and CoreDNS Relate
@@ -110,7 +116,7 @@ api.{org}.local/storage/*  → storage module
 api.{org}.local/deploy/*   → deployment module
 ```
 
-These 4 services are **modules in the same TypeScript application**, not separate containers. They share connection pools, middleware, and the auth/API-key validation layer. Postgres is in its own container because it's a different program.
+These 4 services are **separate containers** (one process per container — Docker best practice), reachable only on the internal Docker network. Only the **API Gateway** is exposed on the LAN; it resolves the API key → `app_id`, authenticates the session, and forwards to the right service over the internal network with **signed internal headers** (HMAC, shared secret in `.env`) so a compromised app container can't spoof another tenant. Services do not share a process or a connection pool with each other — they share only the Postgres instance (via PgBouncer). See ADR 003 §14 for the authoritative topology.
 
 **Reason for one origin:** avoids CORS hell, simplifies SDK config, matches Supabase/Firebase convention.
 
@@ -135,8 +141,11 @@ These 4 services are **modules in the same TypeScript application**, not separat
 | API framework | Hono or Fastify (TBD) |
 | Frontend (Console) | Next.js 14 |
 | Database | PostgreSQL 16 |
-| ORM | Drizzle or Prisma (TBD) |
-| Auth | Lucia or custom (sessions + API keys) |
+| Connection pooler | PgBouncer (transaction pooling) |
+| Cache | Redis 7 (API-key resolution) |
+| ORM | Drizzle (decided — ADR 003 §15) |
+| SQL validation | `pg-query-parser` (never regex SQL) |
+| Auth | Lucia v3 + `oidc-provider` (sessions + API keys + SSO) |
 | Reverse proxy | Caddy 2 |
 | DNS | CoreDNS |
 | Container runtime | Docker + Compose |
@@ -151,9 +160,13 @@ These 4 services are **modules in the same TypeScript application**, not separat
 
 ```
 nublestation/
-├── apps/                        ← things that become Docker containers
-│   ├── api/                     ← TypeScript API server (auth/db/storage/deploy)
-│   └── console/                 ← Next.js admin dashboard
+├── apps/                        ← each dir = one Docker container (one process per container)
+│   ├── gateway/                 ← API Gateway: only exposed service; key/session auth, routing
+│   ├── auth/                    ← Auth service (sessions, API keys, OIDC/SSO)
+│   ├── db/                      ← Database service (auto-REST, RLS, migrations) — ADR 003
+│   ├── storage/                 ← Storage service (file bytes + metadata)
+│   ├── deploy/                  ← Deploy service (frontend bundle uploads)
+│   └── console/                 ← Next.js admin dashboard (consumes /v1/admin/*)
 ├── packages/                    ← things that become npm packages
 │   ├── sdk/                     ← @nublestation/sdk — used by app developers
 │   ├── cli/                     ← @nublestation/cli — the `nuble` command
