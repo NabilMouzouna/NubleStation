@@ -222,7 +222,7 @@ The developer writes one file in their NubleStation app project:
 
 ```typescript
 // schema.ts — single source of truth
-import { defineSchema, t } from '@nublestation/schema';
+import { defineSchema, t } from '@nublestationstation/schema';
 
 export default defineSchema({
   tasks: {

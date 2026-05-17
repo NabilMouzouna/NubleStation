@@ -1,5 +1,5 @@
 {
-  "name": "@repo/ui",
+  "name": "@nublestation/ui",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -24,8 +24,8 @@
     "lucide-react": "^0.468.0"
   },
   "devDependencies": {
-    "@repo/eslint-config": "workspace:*",
-    "@repo/typescript-config": "workspace:*",
+    "@nublestation/eslint-config": "workspace:*",
+    "@nublestation/typescript-config": "workspace:*",
     "@types/node": "^22.15.3",
     "@types/react": "19.2.2",
     "@types/react-dom": "19.2.2",

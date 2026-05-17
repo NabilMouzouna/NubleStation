@@ -11,11 +11,11 @@
     "prefix": ""
   },
   "aliases": {
-    "components": "@repo/ui/components",
-    "utils": "@repo/ui/lib/utils",
-    "ui": "@repo/ui/components/ui",
-    "lib": "@repo/ui/lib",
-    "hooks": "@repo/ui/hooks"
+    "components": "@nublestation/ui/components",
+    "utils": "@nublestation/ui/lib/utils",
+    "ui": "@nublestation/ui/components/ui",
+    "lib": "@nublestation/ui/lib",
+    "hooks": "@nublestation/ui/hooks"
   },
   "iconLibrary": "lucide"
 }

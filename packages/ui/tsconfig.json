@@ -1,5 +1,5 @@
 {
-  "extends": "@repo/typescript-config/react-library.json",
+  "extends": "@nublestation/typescript-config/react-library.json",
   "compilerOptions": {
     "module": "ESNext",
     "moduleResolution": "Bundler",

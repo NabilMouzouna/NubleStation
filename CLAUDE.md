@@ -23,7 +23,7 @@ This is a **Final Year Project (PFE)** in Network and Telecommunications Enginee
 
 - The product is **NubleStation** (was originally "AppBase" but that's taken on npm/GitHub)
 - Default organization domain placeholder is `nuble.local`
-- npm scope: TBD (likely `@nuble/...`)
+- npm scope: TBD (likely `@nublestation/...`)
 - Docker images: GHCR under the developer's GitHub namespace
 
 ---
@@ -155,8 +155,8 @@ nublestation/
 │   ├── api/                     ← TypeScript API server (auth/db/storage/deploy)
 │   └── console/                 ← Next.js admin dashboard
 ├── packages/                    ← things that become npm packages
-│   ├── sdk/                     ← @nuble/sdk — used by app developers
-│   ├── cli/                     ← @nuble/cli — the `nuble` command
+│   ├── sdk/                     ← @nublestation/sdk — used by app developers
+│   ├── cli/                     ← @nublestation/cli — the `nuble` command
 │   └── shared/                  ← shared types/utils
 ├── infra/                       ← infrastructure config (not code)
 │   ├── docker-compose.yml
@@ -188,7 +188,7 @@ nublestation/
 
 1. **Install** — `curl -sSL https://.../install.sh | bash`. Asks for org name + admin password. Detects host IP. Writes `.env`. Starts Compose. Prints `✅ Open http://console.{org}.local`.
 2. **Admin setup** — admin opens `console.{org}.local`, creates an app "tasks" → reserves `tasks.{org}.local` and issues an API key.
-3. **Developer build & deploy** — developer codes locally with `@nuble/sdk`, runs `nuble deploy --app tasks`. CLI zips `dist/` and uploads via API. Caddy serves it.
+3. **Developer build & deploy** — developer codes locally with `@nublestation/sdk`, runs `nuble deploy --app tasks`. CLI zips `dist/` and uploads via API. Caddy serves it.
 4. **End user** — nurse's tablet (configured to use the host as DNS, via router) opens `tasks.{org}.local`, CoreDNS resolves it, app loads, SSO works across all org apps.
 
 ---
