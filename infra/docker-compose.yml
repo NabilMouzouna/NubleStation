@@ -63,21 +63,14 @@ services:
       retries: 3
 
   console:
-    build:
-      context: ..
-      dockerfile: apps/console/Dockerfile
-    image: nublestation/console:dev
-    pull_policy: never
+    image: nginx:alpine
     restart: unless-stopped
-    environment:
-      NODE_ENV: production
-      NEXT_TELEMETRY_DISABLED: "1"
-      PORT: "3000"
-      HOSTNAME: "0.0.0.0"
+    volumes:
+      - ./placeholders/console:/usr/share/nginx/html:ro
     networks:
       - nuble
     healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3000"]
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:80"]
       interval: 30s
       timeout: 5s
       retries: 3
