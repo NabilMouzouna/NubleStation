@@ -1,4 +1,4 @@
-# ADR-001: Database Service Architecture
+# ADR 003 — Database Service Architecture
 
 **Status:** Accepted
 **Date:** 2026-05-16
@@ -222,7 +222,7 @@ The developer writes one file in their NubleStation app project:
 
 ```typescript
 // schema.ts — single source of truth
-import { defineSchema, t } from '@nublestationstation/schema';
+import { defineSchema, t } from '@nublestation/schema';
 
 export default defineSchema({
   tasks: {
@@ -710,7 +710,7 @@ Avoid building from scratch where battle-tested OSS exists. Recommendations:
 | Component | Recommendation | Why |
 |---|---|---|
 | Reverse proxy | **Caddy 2** | Already in your stack; auto-HTTPS for LAN |
-| DNS | **CoreDNS** + mDNS (Avahi) | Already in your stack |
+| DNS | **CoreDNS** only | Already in your stack; mDNS removed (see ADR — DNS decision) |
 
 ### Observability (v1 Minimum)
 
@@ -1045,4 +1045,4 @@ The vertical-slice path (recommended): build one resource end to end before scal
 
 ---
 
-*End of ADR-001.*
+*End of ADR 003.*
