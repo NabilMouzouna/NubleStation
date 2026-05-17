@@ -56,6 +56,10 @@ This document captures the agreed-upon architecture for the Database Service, in
 | Complex queries | **Three escape levels** (computed, named, raw) | Power with governance |
 | Custom logic | **Deferred to v2** | Scope discipline; covered by named queries for now |
 | GraphQL | **Deferred to v2** | REST + SSE achieves the same DX at lower complexity |
+| Service topology | **One process per container; only the API Gateway is exposed** | Docker best practice; gateway is the single trust boundary on the LAN |
+| Gateway → service auth | **Signed internal headers over the Docker network** | App containers cannot spoof `app_id`/user identity |
+| API key format | **`nbl_<key_id>.<secret>`** | Indexed `key_id` lookup, Argon2-verified secret (hash is not directly queryable) |
+| Client transactions | **Deferred to v2 (batch endpoint)** | Per-request transaction is enough for v1 CRUD |
 
 ---
 
@@ -118,18 +122,20 @@ Postgres (one instance, one connection pool, one backup)
 │   ├── organizations             (single row — the clinic)
 │   ├── users                     (every human: admins, devs, end users)
 │   ├── apps                      (one row per app the admin creates)
-│   ├── api_keys                  (hashed, scoped to one app)
+│   ├── api_keys                  (key_id indexed + Argon2 secret_hash)
 │   ├── user_app_access           (which user can use which app + role)
+│   ├── app_tables                (registry: which custom table belongs to which app)
 │   ├── deployments               (frontend versions per app)
-│   ├── migrations                (applied SQL migrations log)
+│   ├── migrations                (applied app SQL migrations log)
+│   ├── schema_version            (NubleStation's own platform-schema version)
 │   └── audit_log                 (compliance trail)
 │
-└── schema: tenant_data           [RLS ON for every table]
-    ├── users (VIEW)              (filtered subset of platform.users)
-    ├── files (VIEW)              (filtered subset of platform.files)
-    ├── notifications (VIEW)      (filtered subset of platform.notifications)
-    ├── [app-defined tables]      (tasks, records, invoices, etc.)
-    └── ... each with app_id and auto-generated RLS policy
+└── schema: tenant_data
+    ├── users (VIEW)              [no RLS — filtering is in the view's WHERE]
+    ├── files (VIEW)              [no RLS — filtering is in the view's WHERE]
+    ├── notifications (VIEW)      [no RLS — filtering is in the view's WHERE]
+    ├── [app-defined tables]      [RLS ON] (tasks, records, invoices, etc.)
+    └── ... each base table has app_id + auto-generated RLS policy
 ```
 
 ### Why One Database, Two Schemas
@@ -151,7 +157,10 @@ Every human who logs in. One identity, many app accesses. Holds email, hashed pa
 Each app the admin creates. Holds UUID, name (used as subdomain), display name, owning developer, creation date.
 
 #### `api_keys`
-Credentials a developer uses from the SDK. Stores **only the hash** (Argon2), never plaintext. Linked to one app, with optional label and expiration.
+Credentials a developer uses from the SDK. Keys are issued in the format **`nbl_<key_id>.<secret>`**, where `key_id` is a short random public identifier and `secret` is a long random string. The table stores `key_id` (plaintext, **indexed** — this is what the gateway looks up) and `secret_hash` (Argon2 of the secret, never the plaintext). Resolution: split the key on `.`, look up the row by `key_id`, then Argon2-verify the presented `secret` against `secret_hash`. An Argon2 hash cannot be queried directly (per-record salt), so a lookup-able `key_id` is mandatory. Linked to one app, with optional label and expiration.
+
+#### `app_tables`
+The registry of which custom tables belong to which app. Holds `app_id`, `table_name`, and the serialized schema JSON for that resource. The REST router consults this table — **not** `information_schema` — so each app only ever sees and routes to its own tables, never another app's table names.
 
 #### `user_app_access`
 The authorization matrix. Rows say *"User X can access App Y with role Z"*. Critical for clinic compliance.
@@ -168,6 +177,10 @@ Every sensitive action (login, permission change, query execution at Level 2/3).
 ### Tenant Tables
 
 App developers define their own tables in `tenant_data`. The schema DSL injects `app_id UUID NOT NULL` automatically. RLS policy is auto-generated. The developer never writes raw SQL.
+
+**Table ownership model — shared physical tables, RLS-partitioned.** A resource name (e.g. `tasks`) maps to **one physical table** `tenant_data.tasks`; every app's rows coexist there, separated by `app_id` and RLS. Resource names are therefore **reserved org-wide**: the first app to push a `tasks` schema defines its columns, and a second app pushing a *compatible* `tasks` schema reuses the same table. An incompatible definition for an already-claimed name is rejected at push time with a clear error (the developer renames, e.g. `clinic_tasks`). This is recorded in `platform.app_tables`. The alternative — physically separate per-app tables — was rejected because it explodes the table count on a clinic mini-PC and complicates the migration runner; RLS already provides the isolation that separate tables would.
+
+Rationale for org-wide reservation over per-app physical isolation: a single clinic install hosts a small number of apps with a curated admin, so name collisions are rare and a rename is a cheaper cost than carrying N physical copies of every common table.
 
 ---
 
@@ -259,6 +272,20 @@ When the developer runs `nuble db push --app tasks`:
 2. **RLS policy** auto-attached to each new table
 3. **TypeScript types** generated and saved locally (`.nuble/types.ts`) for SDK autocompletion
 
+### How `t.ref('users')` Resolves (FK vs. View)
+
+`tenant_data.users` is a **view**, and PostgreSQL forbids a foreign key that references a view. So `t.ref('users')` does **not** create an FK to `tenant_data.users`. The DSL compiles it to:
+
+1. A real foreign key on the **base table**: `assignee UUID REFERENCES platform.users(id)` (cross-schema FKs are legal).
+2. An **auto-generated row trigger** enforcing that the referenced user actually has access to the current app:
+
+```sql
+-- BEFORE INSERT OR UPDATE on tenant_data.tasks
+-- rejects the row if (assignee, current_tenant) ∉ platform.user_app_access
+```
+
+This closes the gap that an FK alone leaves open: without the trigger, a developer could assign a task to a `platform.users` row that has no `user_app_access` entry for this app. The view is the **read path** (apps see only their permitted users); the platform table + trigger is the **referential-integrity path**. The developer sees neither — they just write `t.ref('users')`.
+
 ### Why Not Let the Developer Use Raw Drizzle?
 
 Drizzle is a SQL builder that runs against a Postgres connection. If used in the frontend, the browser would need direct database credentials (catastrophic). The DSL serializes to JSON over HTTP; only the server speaks SQL.
@@ -298,6 +325,10 @@ await nuble.files.upload(blob, { folder: 'patient-records', access: 'private' })
 
 These map to platform schema tables but are exposed to apps through **views in `tenant_data`** that auto-filter by `user_app_access`. The app developer only sees users/files relevant to their app.
 
+**Reserved resource names.** `users`, `files`, `notifications`, and `audit_log` are reserved. A `schema.ts` that defines a custom resource with one of these names is rejected at `nuble db push` with an explicit error instructing the developer to rename (the SDK already separates the namespaces: built-ins are `nuble.users.*`, custom tables are `nuble.db.*`).
+
+**`nuble.users.create()` grants access to the calling app.** Creating a user from app X inserts the `platform.users` row **and** a `platform.user_app_access(user_id, app_id = X, role = default)` row in the same transaction. Without this, the app could not see the user it just created (the `tenant_data.users` view filters by `user_app_access`). Granting access to *other* apps is an explicit, separately-authorized admin action — never implicit.
+
 ### Tier 2: Custom Resources (Amplify Gen 2-style)
 
 Anything app-specific. Defined in `schema.ts`, auto-exposed in the SDK.
@@ -329,6 +360,16 @@ await nuble.db.tasks.aggregate({ count: true, where: { status: 'done' } });
 
 Each request from the SDK flows through these layers, in order:
 
+### Layer 0 — Gateway Auth (Before the DB Service)
+
+This happens in the **API Gateway container**, not the database service. The gateway is the only container exposed on the LAN; the database service is reachable only on the internal Docker network. The gateway:
+
+1. Extracts the API key, splits `nbl_<key_id>.<secret>`, resolves `key_id → app_id` (Redis cache, fallback `platform.api_keys`), Argon2-verifies the secret.
+2. Resolves the end-user session (cookie/OIDC token) to a `user_id`.
+3. Forwards the request to the database service over the internal network with **signed internal headers** (`X-Nuble-App-Id`, `X-Nuble-User-Id`, `X-Nuble-Sig` = HMAC over the payload using a shared secret from `.env`).
+
+The database service **trusts these headers only if the HMAC verifies**, so a compromised app container cannot forge another tenant's `app_id`. The REST router (Layer 1) never sees a raw API key.
+
 ### Layer 1 — REST Router (Public Face)
 
 Auto-generated endpoints per table:
@@ -341,7 +382,7 @@ Auto-generated endpoints per table:
 | PATCH | `/v1/db/{table}/:id` | Update |
 | DELETE | `/v1/db/{table}/:id` | Delete |
 
-No API code written by the developer. The router reads `information_schema.tables` to know what's exposed.
+No API code written by the developer. The router reads **`platform.app_tables` scoped to the caller's `app_id`** (never `information_schema`) to know what's exposed — so one app can never discover or route to another app's table names.
 
 ### Layer 2 — Query Validator (Safety Net)
 
@@ -400,6 +441,19 @@ Inspired by PostgREST:
 ?limit=20&offset=40            pagination
 ?select=id,title,status        partial response
 ```
+
+### JSONB Filters
+
+JSONB is one of the five reasons Postgres was chosen, so the query interface must reach into it. Supported operators on a `t.json()` column `metadata`:
+
+```
+?metadata->>status=eq.urgent       text value at key 'status' equals 'urgent'
+?metadata->priority=eq.1           numeric value at key 'priority'
+?metadata=cs.{"tag":"vip"}         metadata contains this JSON (Postgres @>)
+?metadata?key=has.assignee         key 'assignee' exists (Postgres ? operator)
+```
+
+The validator whitelists the path syntax (`->`, `->>`) and the operators (`eq`, `cs`, `has`); arbitrary path expressions are rejected. All compile to parameterized Postgres JSONB operators — never string-built.
 
 ### SDK Builder (Wraps REST)
 
@@ -557,6 +611,17 @@ platform.migrations
 
 **Checksum** prevents drift: if a developer edits an already-applied migration, the checksum changes and the platform refuses further migrations.
 
+### Platform Self-Migrations (NubleStation's Own Schema)
+
+`platform.migrations` tracks **app-developer** migrations. NubleStation's *own* schema (the `platform.*` tables) also evolves between releases (`0.4.0 → 0.5.0`), and that needs a separate, independent runner:
+
+- A **platform-migration runner** runs at **API container boot, before the service accepts traffic**. If migrations fail, the container exits non-zero rather than serving a half-migrated schema.
+- Applied versions are recorded in **`platform.schema_version`** (version, checksum, applied_at).
+- Implemented with **Drizzle Kit** over the `platform` schema — standard usage, ~30 lines of wrapper.
+- This is distinct from the app-migration library in every way: different table, different trigger (boot vs. `nuble db push`), different SQL source (shipped with the release, not developer-authored), no per-app advisory lock.
+
+The two migration systems never share state. Conflating them would let an app developer's push interfere with a platform upgrade.
+
 ---
 
 ## 12. Deployment Integration (LAN-Native)
@@ -633,11 +698,15 @@ On the server:
 
 ## 14. Cross-Service Integration
 
+### The Service Topology (Authoritative)
+
+Every service (gateway, auth, db, storage, deploy) is **its own container** — one process per container, Docker best practice. Only the **API Gateway** is published on the LAN; all other services listen only on the internal Docker bridge network. Service-to-service calls are therefore **HTTP over the internal Docker network** — a fast hop, but a real network hop, not an in-process call. There is no shared process and no shared connection pool *between services*; they share only the **Postgres instance** (each opens its own pool to it).
+
 ### Database Service ↔ Auth Service
 
 - Auth service writes to `platform.users` and `platform.user_app_access`
 - Database service exposes `tenant_data.users` (view) for app developers
-- Both services share the same Postgres instance; no network hop
+- They communicate over the internal Docker network when needed; they do **not** share a process — they share the Postgres instance
 
 ### Database Service ↔ Storage Service
 
@@ -657,9 +726,32 @@ This document does not prescribe the storage service's full design; only the dat
 
 ### Database Service ↔ API Gateway
 
-- Gateway resolves API key → `app_id` (cached in Redis, fallback to `platform.api_keys`)
-- Gateway forwards request to database service with `app_id` in a trusted header
-- Database service sets `SET LOCAL app.current_tenant` from that header
+- Gateway parses `nbl_<key_id>.<secret>`, resolves `key_id → app_id` (Redis cache, fallback `platform.api_keys`), Argon2-verifies the secret
+- Gateway forwards to the database service over the internal Docker network with **signed internal headers**: `X-Nuble-App-Id`, `X-Nuble-User-Id`, and `X-Nuble-Sig` (HMAC of the payload using a shared secret from `.env`)
+- Database service verifies the HMAC before trusting the headers, then sets `SET LOCAL app.current_tenant` from `X-Nuble-App-Id` — a compromised app container cannot forge another tenant's `app_id`
+
+### Single Sign-On Across `*.nuble.local`
+
+All apps live under one eTLD+1 (`nuble.local`), which makes a shared session cookie viable:
+
+1. User authenticates once (login form served by the Console / auth service).
+2. Auth service issues a session and sets a cookie scoped to **`Domain=.nuble.local`** — so it is sent to `console.nuble.local`, `tasks.nuble.local`, every app subdomain.
+3. On any request, the **gateway** validates the session cookie before forwarding (it already terminates every subdomain via Caddy), and resolves it to `X-Nuble-User-Id`.
+4. For programmatic / token-based access, `oidc-provider` issues OIDC tokens; the gateway accepts either a valid session cookie or a bearer token.
+
+The cookie is `HttpOnly`, `Secure` (Caddy serves HTTPS via its internal CA), `SameSite=Lax`. No per-app login; revoking the session at the auth service logs the user out of every app at once.
+
+### Database Service ↔ Console (Platform Control API)
+
+The auto-REST surface (`/v1/db/*`) only covers `tenant_data` and is authenticated by **API key**. The Console needs a different surface to manage the platform itself:
+
+- Route prefix **`/v1/admin/*`**, served by the gateway, authenticated by **admin session** (not an API key)
+- **Hand-written**, not auto-generated — it touches `platform.*` tables directly
+- Consumed **only by the Console**
+- Covers: list/create/disable users, create/list apps, issue/revoke API keys, manage `user_app_access`, list deployments, trigger app migrations (`POST /v1/admin/apps/:id/migrations`)
+- Every mutating call writes to `platform.audit_log`
+
+This is the API the Console hits in Phase 1, so it must be designed before the Console is built.
 
 ---
 
@@ -672,7 +764,7 @@ Avoid building from scratch where battle-tested OSS exists. Recommendations:
 | Component | Recommendation | Why |
 |---|---|---|
 | Database engine | **PostgreSQL 16** (Docker official image) | Latest LTS, native RLS, JSONB |
-| Connection pooler | **PgBouncer** (transaction pooling mode) | Reduces connection overhead; needed for `SET LOCAL` pattern |
+| Connection pooler | **PgBouncer** (transaction pooling mode) | Reduces connection overhead. Note: transaction pooling is *why* we use `SET LOCAL` (not plain `SET`) — PgBouncer doesn't require `SET LOCAL`, it's the pooling mode that makes per-transaction scoping the safe choice |
 | ORM (server-side) | **Drizzle ORM** | TypeScript-native, lighter than Prisma, raw SQL escape hatch |
 | Migration runner | **Drizzle Kit** (with custom wrapper) | Already in your stack; wrap it for validation/RLS injection |
 | SQL parser (validation) | **`pg-query-parser`** (npm) | Real Postgres parser ported to JS; never regex SQL |
@@ -862,6 +954,21 @@ This section captures explicitly out-of-scope items with their integration path.
 
 Already documented as v2 in the project context. Database integration would expose embeddings storage (pgvector extension) and inference endpoints.
 
+### V2.10 — Multi-Statement Client Transactions
+
+**What:** An SDK API to run several writes atomically as one transaction — `nuble.db.transaction(async tx => { ... })`.
+
+**How it integrates:**
+- A `/v1/db/batch` endpoint accepting an ordered list of operations, executed in a single tenant transaction (one `BEGIN`/`SET LOCAL`/`COMMIT`).
+- Or a longer-lived transaction handle that survives across HTTP calls with server-side timeout management (heavier).
+
+**Why deferred:**
+- Every v1 request is already its own transaction with correct tenant scoping — single-statement atomicity is covered.
+- Cross-HTTP transaction handles add real complexity (timeout, abandoned-transaction cleanup, connection pinning). Firebase has no client transactions either; Supabase routes this through stored procedures.
+- v1 workaround: a Level 2 **named query** can wrap a multi-statement CTE atomically today.
+
+**Defense sentence:** *"v1 guarantees per-operation atomicity with correct tenant isolation; multi-statement client transactions are a v2 batch endpoint, not a rearchitecture, and named queries already cover atomic multi-step logic in v1."*
+
 ---
 
 ## 17. Honest Trade-offs
@@ -882,7 +989,7 @@ Already documented as v2 in the project context. Database integration would expo
 |---|---|
 | Schema DSL on top of Drizzle | Maintenance burden of the DSL layer |
 | Row-level isolation | Catastrophic platform bug *could* leak (RLS heavily mitigates) |
-| `SET LOCAL` in transactions | Every read is a transaction (microsecond overhead) |
+| `SET LOCAL` in transactions | Every read is a transaction (sub-millisecond overhead on LAN) |
 | REST + SSE (no GraphQL) | Nested queries need explicit `include` |
 | Custom DSL (not raw Drizzle) | Developer learns NubleStation-specific syntax |
 | No edge functions in v1 | Custom logic limited to named queries |
@@ -895,7 +1002,7 @@ Already documented as v2 in the project context. Database integration would expo
 |---|---|
 | Redis cache down | Fallback to Postgres for API key resolution (slower but correct) |
 | Postgres down | Whole platform down (acceptable on single-host model) |
-| RLS bypass via developer SQL | Impossible — developer never executes raw SQL |
+| RLS bypass via developer SQL | Auto-REST/DSL: developer never executes raw SQL. Level 2 named queries *are* developer SQL but are parsed by `pg-query-parser` against an allowlist and must include the tenant filter — validated, not "impossible" |
 | Migration drift between devs | Checksum verification refuses divergent state |
 | Connection pool reuse leak | `SET LOCAL` in transaction guarantees reset |
 | Quota exhaustion | Per-app limits in validator + Postgres `statement_timeout` |
@@ -1018,7 +1125,9 @@ The vertical-slice path (recommended): build one resource end to end before scal
 | Term | Definition |
 |---|---|
 | **App** | A logical tenant within NubleStation. Backed by a row in `platform.apps`. Not a running process. |
-| **API Key** | Per-app credential used by the SDK. Stored as hash; resolved to `app_id` by the gateway. |
+| **API Key** | Per-app credential `nbl_<key_id>.<secret>`. `key_id` is indexed plaintext; `secret` is Argon2-hashed. Resolved to `app_id` by the gateway. |
+| **`app_tables`** | Platform registry mapping each custom table name to the owning `app_id`. The REST router uses it (not `information_schema`) to scope routing. |
+| **`schema_version`** | Tracks NubleStation's own platform-schema migrations, applied at API container boot. Distinct from `platform.migrations` (app migrations). |
 | **DSL** | Domain-Specific Language. NubleStation's schema DSL is a TypeScript-typed superset of Drizzle's schema syntax. |
 | **JSONB** | Postgres binary JSON type. Indexable, queryable, faster than `JSON`. |
 | **OIDC** | OpenID Connect. Identity protocol on top of OAuth 2.0, used for cross-app SSO. |
@@ -1052,6 +1161,7 @@ The vertical-slice path (recommended): build one resource end to end before scal
 | Date | Author | Change |
 |---|---|---|
 | 2026-05-16 | Nabil Mouzouna | Initial document accepted |
+| 2026-05-17 | Nabil Mouzouna | Review pass: fixed API-key storage model (#2), FK-to-view resolution (#5), user-create access grant (#9); clarified service topology + signed internal headers (#1), shared-table ownership + `app_tables` registry (#4); added Layer 0 gateway auth, SSO flow, Platform Control API (#10/#11), platform self-migrations + `schema_version` (#12), JSONB filter syntax (#6), reserved resource names (#8); corrected PgBouncer/`SET LOCAL` rationale (#3) and RLS-bypass wording; deferred multi-statement client transactions to v2.10 (#7) |
 
 ---
 
