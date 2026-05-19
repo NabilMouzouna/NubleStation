@@ -34,6 +34,9 @@ export const config = [
       ...pluginReactHooks.configs.recommended.rules,
       // React scope no longer necessary with new JSX transform.
       "react/react-in-jsx-scope": "off",
+      // TypeScript already validates props; this rule produces false positives
+      // on TS-typed components like React.forwardRef.
+      "react/prop-types": "off",
     },
   },
 ];
