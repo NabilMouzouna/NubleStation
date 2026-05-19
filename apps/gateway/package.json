@@ -8,7 +8,7 @@
     "build": "tsc -p tsconfig.json",
     "start": "node dist/index.js",
     "test": "vitest run",
-    "lint": "echo \"(no lint configured for gateway yet)\"",
+    "lint": "eslint . --max-warnings 0",
     "check-types": "tsc --noEmit"
   },
   "dependencies": {
@@ -23,6 +23,7 @@
     "zod": "^3.23.8"
   },
   "devDependencies": {
+    "@nublestation/eslint-config": "workspace:*",
     "@nublestation/typescript-config": "workspace:*",
     "@types/node": "^22.10.1",
     "@types/pg": "^8.11.10",

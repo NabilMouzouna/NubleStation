@@ -60,7 +60,6 @@ async function runAsCli() {
   try {
     await runPlatformMigrations(pool);
     await recordSchemaVersion(pool);
-    // eslint-disable-next-line no-console
     console.log("platform migrations applied");
   } finally {
     await closePool();
@@ -69,7 +68,6 @@ async function runAsCli() {
 
 if (process.argv[1] && process.argv[1] === fileURLToPath(import.meta.url)) {
   runAsCli().catch((err) => {
-    // eslint-disable-next-line no-console
     console.error(err);
     process.exit(1);
   });

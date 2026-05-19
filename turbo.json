@@ -1,6 +1,7 @@
 {
   "$schema": "https://turborepo.dev/schema.json",
   "ui": "tui",
+  "globalEnv": ["NUBLE_ENV_FILE"],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
@@ -24,7 +25,7 @@
     },
     "migrate": {
       "cache": false,
-      "env": ["DATABASE_URL", "NUBLE_ENV_FILE"]
+      "env": ["DATABASE_URL"]
     }
   }
 }

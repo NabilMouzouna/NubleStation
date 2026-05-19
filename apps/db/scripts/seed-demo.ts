@@ -43,13 +43,11 @@ async function main() {
     [appId, keyId, secretHash],
   );
 
-  // eslint-disable-next-line no-console
   console.log(JSON.stringify({ orgId, appId, keyId, apiKey: `nbl_${keyId}.${secret}` }, null, 2));
 }
 
 main()
   .catch((err) => {
-    // eslint-disable-next-line no-console
     console.error(err);
     process.exit(1);
   })
