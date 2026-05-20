@@ -1,8 +1,5 @@
-Here's the context to drop into Claude Code. Save it as `CLAUDE.md` at the repo root — Claude Code reads this automatically and uses it for every task.
+**IMPORTANT NOTE:** claude should forcibly respect these rules @RULES.md ["/Users/nabilmouzouna/School/PFE/NubleStation project/RULES.md"]. **These rules override any default behavior. If unsure, ask.**
 
----
-
-```markdown
 # NubleStation — Project Context for Claude Code
 
 > Read this first. It defines what we're building, why, and the constraints you must respect.
@@ -138,7 +135,7 @@ These 4 services are **separate containers** (one process per container — Dock
 | Language | TypeScript |
 | Package manager | pnpm |
 | Monorepo | Turborepo |
-| API framework | Hono or Fastify (TBD) |
+| API framework | Hono (decided — see ADR 003 / roadmap) |
 | Frontend (Console) | Next.js 14 |
 | Database | PostgreSQL 16 |
 | Connection pooler | PgBouncer (transaction pooling) |
@@ -147,7 +144,7 @@ These 4 services are **separate containers** (one process per container — Dock
 | SQL validation | `pg-query-parser` (never regex SQL) |
 | Auth | Lucia v3 + `oidc-provider` (sessions + API keys + SSO) |
 | Reverse proxy | Caddy 2 |
-| DNS | CoreDNS |
+| DNS | CoreDNS only (mDNS removed — decision #6) |
 | Container runtime | Docker + Compose |
 | Testing | Vitest + Playwright |
 | CI | GitHub Actions |
@@ -252,6 +249,7 @@ Service layer (auth/db/storage/deploy) is treated as **placeholders** during thi
 - Bring a pre-configured travel router (controls demo network)
 - Demo flow: fresh Ubuntu VM → `curl ... | bash` → console live → create app → deploy frontend → unplug internet → still works → kill container → auto-restart
 - Strong defensive sentences are documented in the project plan — code should support these claims (e.g., enforced authz must be centralized, not per-app)
-```
 
----
+----
+
+

@@ -1,0 +1,82 @@
+name: CI
+
+on:
+  push:
+    branches: [main, staging]
+  pull_request:
+    branches: [main, staging]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Lint + check-types
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.0.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm lint
+
+      - run: pnpm check-types
+
+  test:
+    name: Tests (db + gateway)
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: nuble
+          POSTGRES_PASSWORD: nuble
+          POSTGRES_DB: nuble_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U nuble"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgres://nuble:nuble@localhost:5432/nuble_test
+      DATABASE_URL_TEST: postgres://nuble:nuble@localhost:5432/nuble_test
+      INTERNAL_HMAC_SECRET: ci-hmac-secret-min-16-chars-ok
+      NODE_ENV: test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.0.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Wait for Postgres
+        run: |
+          for i in $(seq 1 30); do
+            pg_isready -h localhost -U nuble && break
+            sleep 1
+          done
+
+      - name: Run tests
+        run: pnpm test

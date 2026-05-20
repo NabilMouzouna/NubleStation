@@ -1,0 +1,23 @@
+{
+  "name": "@nublestation/shared",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./hmac": "./src/hmac.ts",
+    "./headers": "./src/headers.ts",
+    "./api-key": "./src/api-key.ts"
+  },
+  "scripts": {
+    "check-types": "tsc --noEmit",
+    "lint": "echo \"(no lint configured for shared yet)\""
+  },
+  "devDependencies": {
+    "@nublestation/typescript-config": "workspace:*",
+    "@types/node": "^22.10.1",
+    "typescript": "5.9.2"
+  }
+}

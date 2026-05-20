@@ -1,0 +1,9 @@
+{
+  "extends": "@nublestation/typescript-config/base.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "types": ["node"],
+    "noEmit": true
+  },
+  "include": ["src/**/*", "test/**/*", "vitest.config.ts"]
+}
