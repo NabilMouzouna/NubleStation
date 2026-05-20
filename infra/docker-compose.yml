@@ -67,6 +67,8 @@ services:
     restart: unless-stopped
     volumes:
       - ./placeholders/console:/usr/share/nginx/html:ro
+      - /var/nuble/admin.db:/app/admin.db:rw
+      - /var/run/docker.sock:/var/run/docker.sock:ro
     networks:
       - nuble
     healthcheck:

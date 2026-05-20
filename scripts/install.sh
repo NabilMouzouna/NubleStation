@@ -14,9 +14,19 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 INFRA_DIR="$REPO_ROOT/infra"
 
-info "Checking Docker..."
+info "Checking dependencies..."
 command -v docker >/dev/null 2>&1 || error "Docker is not installed. Install from https://docs.docker.com/engine/install/"
 docker compose version >/dev/null 2>&1 || error "Docker Compose v2 is required."
+
+if ! command -v sqlite3 >/dev/null 2>&1; then
+    info "Installing sqlite3..."
+    sudo apt-get install -y sqlite3 >/dev/null
+fi
+
+if ! command -v uuidgen >/dev/null 2>&1; then
+    info "Installing uuid-runtime..."
+    sudo apt-get install -y uuid-runtime >/dev/null
+fi
 
 info "Detecting host IP..."
 
@@ -55,21 +65,29 @@ info "Host IP: $HOST_IP${HOST_IFACE:+ (interface: $HOST_IFACE)}${HOST_MAC:+, MAC
 read -p "Organization name (default: nuble): " ORG_NAME
 ORG_NAME=${ORG_NAME:-nuble}
 
-read -s -p "Admin password: " ADMIN_PASSWORD
+read -p "Organization description (optional): " ORG_DESCRIPTION
+
+read -p "Super admin email: " ADMIN_EMAIL
+[ -z "$ADMIN_EMAIL" ] && error "Email cannot be empty"
+
+read -s -p "Super admin password: " ADMIN_PASSWORD
 echo
 [ -z "$ADMIN_PASSWORD" ] && error "Password cannot be empty"
 
 POSTGRES_PASSWORD=$(openssl rand -hex 16)
 
+INTERNAL_HMAC_SECRET=$(openssl rand -hex 32)
+
 info "Writing .env..."
 cat > "$INFRA_DIR/.env" <<EOF
 ORG_NAME=$ORG_NAME
 HOST_IP=$HOST_IP
-ADMIN_PASSWORD=$ADMIN_PASSWORD
 
 POSTGRES_USER=nuble
 POSTGRES_PASSWORD=$POSTGRES_PASSWORD
 POSTGRES_DB=nuble
+
+INTERNAL_HMAC_SECRET=$INTERNAL_HMAC_SECRET
 
 NUBLE_API_IMAGE=nginx:alpine
 NUBLE_CONSOLE_IMAGE=nginx:alpine
@@ -93,6 +111,28 @@ if ! grep -q "$ORG_NAME.local" /etc/hosts 2>/dev/null; then
 else
     warn "/etc/hosts already has $ORG_NAME.local — skipping"
 fi
+
+info "Creating admin database..."
+mkdir -p /var/nuble
+sqlite3 /var/nuble/admin.db < "$SCRIPT_DIR/seed-admin.sql"
+
+info "Hashing admin password..."
+ADMIN_PASSWORD_HASH=$(docker run --rm node:20-alpine \
+  sh -c "npm install -g @node-rs/argon2 --silent 2>/dev/null && \
+         node -e \"const{hashSync}=require('@node-rs/argon2'); \
+                  process.stdout.write(hashSync(process.argv[1]))\" \"$ADMIN_PASSWORD\"")
+[ -z "$ADMIN_PASSWORD_HASH" ] && error "Password hashing failed"
+
+ORG_ID=$(uuidgen | tr '[:upper:]' '[:lower:]')
+ADMIN_ID=$(uuidgen | tr '[:upper:]' '[:lower:]')
+
+sqlite3 /var/nuble/admin.db <<SQL
+PRAGMA foreign_keys = ON;
+INSERT INTO organization (id, name, description, installed_at)
+  VALUES ('$ORG_ID', '$ORG_NAME', '$ORG_DESCRIPTION', unixepoch());
+INSERT INTO admin_users (id, org_id, email, password_hash, role, created_at)
+  VALUES ('$ADMIN_ID', '$ORG_ID', '$ADMIN_EMAIL', '$ADMIN_PASSWORD_HASH', 'super_admin', unixepoch());
+SQL
 
 info "Starting NubleStation stack..."
 cd "$INFRA_DIR"
