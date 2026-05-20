@@ -7,6 +7,7 @@ CHECKPOINT_FILE="$INSTALL_DIR/.install-checkpoint"
 VERSION_FILE="$INSTALL_DIR/.nuble-version"
 BASE_URL="https://github.com/NabilMouzouna/NubleStation/releases/download/${VERSION}"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 # ── Colors ────────────────────────────────────────────────────────────────────
 G="$(printf '\033[0;32m')"
@@ -126,7 +127,7 @@ download_bundle() {
 }
 
 bundle_file() {
-  if [ "$VERSION" = "dev" ]; then printf '%s/%s' "$SCRIPT_DIR" "$1"
+  if [ "$VERSION" = "dev" ]; then printf '%s/%s' "$REPO_ROOT" "$1"
   else printf '%s/install/%s' "$INSTALL_DIR" "$1"
   fi
 }
