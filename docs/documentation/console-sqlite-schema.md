@@ -6,8 +6,16 @@ See ADR 005 §2 for the full rationale behind using SQLite over PostgreSQL for t
 
 ```mermaid
 erDiagram
+    ORGANIZATION {
+        TEXT id PK
+        TEXT name
+        TEXT description
+        INTEGER installed_at
+    }
+
     ADMIN_USERS {
         TEXT id PK
+        TEXT org_id FK
         TEXT email UK
         TEXT password_hash
         TEXT role
@@ -37,14 +45,18 @@ erDiagram
         INTEGER created_at
     }
 
+    ORGANIZATION ||--o{ ADMIN_USERS : "belongs to"
     ADMIN_USERS ||--o{ ADMIN_SESSIONS : "has"
     ADMIN_USERS ||--o{ PLATFORM_AUDIT : "performed by"
 ```
 
 ## Table Notes
 
+### `organization`
+A single row, seeded by `install.sh` at install time. Holds the org name and an optional description displayed in the console header. `installed_at` is a Unix timestamp. There is always exactly one organization per NubleStation instance — this table never has more than one row.
+
 ### `admin_users`
-Platform administrators only — not clinic staff or app tenants. Two roles:
+Platform administrators only — not clinic staff or app tenants. `org_id` references `organization(id)` — since there is only one org, this is always the same value, but the FK makes the relationship explicit and enforces referential integrity. Two roles:
 - `super_admin` — seeded by `install.sh`, full access, cannot be deleted
 - `admin` — invited by super admin, access scoped per invite
 
