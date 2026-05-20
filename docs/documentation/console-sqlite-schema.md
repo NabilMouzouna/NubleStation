@@ -4,6 +4,49 @@ The console service uses a dedicated SQLite file (`/var/nuble/admin.db`) for pla
 
 See ADR 005 §2 for the full rationale behind using SQLite over PostgreSQL for this layer.
 
+## Where the file lives and how the console reads it
+
+```
+Host filesystem: /var/nuble/admin.db        ← created by install.sh before Docker starts
+                        │
+                        │ bind mount (docker-compose.yml)
+                        ▼
+Console container: /app/admin.db            ← read/written by Next.js server-side code
+```
+
+The console never creates the file. `install.sh` creates and seeds it on the host using the `sqlite3` CLI and `scripts/seed-admin.sql`. When the console container starts, it finds an already-populated file at `/app/admin.db`.
+
+Next.js server components and server actions open it with `better-sqlite3` (synchronous — no async overhead, no network):
+
+```ts
+import Database from "better-sqlite3";
+const db = new Database("/app/admin.db");
+```
+
+Client components never access `admin.db` directly — only server-side code does.
+
+## Schema creation — who owns it
+
+The schema is created by `install.sh` running `scripts/seed-admin.sql` via the `sqlite3` CLI on the host — **before any container starts**. The console does not run Drizzle migrations. On boot, it performs a lightweight version check (a `schema_version` row) and applies any pending upgrade migrations if NubleStation itself was updated. The primary source of truth for the schema is `scripts/seed-admin.sql`.
+
+```
+install.sh
+  ├── sqlite3 /var/nuble/admin.db < scripts/seed-admin.sql
+  │     ├── CREATE TABLE organization
+  │     ├── CREATE TABLE admin_users
+  │     ├── CREATE TABLE admin_sessions
+  │     ├── CREATE TABLE infra_events
+  │     ├── CREATE TABLE platform_audit
+  │     ├── CREATE TABLE schema_version
+  │     ├── INSERT INTO organization (name, description, installed_at)
+  │     └── INSERT INTO admin_users  (org_id, email, password_hash, role, ...)
+  └── docker compose up
+
+Console container boot
+  ├── opens /app/admin.db with better-sqlite3
+  └── checks schema_version → applies upgrade migrations if needed
+```
+
 ```mermaid
 erDiagram
     ORGANIZATION {
@@ -45,6 +88,11 @@ erDiagram
         INTEGER created_at
     }
 
+    SCHEMA_VERSION {
+        INTEGER version PK
+        INTEGER applied_at
+    }
+
     ORGANIZATION ||--o{ ADMIN_USERS : "belongs to"
     ADMIN_USERS ||--o{ ADMIN_SESSIONS : "has"
     ADMIN_USERS ||--o{ PLATFORM_AUDIT : "performed by"
@@ -73,6 +121,9 @@ Append-only. Written by `POST /internal/events` — an endpoint that accepts HMA
 ### `platform_audit`
 Written by the console on every mutating admin action (app created, admin invited, key revoked, etc.). `target` holds the affected resource ID as a plain string. Append-only — no UPDATE or DELETE.
 
+### `schema_version`
+A single row tracking the current schema version number. Written by `seed-admin.sql` on install. On console boot, `better-sqlite3` reads this row and applies any pending upgrade migrations if the NubleStation version has advanced. No FKs — fully standalone.
+
 ## Design Constraints
 
 | Constraint | How enforced |
@@ -80,5 +131,5 @@ Written by the console on every mutating admin action (app created, admin invite
 | One file, no server | SQLite — `better-sqlite3`, synchronous reads in Next.js server components |
 | Exists before Docker | Created by `install.sh` before `docker compose up` |
 | Independent of Postgres | No foreign keys or queries cross into PostgreSQL |
-| Schema evolution | Console runs its own migration runner on boot (same pattern as ADR 003 §11) |
+| Schema evolution | `seed-admin.sql` is source of truth; console checks `schema_version` on boot for upgrades |
 | Mount strategy | Bind mount: `/var/nuble/admin.db → /app/admin.db:rw` in docker-compose.yml |
