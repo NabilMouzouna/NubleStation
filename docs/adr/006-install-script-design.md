@@ -153,10 +153,31 @@ What would you like to do?
 - Does not restart any services
 
 **Reinstall (option 3):**
-- Requires double confirmation: `"Type DESTROY to confirm"`
-- `docker compose down -v`
-- `rm -rf /var/nuble/`
-- Runs full install from scratch
+
+PostgreSQL app data (tenant tables, organization data) is **never wiped** — it lives in a named Docker volume and is left untouched. Only the platform identity layer is reset.
+
+Two-phase confirmation:
+
+```
+Phase 1 — admin.db reset (always required):
+  "This will erase all admin accounts and organization settings."
+  "Type RESET to confirm: " ___
+
+Phase 2 — infra files (optional):
+  "Also replace docker-compose.yml, .env, Caddyfile, and Corefile?"
+  "[y/N]: " ___
+```
+
+What gets reset:
+| Resource | Behavior |
+|---|---|
+| `/var/nuble/admin.db` | Wiped and re-seeded (requires Phase 1 confirm) |
+| `.env`, `docker-compose.yml`, `Caddyfile`, `Corefile` | Replaced if Phase 2 confirmed |
+| PostgreSQL volume (`nuble_data`) | **Never touched — app data preserved** |
+| `/var/nuble/files/` (storage volume) | **Never touched — uploaded files preserved** |
+| `/var/nuble/.nuble-version` | Updated to new version after reinstall |
+
+After confirmation, runs the full credential prompts (org name, admin email, password) and re-seeds `admin.db` as if it were a fresh install. Services are restarted with `docker compose restart console`.
 
 **No changes (option 4):** Exit cleanly.
 
