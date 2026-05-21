@@ -62,7 +62,8 @@ detect_pkg_manager() {
   if   command -v apt-get >/dev/null 2>&1; then PKG=apt
   elif command -v dnf     >/dev/null 2>&1; then PKG=dnf
   elif command -v pacman  >/dev/null 2>&1; then PKG=pacman
-  else error "Unsupported package manager. Supported: apt, dnf, pacman."
+  elif command -v brew    >/dev/null 2>&1; then PKG=brew
+  else error "Unsupported package manager. Supported: apt, dnf, pacman, brew."
   fi
 }
 
@@ -71,6 +72,7 @@ install_dep() {
     apt)    sudo apt-get install -y "$1" >/dev/null ;;
     dnf)    sudo dnf install -y "$1" >/dev/null ;;
     pacman) sudo pacman -S --noconfirm "$1" >/dev/null ;;
+    brew)   brew install "$1" >/dev/null ;;
   esac
 }
 
@@ -240,6 +242,7 @@ run_local() {
     case "$PKG" in
       apt)        install_dep uuid-runtime ;;
       dnf|pacman) install_dep util-linux   ;;
+      brew)       install_dep ossp-uuid    ;;
     esac
   }
   info "uuidgen ready"
@@ -325,8 +328,9 @@ main() {
   command -v uuidgen >/dev/null 2>&1 || {
     step "Installing uuidgen"
     case "$PKG" in
-      apt)    install_dep uuid-runtime ;;
+      apt)        install_dep uuid-runtime ;;
       dnf|pacman) install_dep util-linux ;;
+      brew)       install_dep ossp-uuid ;;
     esac
   }
   info "uuidgen ready"
@@ -337,6 +341,7 @@ main() {
       apt)    install_dep whiptail ;;
       dnf)    install_dep newt ;;
       pacman) install_dep libnewt ;;
+      brew)   install_dep dialog ;;
     esac
     detect_tui
   fi
