@@ -5,9 +5,13 @@
  */
 
 @theme {
-  /* Brand */
-  --color-primary: #0064e0;
-  --color-primary-deep: #0457cb;
+  /* Brand — extracted from packages/assets/icon.svg + logo-light.svg */
+  --color-brand-blue: #1f4fe0;       /* gradient start */
+  --color-brand-purple: #5f55f0;     /* cloud body */
+  --color-brand-violet: #9b5bff;     /* gradient end, network bar */
+
+  --color-primary: #5f55f0;
+  --color-primary-deep: #4340d4;
   --color-primary-foreground: #ffffff;
 
   /* Surface */
@@ -21,7 +25,7 @@
   /* Lines & focus */
   --color-border: #dee3e9;
   --color-input: #ced0d4;
-  --color-ring: #0064e0;
+  --color-ring: #5f55f0;
 
   /* Semantic */
   --color-success: #31a24c;
