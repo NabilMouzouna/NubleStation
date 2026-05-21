@@ -85,16 +85,32 @@ No `--prebuilt` flag in v1. The pipeline is the contract.
 
 ### 6. Framework support and constraints
 
-Only static output is supported. The CLI detects the framework and output directory:
+The rule is: **if `npm run build` produces a folder of static files with no Node.js process needed to serve them, it works.** If it requires a runtime process (Express, Node HTTP server, edge functions), it does not.
 
-| Framework | Output dir | Condition |
+**In scope — produces static output:**
+
+| Framework | Output dir | Required config |
 |---|---|---|
-| Vite | `dist/` | default |
-| Create React App | `build/` | default |
-| Next.js | `out/` | requires `output: 'export'` in next.config.js |
-| Plain HTML | any | `--dir` flag |
+| Vite (React, Vue, Svelte, vanilla) | `dist/` | none |
+| Create React App | `build/` | none |
+| Next.js | `out/` | `output: 'export'` in next.config.js |
+| Nuxt.js | `dist/` | `ssr: false` + `target: 'static'` |
+| SvelteKit | `build/` | `@sveltejs/adapter-static` |
+| Astro | `dist/` | `output: 'static'` in astro.config.mjs |
+| Angular | `dist/{project}/` | none |
+| Plain HTML/CSS/JS | any | `--dir` flag on `nuble deploy` |
 
-If Next.js SSR is detected (no `output: 'export'`), the CLI aborts with a clear message before building. SSR hosting is out of scope — NubleStation hosts frontends, not Node.js servers.
+**Out of scope — requires a server runtime:**
+
+| Framework | Reason |
+|---|---|
+| Next.js (SSR/ISR mode) | Requires Node.js server; no static export configured |
+| Remix | Server-required by design; no static export path |
+| Nuxt.js (SSR mode) | Requires Node.js server |
+| SvelteKit (without static adapter) | Requires Node/Edge runtime |
+| Astro (SSR mode) | Requires server adapter |
+
+If the CLI detects an incompatible configuration (e.g. Next.js without `output: 'export'`), it aborts before building with a clear message pointing to the required config change. SSR hosting is out of scope — NubleStation hosts frontends, not Node.js servers.
 
 ### 7. SDK wiring and CORS
 
