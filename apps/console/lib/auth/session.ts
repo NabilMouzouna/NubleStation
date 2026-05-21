@@ -3,7 +3,7 @@ import { cookies } from "next/headers";
 import db from "@/lib/db";
 
 const COOKIE_NAME = "nuble_session";
-const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+const SESSION_TTL_MS = 8 * 60 * 60 * 1000; // 8 hours
 
 export interface AdminSession {
   sessionId: string;

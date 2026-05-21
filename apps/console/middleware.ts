@@ -1,17 +1,17 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
-const PUBLIC_PATHS = ["/auth", "/_next", "/favicon.ico", "/logo-light.png", "/icon.png"];
+const PUBLIC_PREFIXES = ["/auth", "/_next", "/favicon.ico", "/logo-light.png", "/icon.png", "/services/"];
 
-export function proxy(request: NextRequest) {
+export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  if (PUBLIC_PATHS.some((p) => pathname.startsWith(p))) {
+  if (PUBLIC_PREFIXES.some((p) => pathname.startsWith(p))) {
     return NextResponse.next();
   }
 
-  // Cookie presence check only — full expiry + DB validation happens in
-  // validateSession() inside each server component
+  // Cookie presence check only — Edge runtime cannot run SQLite.
+  // Full expiry + DB validation is the second layer inside the shell layout.
   const session = request.cookies.get("nuble_session");
   if (!session?.value) {
     return NextResponse.redirect(new URL("/auth", request.url));

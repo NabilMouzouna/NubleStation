@@ -1,4 +1,6 @@
+import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
+import { validateSession } from "@/lib/auth/session";
 import {
   LayoutDashboard,
   Activity,
@@ -28,7 +30,9 @@ const adminItems = [
   { label: "Settings", href: "/settings", icon: <Settings size={16} /> },
 ];
 
-export default function ShellLayout({ children }: { children: ReactNode }) {
+export default async function ShellLayout({ children }: { children: ReactNode }) {
+  const session = await validateSession();
+  if (!session) redirect("/auth");
   return (
     <div className="flex h-screen overflow-hidden bg-background">
 
