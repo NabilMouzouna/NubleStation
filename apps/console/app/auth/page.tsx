@@ -22,8 +22,8 @@ export default function AuthPage() {
                 priority
               />
             </div>
-            <h1 className="text-xl font-semibold text-foreground">Sign in</h1>
-            <p className="mt-1 text-sm text-muted-foreground">
+            <h1 className="text-center text-xl font-semibold text-foreground">Sign in</h1>
+            <p className="mt-1 text-center text-sm text-muted-foreground">
               Enter your admin credentials to continue.
             </p>
           </CardHeader>
