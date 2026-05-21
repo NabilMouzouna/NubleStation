@@ -1,3 +1,4 @@
+import Image from "next/image";
 import {
   Card,
   CardContent,
@@ -5,14 +6,19 @@ import {
 } from "@nublestation/ui/components/card";
 import { Input } from "@nublestation/ui/components/input";
 import { Button } from "@nublestation/ui/components/button";
-import { NubleLogo } from "@/components/brand";
 
 export default function AuthPage() {
   return (
     <main className="flex min-h-screen items-center justify-center bg-muted px-4">
       <div className="w-full max-w-sm">
         <div className="mb-8 flex justify-center">
-          <NubleLogo tagline />
+          <Image
+            src="/logo-light.png"
+            alt="NubleStation"
+            width={240}
+            height={48}
+            priority
+          />
         </div>
 
         <Card>
