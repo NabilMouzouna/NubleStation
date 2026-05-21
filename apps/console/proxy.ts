@@ -3,7 +3,7 @@ import type { NextRequest } from "next/server";
 
 const PUBLIC_PREFIXES = ["/auth", "/_next", "/favicon.ico", "/logo-light.png", "/icon.png", "/services/"];
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   if (PUBLIC_PREFIXES.some((p) => pathname.startsWith(p))) {
