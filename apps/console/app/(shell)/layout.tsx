@@ -1,64 +1,64 @@
-import Link from "next/link";
 import type { ReactNode } from "react";
+import {
+  LayoutDashboard,
+  Activity,
+  AppWindow,
+  Network,
+  HardDrive,
+  ClipboardList,
+  Users,
+  Settings,
+  LogOut,
+} from "lucide-react";
+import { NubleSidebarHeader } from "@/components/brand";
+import { NavItem } from "@/components/nav-item";
 
 const navItems = [
-  { label: "Dashboard", href: "/dashboard" },
-  { label: "Watch", href: "/watch" },
-  { label: "Apps", href: "/apps" },
-  { label: "Network", href: "/network" },
-  { label: "Storage", href: "/storage" },
-  { label: "Audit", href: "/audit" },
+  { label: "Dashboard", href: "/dashboard", icon: <LayoutDashboard size={16} /> },
+  { label: "Watch", href: "/watch", icon: <Activity size={16} /> },
+  { label: "Apps", href: "/apps", icon: <AppWindow size={16} /> },
+  { label: "Network", href: "/network", icon: <Network size={16} /> },
+  { label: "Storage", href: "/storage", icon: <HardDrive size={16} /> },
+  { label: "Audit", href: "/audit", icon: <ClipboardList size={16} /> },
 ];
 
-// Visible only to super_admin — role gating wired when auth is added
 const adminItems = [
-  { label: "Admins", href: "/admins" },
-  { label: "Settings", href: "/settings" },
+  { label: "Admins", href: "/admins", icon: <Users size={16} /> },
+  { label: "Settings", href: "/settings", icon: <Settings size={16} /> },
 ];
 
 export default function ShellLayout({ children }: { children: ReactNode }) {
   return (
     <div className="flex h-screen overflow-hidden bg-background">
       <aside className="flex w-56 flex-shrink-0 flex-col border-r border-border bg-background">
-        <div className="px-5 py-6">
-          <span className="text-sm font-bold tracking-tight text-foreground">
-            NubleStation
-          </span>
+        <div className="px-5 py-5">
+          <NubleSidebarHeader />
         </div>
 
         <nav className="flex flex-1 flex-col gap-0.5 overflow-y-auto px-3">
           {navItems.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className="rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-            >
-              {item.label}
-            </Link>
+            <NavItem key={item.href} href={item.href} icon={item.icon} label={item.label} />
           ))}
 
-          <div className="my-2 border-t border-border" />
+          <div className="my-3 border-t border-border" />
 
           {adminItems.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className="rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-            >
-              {item.label}
-            </Link>
+            <NavItem key={item.href} href={item.href} icon={item.icon} label={item.label} />
           ))}
         </nav>
 
         <div className="border-t border-border px-5 py-4">
-          {/* Org name populated from session once auth is wired */}
-          <p className="text-xs text-muted-foreground">Organization</p>
-          <button
-            type="button"
-            className="mt-2 text-sm font-medium text-destructive transition-colors hover:text-destructive/80"
-          >
-            Sign out
-          </button>
+          <p className="text-xs font-medium text-foreground">Organization</p>
+          <p className="text-xs text-muted-foreground">clinic.local</p>
+          <form action="/auth/logout" method="POST" className="mt-3">
+            <button
+              type="submit"
+              className="flex items-center gap-2 text-xs text-muted-foreground transition-colors hover:text-destructive"
+            >
+              <LogOut size={13} />
+              Sign out
+            </button>
+          </form>
         </div>
       </aside>
 
