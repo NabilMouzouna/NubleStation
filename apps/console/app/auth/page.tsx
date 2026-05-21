@@ -11,18 +11,17 @@ export default function AuthPage() {
   return (
     <main className="flex min-h-screen items-center justify-center bg-muted px-4">
       <div className="w-full max-w-sm">
-        <div className="mb-8 flex justify-center">
-          <Image
-            src="/logo-light.png"
-            alt="NubleStation"
-            width={240}
-            height={48}
-            priority
-          />
-        </div>
-
         <Card>
           <CardHeader>
+            <div className="mb-4 flex justify-center">
+              <Image
+                src="/logo-light.png"
+                alt="NubleStation"
+                width={200}
+                height={40}
+                priority
+              />
+            </div>
             <h1 className="text-xl font-semibold text-foreground">Sign in</h1>
             <p className="mt-1 text-sm text-muted-foreground">
               Enter your admin credentials to continue.
