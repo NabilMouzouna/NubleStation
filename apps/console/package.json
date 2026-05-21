@@ -9,6 +9,7 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@node-rs/argon2": "^2.0.2",
     "@nublestation/ui": "workspace:*",
     "better-sqlite3": "^12.10.0",
     "lucide-react": "^0.468.0",

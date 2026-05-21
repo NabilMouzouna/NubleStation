@@ -20,6 +20,9 @@ importers:
 
   apps/console:
     dependencies:
+      '@node-rs/argon2':
+        specifier: ^2.0.2
+        version: 2.0.2
       '@nublestation/ui':
         specifier: workspace:*
         version: link:../../packages/ui
