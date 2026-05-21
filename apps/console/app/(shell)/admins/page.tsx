@@ -15,7 +15,7 @@ export default function AdminsPage() {
           <h1 className="text-2xl font-semibold tracking-tight text-foreground">Admins</h1>
           <p className="mt-1 text-sm text-muted-foreground">Platform administrators for this organization</p>
         </div>
-        <Button>
+        <Button size="sm">
           <UserPlus size={16} />
           Invite admin
         </Button>

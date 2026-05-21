@@ -17,7 +17,7 @@ export default function AppsPage() {
           <h1 className="text-2xl font-semibold tracking-tight text-foreground">Apps</h1>
           <p className="mt-1 text-sm text-muted-foreground">All registered apps in your organization</p>
         </div>
-        <Button>
+        <Button size="sm">
           <Plus size={16} />
           Create app
         </Button>

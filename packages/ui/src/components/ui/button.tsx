@@ -10,7 +10,7 @@ const buttonVariants = cva(
     variants: {
       variant: {
         default:
-          "bg-brand-gradient text-white shadow-sm hover:opacity-90 hover:shadow-md",
+          "bg-gradient-to-r from-brand-blue to-brand-violet text-white shadow-sm hover:opacity-90 hover:shadow-md",
         ink: "bg-foreground text-white hover:bg-foreground/90 hover:shadow-md",
         secondary:
           "border-2 border-foreground bg-transparent text-foreground hover:bg-foreground hover:text-white",

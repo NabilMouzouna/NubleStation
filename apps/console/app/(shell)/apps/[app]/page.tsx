@@ -245,7 +245,7 @@ export default function AppDetailPage({ params }: { params: Promise<{ app: strin
           <h1 className="text-2xl font-semibold capitalize tracking-tight text-foreground">{app}</h1>
           <p className="mt-0.5 text-sm text-muted-foreground">{app}.clinic.local</p>
         </div>
-        <Button>New deployment</Button>
+        <Button size="sm">New deployment</Button>
       </div>
 
       <div className="mt-8 flex gap-1 border-b border-border">
