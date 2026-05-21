@@ -8,7 +8,9 @@
     "./lib/utils": "./src/lib/utils.ts",
     "./components/button": "./src/components/ui/button.tsx",
     "./components/card": "./src/components/ui/card.tsx",
-    "./components/input": "./src/components/ui/input.tsx"
+    "./components/input": "./src/components/ui/input.tsx",
+    "./components/badge": "./src/components/ui/badge.tsx",
+    "./components/table": "./src/components/ui/table.tsx"
   },
   "scripts": {
     "lint": "eslint . --max-warnings 0",
