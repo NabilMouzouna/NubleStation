@@ -1,9 +1,13 @@
+import { redirect } from "next/navigation";
 import Image from "next/image";
 import { Card } from "@nublestation/ui/components/card";
-import { Input } from "@nublestation/ui/components/input";
-import { Button } from "@nublestation/ui/components/button";
+import { validateSession } from "@/lib/auth/session";
+import { LoginForm } from "./_login-form";
 
-export default function AuthPage() {
+export default async function AuthPage() {
+  const session = await validateSession();
+  if (session) redirect("/dashboard");
+
   return (
     <main className="flex min-h-screen items-center justify-center bg-muted px-4">
       <div className="w-full max-w-sm">
@@ -26,44 +30,7 @@ export default function AuthPage() {
               </p>
             </div>
 
-            <form className="flex flex-col gap-4">
-              <div className="flex flex-col gap-1.5">
-                <label htmlFor="email" className="text-sm font-medium text-foreground">
-                  Email
-                </label>
-                <Input
-                  id="email"
-                  name="email"
-                  type="email"
-                  placeholder="admin@example.com"
-                  autoComplete="email"
-                  required
-                />
-              </div>
-
-              <div className="flex flex-col gap-1.5">
-                <label htmlFor="password" className="text-sm font-medium text-foreground">
-                  Password
-                </label>
-                <Input
-                  id="password"
-                  name="password"
-                  type="password"
-                  placeholder="••••••••"
-                  autoComplete="current-password"
-                  required
-                />
-              </div>
-
-              <Button type="submit" size="lg" className="mt-2 w-full">
-                Sign in
-              </Button>
-
-              {/* Shown only on failed login — wired when auth server action is added */}
-              <p aria-live="polite" className="hidden text-center text-sm text-destructive">
-                Invalid email or password.
-              </p>
-            </form>
+            <LoginForm />
           </div>
         </Card>
       </div>
