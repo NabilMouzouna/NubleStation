@@ -4,11 +4,11 @@ import { Button } from "@nublestation/ui/components/button";
 
 export default function SettingsPage() {
   return (
-    <div className="p-8">
+    <div className="p-5 lg:p-8">
       <h1 className="text-2xl font-semibold tracking-tight text-foreground">Settings</h1>
       <p className="mt-1 text-sm text-muted-foreground">Organization and platform configuration</p>
 
-      <div className="mt-8 flex flex-col gap-6 max-w-2xl">
+      <div className="mt-6 flex flex-col gap-5 w-full max-w-2xl">
         <Card>
           <CardHeader>
             <CardTitle>Organization</CardTitle>

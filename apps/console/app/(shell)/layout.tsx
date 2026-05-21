@@ -12,25 +12,28 @@ import {
 } from "lucide-react";
 import { NubleSidebarHeader } from "@/components/brand";
 import { NavItem } from "@/components/nav-item";
+import { BottomNav } from "@/components/bottom-nav";
 
 const navItems = [
   { label: "Dashboard", href: "/dashboard", icon: <LayoutDashboard size={16} /> },
-  { label: "Watch", href: "/watch", icon: <Activity size={16} /> },
-  { label: "Apps", href: "/apps", icon: <AppWindow size={16} /> },
-  { label: "Network", href: "/network", icon: <Network size={16} /> },
-  { label: "Storage", href: "/storage", icon: <HardDrive size={16} /> },
-  { label: "Audit", href: "/audit", icon: <ClipboardList size={16} /> },
+  { label: "Watch",     href: "/watch",     icon: <Activity size={16} />        },
+  { label: "Apps",      href: "/apps",      icon: <AppWindow size={16} />       },
+  { label: "Network",   href: "/network",   icon: <Network size={16} />         },
+  { label: "Storage",   href: "/storage",   icon: <HardDrive size={16} />       },
+  { label: "Audit",     href: "/audit",     icon: <ClipboardList size={16} />   },
 ];
 
 const adminItems = [
-  { label: "Admins", href: "/admins", icon: <Users size={16} /> },
+  { label: "Admins",   href: "/admins",   icon: <Users size={16} />    },
   { label: "Settings", href: "/settings", icon: <Settings size={16} /> },
 ];
 
 export default function ShellLayout({ children }: { children: ReactNode }) {
   return (
     <div className="flex h-screen overflow-hidden bg-background">
-      <aside className="flex w-56 flex-shrink-0 flex-col border-r border-border bg-background">
+
+      {/* Sidebar — desktop only */}
+      <aside className="hidden w-56 flex-shrink-0 flex-col border-r border-border bg-background md:flex">
         <div className="px-5 py-5">
           <NubleSidebarHeader />
         </div>
@@ -39,9 +42,7 @@ export default function ShellLayout({ children }: { children: ReactNode }) {
           {navItems.map((item) => (
             <NavItem key={item.href} href={item.href} icon={item.icon} label={item.label} />
           ))}
-
           <div className="my-3 border-t border-border" />
-
           {adminItems.map((item) => (
             <NavItem key={item.href} href={item.href} icon={item.icon} label={item.label} />
           ))}
@@ -62,7 +63,14 @@ export default function ShellLayout({ children }: { children: ReactNode }) {
         </div>
       </aside>
 
-      <main className="flex flex-1 flex-col overflow-auto">{children}</main>
+      {/* Main — bottom padding on mobile to clear the bottom nav */}
+      <main className="flex flex-1 flex-col overflow-auto pb-16 md:pb-0">
+        {children}
+      </main>
+
+      {/* Bottom nav — mobile only */}
+      <BottomNav />
+
     </div>
   );
 }

@@ -10,7 +10,10 @@
     "./components/card": "./src/components/ui/card.tsx",
     "./components/input": "./src/components/ui/input.tsx",
     "./components/badge": "./src/components/ui/badge.tsx",
-    "./components/table": "./src/components/ui/table.tsx"
+    "./components/table": "./src/components/ui/table.tsx",
+    "./components/avatar": "./src/components/ui/avatar.tsx",
+    "./components/progress": "./src/components/ui/progress.tsx",
+    "./components/separator": "./src/components/ui/separator.tsx"
   },
   "scripts": {
     "lint": "eslint . --max-warnings 0",
