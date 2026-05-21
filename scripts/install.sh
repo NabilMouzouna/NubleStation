@@ -279,11 +279,11 @@ SQL
   printf '\n'
   printf '%s  Start the console:%s\n' "$B" "$NC"
   printf '\n'
-  printf '    cd %s/apps/console\n' "$REPO_ROOT"
-  printf '    ADMIN_DB_PATH=%s pnpm dev\n' "$DB_PATH"
+  printf '    cd "%s/apps/console"\n' "$REPO_ROOT"
+  printf '    ADMIN_DB_PATH="%s" pnpm dev\n' "$DB_PATH"
   printf '\n'
   printf '  Or persist it in apps/console/.env.local:\n'
-  printf '    echo "ADMIN_DB_PATH=%s" > apps/console/.env.local\n' "$DB_PATH"
+  printf '    echo ADMIN_DB_PATH="%s" > apps/console/.env.local\n' "$DB_PATH"
   printf '\n'
 }
 
