@@ -1,9 +1,5 @@
 import Image from "next/image";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-} from "@nublestation/ui/components/card";
+import { Card } from "@nublestation/ui/components/card";
 import { Input } from "@nublestation/ui/components/input";
 import { Button } from "@nublestation/ui/components/button";
 
@@ -12,8 +8,8 @@ export default function AuthPage() {
     <main className="flex min-h-screen items-center justify-center bg-muted px-4">
       <div className="w-full max-w-sm">
         <Card>
-          <CardHeader>
-            <div className="mb-4 flex justify-center">
+          <div className="p-8">
+            <div className="flex justify-center">
               <Image
                 src="/logo-light.png"
                 alt="NubleStation"
@@ -22,19 +18,17 @@ export default function AuthPage() {
                 priority
               />
             </div>
-            <h1 className="text-center text-xl font-semibold text-foreground">Sign in</h1>
-            <p className="mt-1 text-center text-sm text-muted-foreground">
-              Enter your admin credentials to continue.
-            </p>
-          </CardHeader>
 
-          <CardContent>
+            <div className="mb-5 mt-8 text-center">
+              <h1 className="text-xl font-semibold text-foreground">Sign in</h1>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Enter your admin credentials to continue.
+              </p>
+            </div>
+
             <form className="flex flex-col gap-4">
               <div className="flex flex-col gap-1.5">
-                <label
-                  htmlFor="email"
-                  className="text-sm font-medium text-foreground"
-                >
+                <label htmlFor="email" className="text-sm font-medium text-foreground">
                   Email
                 </label>
                 <Input
@@ -48,10 +42,7 @@ export default function AuthPage() {
               </div>
 
               <div className="flex flex-col gap-1.5">
-                <label
-                  htmlFor="password"
-                  className="text-sm font-medium text-foreground"
-                >
+                <label htmlFor="password" className="text-sm font-medium text-foreground">
                   Password
                 </label>
                 <Input
@@ -69,14 +60,11 @@ export default function AuthPage() {
               </Button>
 
               {/* Shown only on failed login — wired when auth server action is added */}
-              <p
-                aria-live="polite"
-                className="hidden text-center text-sm text-destructive"
-              >
+              <p aria-live="polite" className="hidden text-center text-sm text-destructive">
                 Invalid email or password.
               </p>
             </form>
-          </CardContent>
+          </div>
         </Card>
       </div>
     </main>
