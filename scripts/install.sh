@@ -252,7 +252,7 @@ run_local() {
   DB_PATH="$REPO_ROOT/apps/console/dev.db"
   step "Creating admin database at $DB_PATH"
   rm -f "$DB_PATH"
-  sqlite3 "$DB_PATH" < "$(bundle_file scripts/seed-admin.sql)"
+  sqlite3 "$DB_PATH" < "$(bundle_file scripts/seed-admin.sql)" >/dev/null
 
   step "Hashing admin password"
   ADMIN_PASSWORD_HASH="$(hash_password "$ADMIN_PASSWORD")"
@@ -403,7 +403,7 @@ EOF
   # ── 7. Create and seed admin.db ──────────────────────────────────────────────
   step "Creating admin database"
   rm -f "$INSTALL_DIR/admin.db"
-  sqlite3 "$INSTALL_DIR/admin.db" < "$(bundle_file scripts/seed-admin.sql)"
+  sqlite3 "$INSTALL_DIR/admin.db" < "$(bundle_file scripts/seed-admin.sql)" >/dev/null
 
   step "Hashing admin password"
   ADMIN_PASSWORD_HASH="$(hash_password "$ADMIN_PASSWORD")"
