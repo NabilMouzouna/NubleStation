@@ -4,6 +4,10 @@
  * Consumers: apps import this file from their globals.css alongside `@import "tailwindcss"`.
  */
 
+@utility bg-brand-gradient {
+  background-image: linear-gradient(to right, #1F4FE0, #9B5BFF);
+}
+
 @theme {
   /* Brand — extracted from packages/assets/icon.svg + logo-light.svg */
   --color-brand-blue: #1f4fe0;       /* gradient start */

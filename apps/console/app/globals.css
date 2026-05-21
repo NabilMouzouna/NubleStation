@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@source "../../../packages";
 @import "@nublestation/ui/styles/tokens.css";
 
 html,

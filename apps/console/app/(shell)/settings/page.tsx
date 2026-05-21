@@ -79,7 +79,9 @@ export default function SettingsPage() {
           <p className="mt-1 text-sm text-muted-foreground">
             Reinstalling NubleStation will wipe admin.db and require re-seeding credentials. PostgreSQL data is preserved.
           </p>
-          <Button variant="destructive" className="mt-4">Reinstall NubleStation</Button>
+          <div className="mt-5">
+            <Button variant="destructive">Reinstall NubleStation</Button>
+          </div>
         </div>
       </div>
     </div>
