@@ -645,7 +645,7 @@ nuble push --app tasks         # migrations first, then frontend
 
 Two HTTP uploads. No orchestration needed. The developer is sitting at the keyboard.
 
-### What This Means for Today's Database Service Work
+### What This Means for Today's Blaze Work
 
 Only one architectural concern survives from "deployment thinking":
 
@@ -913,7 +913,7 @@ This section captures explicitly out-of-scope items with their integration path.
 - LAN-native CLI deploy is faster and simpler for one-developer scenarios
 - Useful when multiple developers collaborate on one app
 
-### V2.6 — Storage Service Enhancements
+### V2.6 — Vault Enhancements
 
 **What:**
 - Multipart uploads for large files (current limit: ~500 MB)

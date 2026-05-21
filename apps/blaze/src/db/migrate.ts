@@ -8,7 +8,7 @@ import type pg from "pg";
 import { closePool, getPool } from "./pool.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-// src/db/migrate.ts → apps/db/drizzle
+// src/db/migrate.ts → apps/blaze/drizzle
 const MIGRATIONS_FOLDER = resolve(__dirname, "../../drizzle");
 
 export async function runPlatformMigrations(pool: pg.Pool): Promise<void> {

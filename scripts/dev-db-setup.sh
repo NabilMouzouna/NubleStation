@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Idempotent bootstrap for the local Postgres role + databases used by apps/db
+# Idempotent bootstrap for the local Postgres role + databases used by apps/blaze
 # on a developer Mac. Run once after installing Postgres (e.g. via Homebrew).
 #
 # Creates:
@@ -46,6 +46,6 @@ create_db_if_missing "$TEST_DB"
 
 echo "==> done"
 echo
-echo "Connection string for apps/db/.env.local:"
+echo "Connection string for apps/blaze/.env.local:"
 echo "  DATABASE_URL=postgres://$ROLE:$PASSWORD@localhost:5432/$DEV_DB"
 echo "  DATABASE_URL_TEST=postgres://$ROLE:$PASSWORD@localhost:5432/$TEST_DB"

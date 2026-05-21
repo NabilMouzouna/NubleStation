@@ -3,7 +3,7 @@ import { closePool, getPool } from "../src/db/pool.js";
 import { runPlatformMigrations } from "../src/db/migrate.js";
 import { resetTenantData } from "./helpers/tenant-data.js";
 
-// Vitest sets NODE_ENV=test by default, which makes apps/db/src/config.ts pick
+// Vitest sets NODE_ENV=test by default, which makes apps/blaze/src/config.ts pick
 // DATABASE_URL_TEST. .env.local must define it.
 
 beforeAll(async () => {

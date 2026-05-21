@@ -31,7 +31,7 @@ export function loadConfig(): Config {
     const issues = parsed.error.issues
       .map((i) => `  - ${i.path.join(".")}: ${i.message}`)
       .join("\n");
-    throw new Error(`Invalid environment for apps/db:\n${issues}`);
+    throw new Error(`Invalid environment for apps/blaze:\n${issues}`);
   }
   cached = parsed.data;
   return cached;

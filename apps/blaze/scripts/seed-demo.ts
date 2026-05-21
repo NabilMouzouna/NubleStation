@@ -2,7 +2,7 @@
 // Prints the plaintext API key to stdout. Run once on the local dev DB; safe
 // to re-run — existing rows are reused.
 //
-//   pnpm --filter @nublestation/db exec tsx scripts/seed-demo.ts
+//   pnpm --filter @nublestation/blaze exec tsx scripts/seed-demo.ts
 //
 import { randomBytes } from "node:crypto";
 import { hash as argon2Hash } from "@node-rs/argon2";

@@ -61,14 +61,14 @@ const nuble = new NubleClient({
   apiKey: import.meta.env.NUBLE_API_KEY, // injected by `nuble deploy`
 })
 
-// DB service — ADR 003
+// Blaze (database) — ADR 003
 await nuble.db.query('SELECT * FROM tasks WHERE ...')
 
-// Storage service
+// Vault (storage)
 await nuble.storage.upload(file)
 await nuble.storage.getUrl(key)
 
-// Auth — future (v1.5)
+// Identity — future (v1.5)
 await nuble.auth.signIn({ email, password })
 ```
 
@@ -163,5 +163,5 @@ Scaffolding both packages now establishes the repo layout, tsconfig, and publish
 ## References
 
 - ADR 001 — apps are database rows, not containers
-- ADR 003 — DB service, HMAC internal headers, API key format (`nbl_<keyId>.<secret>`)
-- ADR 007 — Deploy service, full CLI pipeline, env injection
+- ADR 003 — Blaze, HMAC internal headers, API key format (`nbl_<keyId>.<secret>`)
+- ADR 007 — Orbit, full CLI pipeline, env injection
