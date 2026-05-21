@@ -8,9 +8,33 @@
 
 The Console (Next.js admin dashboard at `console.{org}.local`) is the only surface end users — clinic admins, IT, developers deploying apps — see directly. It needs a coherent design system before component work begins. Building one from scratch costs weeks; importing a full off-the-shelf kit (shadcn/ui, Mantine) gives speed but no brand identity that matches the "private cloud appliance" positioning.
 
+## Brand assets
+
+| Asset | Path | Usage |
+|---|---|---|
+| Full logo (light) | `packages/assets/logo-light.png` | `/auth` page centered above login card; sidebar header when expanded |
+| Icon only | `packages/assets/icon.png` | Sidebar header when collapsed; browser favicon; any narrow space |
+
+The logo is: cloud icon (blue `#4F6BF6` → purple `#9B40F8` gradient body, violet `#B84FF5` network legs + horizontal bar) + wordmark "**Nuble**Station" (Nuble in near-black `#1A1A1A`, Station in slate-gray `#6B7280`) + tagline "PRIVATE · LOCAL · YOURS" in spaced uppercase gray.
+
+**Dark mode:** a `logo-dark.png` variant (white wordmark) will be needed when dark mode is added in v1.0. Deferred — see Adaptations below.
+
 ## Decision
 
-Adopt a **Meta-inspired token system** as Console's foundation: pill buttons (`rounded.full` 100px), a stark white canvas, a single saturated cobalt accent (`#0064E0`) for primary action, an Optimistic VF–style display face with `ss01`/`ss02` stylistic sets, a 4px spacing base, and `rounded.xxxl` (32px) card geometry as the dominant signature.
+Adopt a **Meta-inspired token system** as Console's foundation: pill buttons (`rounded.full` 100px), a stark white canvas, a brand-purple accent (`#6B48F5`) for primary action derived from the logo gradient, an Optimistic VF–style display face with `ss01`/`ss02` stylistic sets, a 4px spacing base, and `rounded.xxxl` (32px) card geometry as the dominant signature.
+
+**Brand color tokens extracted from `logo-light.png`:**
+
+| Token | Value | Usage |
+|---|---|---|
+| `--color-brand-blue` | `#4F6BF6` | Logo cloud top — gradient start |
+| `--color-brand-purple` | `#9B40F8` | Logo cloud bottom — gradient mid |
+| `--color-brand-violet` | `#B84FF5` | Logo legs + bar — gradient end |
+| `--color-accent` | `#6B48F5` | Primary CTA, active nav, focus rings — midpoint of brand gradient |
+| `--color-text-primary` | `#1A1A1A` | Wordmark "Nuble", headings |
+| `--color-text-secondary` | `#6B7280` | Wordmark "Station", body, tagline |
+
+The `#0064E0` cobalt originally referenced from the Meta spec is replaced by `#6B48F5` to match the actual brand identity.
 
 ## Rationale
 
@@ -27,7 +51,7 @@ NubleStation is positioned as a hardware appliance for clinics. Meta's hardware-
 
 The reference spec was a commerce design language. Console is admin software, so:
 
-- **Primary CTA is the cobalt pill.** The dual-CTA pattern (black marketing pill + cobalt buy pill) collapses to one — Console has no marketing surface, every action is a "do it" affordance.
+- **Primary CTA is the brand-purple pill (`#6B48F5`).** The dual-CTA pattern collapses to one — Console has no marketing surface, every action is a "do it" affordance. Color derived from the actual logo gradient, replacing the Meta cobalt reference.
 - **Drop:** promo strips, checkout summary cards, SKU pickers, product galleries, warranty cards, testimonial cards, promo banners, sale badges. None map to admin tasks.
 - **Keep:** the button family, icon-feature cards, feature cards, text inputs, radio options, semantic badges (success/critical/attention/warning), accordion items, spec tables (reused as resource detail layouts), and the footer region.
 - **Typography:** Optimistic VF is proprietary. Use Inter (or another open variable face that exposes equivalent stylistic sets) with the same `ss01`/`ss02` switching pattern; preserve the negative letter-spacing on body roles.
