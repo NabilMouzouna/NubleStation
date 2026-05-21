@@ -2,21 +2,22 @@
   <defs>
     <linearGradient id="fg" x1="0.5" y1="0" x2="0.5" y2="1">
       <stop offset="0%" stop-color="#FCD34D"/>
-      <stop offset="100%" stop-color="#EA580C"/>
+      <stop offset="55%" stop-color="#F97316"/>
+      <stop offset="100%" stop-color="#DC2626"/>
     </linearGradient>
   </defs>
-  <rect width="64" height="64" rx="16" fill="#0A0400"/>
-  <!-- Single clean flame -->
+  <rect width="64" height="64" rx="16" fill="#FFF5ED"/>
+  <!-- Flame centered: top ~y=10, base y=52, shifted down 2px from original -->
   <path d="
-    M32 52
-    C20 52 17 40 23 30
-    C25 25 27 19 25 11
-    C30 19 31 26 29 30
-    C33 21 35 14 34 8
-    C40 18 43 30 39 38
-    C44 30 44 22 41 14
-    C46 24 47 38 43 44
-    C47 52 44 52 32 52
+    M32 54
+    C20 54 17 42 23 32
+    C25 27 27 21 25 13
+    C30 21 31 28 29 32
+    C33 23 35 16 34 10
+    C40 20 43 32 39 40
+    C44 32 44 24 41 16
+    C46 26 47 40 43 46
+    C47 54 44 54 32 54
     Z
   " fill="url(#fg)"/>
 </svg>

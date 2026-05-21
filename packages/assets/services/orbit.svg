@@ -1,18 +1,23 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
-  <rect width="64" height="64" rx="16" fill="#020B18"/>
-  <!-- Orbit ring back half (behind planet) -->
-  <ellipse cx="32" cy="34" rx="20" ry="7"
-    stroke="#22D3EE" stroke-width="2"
+  <rect width="64" height="64" rx="16" fill="#E6FFFE"/>
+  <!-- Orbit ring back half -->
+  <ellipse cx="32" cy="36" rx="20" ry="7"
+    stroke="#0891B2" stroke-width="2"
     stroke-dasharray="28 34"
     stroke-dashoffset="0"
-    opacity="0.3"
-    transform="rotate(-22 32 34)"/>
-  <!-- Planet -->
-  <circle cx="32" cy="28" r="10" fill="#22D3EE" fill-opacity="0.15" stroke="#22D3EE" stroke-width="2"/>
-  <!-- Orbit ring front half (in front of planet) -->
-  <ellipse cx="32" cy="34" rx="20" ry="7"
-    stroke="#22D3EE" stroke-width="2"
+    opacity="0.25"
+    transform="rotate(-22 32 36)"/>
+  <!-- Planet, centered: cy=30, r=10, y range 20–40 -->
+  <circle cx="32" cy="30" r="10"
+    fill="#0891B2" fill-opacity="0.15"
+    stroke="#0891B2" stroke-width="2"/>
+  <!-- Orbit ring front half -->
+  <ellipse cx="32" cy="36" rx="20" ry="7"
+    stroke="#0891B2" stroke-width="2"
     stroke-dasharray="28 34"
     stroke-dashoffset="-34"
-    transform="rotate(-22 32 34)"/>
+    transform="rotate(-22 32 36)"/>
+  <!-- Satellite -->
+  <circle cx="46" cy="25" r="3" fill="#0891B2"/>
+  <circle cx="46" cy="25" r="1.4" fill="#E6FFFE"/>
 </svg>

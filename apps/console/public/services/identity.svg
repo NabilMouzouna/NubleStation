@@ -1,13 +1,13 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
-  <rect width="64" height="64" rx="16" fill="#08001C"/>
-  <!-- Fingerprint — 5 concentric arcs, center at (32,46), opening downward -->
-  <g stroke="#8B5CF6" stroke-linecap="round" fill="none">
-    <path d="M26 46 A6 6 0 0 1 38 46"   stroke-width="2.5"/>
-    <path d="M22 46 A10 10 0 0 1 42 46" stroke-width="2.2"/>
-    <path d="M18 46 A14 14 0 0 1 46 46" stroke-width="2"/>
-    <path d="M14 46 A18 18 0 0 1 50 46" stroke-width="1.8"/>
-    <path d="M10 46 A22 22 0 0 1 54 46" stroke-width="1.5" opacity="0.6"/>
+  <rect width="64" height="64" rx="16" fill="#EEE9FF"/>
+  <!-- Fingerprint arcs centered at y=43, visual range y=21–43, center≈y=32 -->
+  <g stroke="#7C3AED" stroke-linecap="round" fill="none">
+    <path d="M26 43 A6  6  0 0 1 38 43" stroke-width="2.5"/>
+    <path d="M22 43 A10 10 0 0 1 42 43" stroke-width="2.2"/>
+    <path d="M18 43 A14 14 0 0 1 46 43" stroke-width="2"/>
+    <path d="M14 43 A18 18 0 0 1 50 43" stroke-width="1.8"/>
+    <path d="M10 43 A22 22 0 0 1 54 43" stroke-width="1.5" opacity="0.55"/>
   </g>
   <!-- Center point -->
-  <circle cx="32" cy="40" r="2.5" fill="#8B5CF6"/>
+  <circle cx="32" cy="37" r="2.5" fill="#7C3AED"/>
 </svg>
