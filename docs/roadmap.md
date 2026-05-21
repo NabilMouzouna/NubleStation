@@ -1,4 +1,4 @@
-# Database Service — Roadmap
+# Blaze (database service) — Roadmap
 
 > The **one doc to follow**. Deep detail lives in `adr/003-database-service-architecture.md` — open it only when a phase says "see ADR §X".
 
@@ -106,7 +106,7 @@ flowchart LR
 
 > Smallest thing that *could* leak data, then prove it can't. No HTTP, no SDK, no Redis, no full schema yet — just a script + a test.
 
-- [ ] `apps/api` scaffolded (Hono, TypeScript) + Drizzle + `pg`
+- [ ] `apps/blaze` scaffolded (Hono, TypeScript) + Drizzle + `pg`
 - [ ] **Minimal** migration: `platform.apps` (just `id`, `name`) + one tenant table `tenant_data.notes` (`id`, `app_id`, `body`) with its RLS policy
 - [ ] ⚠1 Connection Manager: `BEGIN → SET LOCAL app.current_tenant → query → COMMIT`, prepared statements **off**
 - [ ] 🔒 **Isolation test green** (the diagram above) — run via a plain script/Vitest against local pg
@@ -181,9 +181,9 @@ trigger arrives — not before.
 
 | Parked item | Why deferred | Revisit when |
 |---|---|---|
-| Secret management (API key storage, rotation, env injection) | DB service doesn't need it to prove isolation; it's a cross-cutting concern | Phase 1b (`api_keys` table) → real design when **Auth service** starts |
-| Deployment service ↔ DB service env/secrets boundary | Deployment service isn't being built today; no contract to define yet | When the **Deployment service** ADR is written |
-| Other services (Auth, Storage) consuming the DB | They consume `platform.*`; contracts only matter once those services exist | Each consumer's own ADR (DB just exposes the schema) |
+| Secret management (API key storage, rotation, env injection) | Blaze doesn't need it to prove isolation; it's a cross-cutting concern | Phase 1b (`api_keys` table) → real design when **Identity** starts |
+| Orbit ↔ Blaze env/secrets boundary | Orbit isn't being built today; no contract to define yet | When Orbit (ADR 007) implementation starts |
+| Other services (Identity, Vault) consuming Blaze | They consume `platform.*`; contracts only matter once those services exist | Each consumer's own ADR (Blaze just exposes the schema) |
 | Schema-per-app vs row-level | **Already decided** — row-level + RLS (ADR §3). Not reopening. | — (closed) |
 | `tenant_data.users/files` shared views (⚠2) | Depends on `platform.users` + Auth; not needed for the spine | Phase 2 |
 | Redis API-key cache | Pure optimization; correctness works without it | Phase 1b / Phase 6 |

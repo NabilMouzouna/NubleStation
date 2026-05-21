@@ -1,15 +1,15 @@
-# HMAC Signing Flow — API Gateway → DB Service
+# HMAC Signing Flow — API Gateway → Blaze
 
-This document describes the end-to-end trust chain from a client request arriving at the API Gateway to the DB service accepting or rejecting the forwarded request. Both sides share `INTERNAL_HMAC_SECRET` (injected via environment variable) and the signing/verification logic in `packages/shared/src/hmac.ts`.
+This document describes the end-to-end trust chain from a client request arriving at the API Gateway to Blaze accepting or rejecting the forwarded request. Both sides share `INTERNAL_HMAC_SECRET` (injected via environment variable) and the signing/verification logic in `packages/shared/src/hmac.ts`.
 
-See ADR 003 §14 for the architectural rationale.
+See ADR 003 §14 for the architectural rationale. The same trust model applies to gateway → Identity / Vault / Orbit; Blaze is used here as the worked example.
 
 ---
 
 ## Overview
 
 ```
-Client                  API Gateway                      DB Service
+Client                  API Gateway                      Blaze
   │                         │                                │
   │  Bearer nbl_<id>.<sec>  │                                │
   │─────────────────────────▶│                                │
@@ -79,7 +79,7 @@ A single generic `401` is returned for any failure — whether `key_id` not foun
 **Files:**
 - `apps/gateway/src/forward/sign.ts` — produces the HMAC signature
 - `apps/gateway/src/forward/proxy.ts` — attaches signed headers and forwards
-- `packages/shared/src/hmac.ts` — canonical implementation (shared with DB service)
+- `packages/shared/src/hmac.ts` — canonical implementation (shared with Blaze)
 
 ### Canonical Payload
 
@@ -114,7 +114,7 @@ export function computeHmac(method, path, bodyHashHex, timestamp, secret): strin
 }
 ```
 
-### Headers sent to DB service
+### Headers sent to Blaze
 
 | Header | Value | Purpose |
 |---|---|---|
@@ -123,13 +123,13 @@ export function computeHmac(method, path, bodyHashHex, timestamp, secret): strin
 | `x-nuble-timestamp` | `<unix ms>` | Replay attack prevention |
 | `x-nuble-sig` | `<sha256 hex>` | HMAC-SHA256 of canonical payload |
 
-The DB service is **not exposed on the LAN** — it only listens on the internal Docker bridge network. These headers are the sole mechanism the DB service uses to identify and trust requests.
+Blaze is **not exposed on the LAN** — it only listens on the internal Docker bridge network. These headers are the sole mechanism Blaze uses to identify and trust requests.
 
 ---
 
-## Phase 3 — DB Service: HMAC Verification Middleware
+## Phase 3 — Blaze: HMAC Verification Middleware
 
-**File:** `apps/db/src/middleware/hmac.ts`
+**File:** `apps/blaze/src/middleware/hmac.ts`
 
 Applied globally to all routes **except** `/healthz` and `/readyz`.
 
@@ -174,6 +174,17 @@ Hono's request body stream can only be consumed once. `.clone()` lets the middle
 
 ---
 
+## A note on `apps/blaze`
+
+In the codebase Blaze still uses `src/db/` internally — that folder is the database-access layer of the service (pool, schema, migrations), not the service name. Don't confuse the two:
+
+| Layer | Path |
+|---|---|
+| Service folder | `apps/blaze/` |
+| Database-access layer inside Blaze | `apps/blaze/src/db/` |
+
+---
+
 ## Shared package — single source of truth
 
 `packages/shared/src/hmac.ts` is imported by both services. This means the canonical payload format, SHA-256 function, and HMAC function can **never drift** between the signer and verifier. Any change to the format is a single commit that affects both sides simultaneously.
@@ -194,13 +205,13 @@ packages/shared/
 |---|---|
 | Authenticity | HMAC-SHA256 with `INTERNAL_HMAC_SECRET` — only gateway knows the secret |
 | Integrity | Body hash is part of the signed payload — body tampering breaks the sig |
-| Replay prevention | Timestamp must be within ±30 s of DB service clock |
+| Replay prevention | Timestamp must be within ±30 s of Blaze's clock |
 | Timing safety | `timingSafeEqual` on HMAC comparison; `argon2.verify` on API key check |
 | Enumeration prevention | Gateway returns a single generic 401 for all auth failures |
-| Network isolation | DB service not exposed on LAN — only reachable via Docker bridge |
+| Network isolation | Blaze not exposed on LAN — only reachable via Docker bridge |
 
 ---
 
 ## Phase 1 limitation: userId is a placeholder
 
-In Phase 1, `X-Nuble-User-Id` is set to `api_keys.id` (the row UUID of the key itself), not a real user session ID. This is documented with a `// Phase 1 placeholder` comment in `apps/gateway/src/routes/proxy.ts:18`. Real session resolution will be introduced when the auth service is built (Phase 2), and the gateway will then resolve session tokens to actual `users.id` UUIDs before forwarding.
+In Phase 1, `X-Nuble-User-Id` is set to `api_keys.id` (the row UUID of the key itself), not a real user session ID. This is documented with a `// Phase 1 placeholder` comment in `apps/gateway/src/routes/proxy.ts:18`. Real session resolution will be introduced when Identity is built (Phase 2), and the gateway will then resolve session tokens to actual `users.id` UUIDs before forwarding.

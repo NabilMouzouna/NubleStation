@@ -185,9 +185,9 @@ flowchart TD
 **Data sources:**
 - Service status: Docker socket polling (via `GET /healthz` on each service's internal port)
 - Infra events: `SELECT * FROM infra_events ORDER BY created_at DESC LIMIT 20` on `admin.db`
-- Quick metrics: aggregated queries against `platform.*` tables via the db service's `/v1/admin/*` routes
+- Quick metrics: aggregated queries against `platform.*` tables via Blaze's `/v1/admin/*` routes
 
-Services shown: gateway, db, auth, storage, deploy, postgres, caddy, coredns.
+Services shown: gateway, blaze, identity, vault, orbit, postgres, caddy, coredns.
 
 ---
 
@@ -229,7 +229,7 @@ flowchart TD
     Action -->|success| AppDetail
 ```
 
-**Per-app card data** is fetched via the db service `/v1/admin/apps` route which aggregates: table count from `platform.app_tables`, storage used from `platform.apps`, user count from `platform.user_app_access`.
+**Per-app card data** is fetched via Blaze's `/v1/admin/apps` route which aggregates: table count from `platform.app_tables`, storage used from `platform.apps`, user count from `platform.user_app_access`.
 
 ---
 
@@ -291,7 +291,7 @@ flowchart TD
     TabUsers --> Users
 ```
 
-**Deployments tab** shows the platform-managed static file upload flow: developer runs `nuble deploy` → CLI POSTs the `dist/` zip → deploy service unpacks to `/var/nuble/apps/:app/` → Caddy serves it at `{appname}.{org}.local`. Console shows the status of each deployment and the endpoint URL.
+**Deployments tab** shows the platform-managed static file upload flow: developer runs `nuble deploy` → CLI POSTs the `dist/` zip → Orbit unpacks to `/var/nuble/apps/:app/` → Caddy serves it at `{appname}.{org}.local`. Console shows the status of each deployment and the endpoint URL.
 
 **Envs & Secrets tab** surfaces the values the app developer needs to configure their SDK: the `api.{org}.local` base URL. Future: per-app environment variable store.
 
@@ -301,7 +301,7 @@ flowchart TD
 
 **Migrations tab** shows the migration history from `platform.migrations` for this app — version, status, ran at, duration. Read-only. Lets the developer debug a failed migration without SSH access.
 
-**Storage tab** reads `/var/nuble/apps/:app/files/` directory listing (served via the storage service's `/v1/admin/storage/:app` route). Images render inline in a preview panel.
+**Storage tab** reads `/var/nuble/apps/:app/files/` directory listing (served via Vault's `/v1/admin/storage/:app` route). Images render inline in a preview panel.
 
 **Users tab** lists entries in `platform.user_app_access` — users who have been granted access to this app's resources.
 
@@ -393,4 +393,4 @@ flowchart TD
     PerAppTable -->|click row| AppDetail["/apps/:app (Storage tab)"]
 ```
 
-**Data source:** storage service's `/v1/admin/storage` route which walks `/var/nuble/apps/` on the host filesystem. Summary bar uses `df` output for actual disk free vs. used. Clicking a row navigates to the app's storage tab for file-level browsing.
+**Data source:** Vault's `/v1/admin/storage` route which walks `/var/nuble/apps/` on the host filesystem. Summary bar uses `df` output for actual disk free vs. used. Clicking a row navigates to the app's storage tab for file-level browsing.

@@ -82,13 +82,13 @@ Every command has a **gate** — the service it requires to be running. Commands
 |---|---|---|---|
 | `nuble init` | Connect to org, write config, install SDK | Gateway `/healthz` | Phase 1 |
 | `nuble status` | Show health of all services | Gateway `/healthz` per service | Phase 1 |
-| `nuble deploy` | Full build + upload pipeline (ADR 007) | Deploy service | Phase 2 |
-| `nuble apps list` | List apps in the org | DB service `/v1/admin/apps` | Phase 2 |
-| `nuble apps create` | Create a new app | DB service | Phase 2 |
-| `nuble env set` | Write an env var for an app | DB service | Phase 2 |
-| `nuble env list` | List env vars for an app | DB service | Phase 2 |
+| `nuble deploy` | Full build + upload pipeline (ADR 007) | Orbit | Phase 2 |
+| `nuble apps list` | List apps in the org | Blaze `/v1/admin/apps` | Phase 2 |
+| `nuble apps create` | Create a new app | Blaze | Phase 2 |
+| `nuble env set` | Write an env var for an app | Blaze | Phase 2 |
+| `nuble env list` | List env vars for an app | Blaze | Phase 2 |
 | `nuble logs` | Stream container logs via SSE | SSE service (v1.5) | Phase 3 |
-| `nuble db push` | Push app-developer schema migration | DB service | Phase 3 |
+| `nuble db push` | Push app-developer schema migration | Blaze | Phase 3 |
 
 `nuble deploy` is the most important Phase 2 command — it is the core value proposition. All other Phase 2 commands are secondary.
 
@@ -142,7 +142,7 @@ Publishing triggers on push to `main` via GitHub Actions (`release.yml`) — sam
 
 ```
 Phase 1 (now)       — packages/sdk scaffold, packages/cli scaffold, nuble init + nuble status
-Phase 2             — nuble deploy (needs deploy service), nuble apps/env (needs db service routes)
+Phase 2             — nuble deploy (needs Orbit), nuble apps/env (needs Blaze admin routes)
 Phase 3 (v1.5)      — nuble logs (needs SSE service), nuble db push (needs schema DSL)
 ```
 

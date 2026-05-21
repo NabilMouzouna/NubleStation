@@ -26,10 +26,10 @@ graph TB
             CoreDNS["CoreDNS :53\nDNS authority"]
             Gateway["API Gateway :3000"]
             Console["Console (Next.js) :80"]
-            DB["DB Service :3001"]
-            Auth["Auth Service :3002"]
-            Storage["Storage :3003"]
-            Deploy["Deploy :3004"]
+            Blaze["Blaze :3001"]
+            Identity["Identity :3002"]
+            Vault["Vault :3003"]
+            Orbit["Orbit :3004"]
             Postgres["PostgreSQL :5432"]
         end
     end
@@ -44,11 +44,11 @@ graph TB
 
     Console -.->|"bind mount :rw"| AdminDB
     Console -.->|"bind mount :ro"| DockerSock
-    Gateway --> DB
-    Gateway --> Auth
-    Gateway --> Storage
-    Gateway --> Deploy
-    DB --> Postgres
+    Gateway --> Blaze
+    Gateway --> Identity
+    Gateway --> Vault
+    Gateway --> Orbit
+    Blaze --> Postgres
 ```
 
 ---
@@ -155,7 +155,7 @@ sequenceDiagram
     participant C as docker compose
     participant PG as PostgreSQL
     participant PB as PgBouncer
-    participant DB as DB Service
+    participant Blaze as Blaze
     participant GW as Gateway
     participant Con as Console
     participant Cad as Caddy
@@ -170,14 +170,14 @@ sequenceDiagram
     C->>PB: start pgbouncer (depends: postgres healthy)
     PB-->>C: healthy
 
-    C->>DB: start db service (depends: pgbouncer healthy)
-    Note over DB: Boot sequence inside container:
-    DB->>DB: loadConfig() — zod validate env
-    DB->>PG: runPlatformMigrations() via drizzle
-    DB->>PG: recordSchemaVersion()
-    DB-->>C: healthy (GET /healthz → 200)
+    C->>Blaze: start Blaze (depends: pgbouncer healthy)
+    Note over Blaze: Boot sequence inside container:
+    Blaze->>Blaze: loadConfig() — zod validate env
+    Blaze->>PG: runPlatformMigrations() via drizzle
+    Blaze->>PG: recordSchemaVersion()
+    Blaze-->>C: healthy (GET /healthz → 200)
 
-    C->>GW: start gateway (depends: db healthy)
+    C->>GW: start gateway (depends: blaze healthy)
     GW->>PG: open read-only pool (api_keys lookup)
     GW-->>C: healthy
 
@@ -200,7 +200,7 @@ Host filesystem                    Inside containers
 ─────────────────                  ─────────────────
 /var/nuble/admin.db    ──────────► /app/admin.db          (console, rw)
 /var/run/docker.sock   ──────────► /var/run/docker.sock   (console, ro)
-/var/nuble/apps/       ──────────► /var/nuble/apps/        (deploy, rw)
+/var/nuble/apps/       ──────────► /var/nuble/apps/        (orbit, rw)
                                    /var/nuble/apps/        (caddy, ro — static files)
 ```
 
@@ -266,7 +266,7 @@ flowchart TD
     Caddy -->|"patients.clinic.local"| Static2["→ file_server\n/var/nuble/apps/patients/current/"]
 
     Console --> NextJS["Next.js App Router\n(running in console container)"]
-    Gateway --> Services["Internal services\ndb · auth · storage · deploy"]
+    Gateway --> Services["Internal services\nblaze · identity · vault · orbit"]
 ```
 
 ### Caddyfile structure
@@ -411,14 +411,14 @@ graph LR
 
     subgraph Layer B ["Layer B — Service event push (detail layer)"]
         GW["Gateway"]
-        DB["DB Service"]
-        Auth["Auth Service"]
+        Blaze["Blaze"]
+        Identity["Identity"]
         ConsoleB["Console\nPOST /internal/events"]
         InfraEvents["infra_events table\n(admin.db)"]
 
         GW -->|"HMAC-signed POST"| ConsoleB
-        DB -->|"HMAC-signed POST"| ConsoleB
-        Auth -->|"HMAC-signed POST"| ConsoleB
+        Blaze -->|"HMAC-signed POST"| ConsoleB
+        Identity -->|"HMAC-signed POST"| ConsoleB
         ConsoleB --> InfraEvents
     end
 ```
@@ -444,7 +444,7 @@ POST http://console/internal/events
 X-Nuble-Sig: <HMAC-SHA256 of payload using INTERNAL_HMAC_SECRET>
 
 {
-  "source": "db",
+  "source": "blaze",
   "event_type": "migration.ran",
   "payload": { "version": "0003", "duration_ms": 42 }
 }
@@ -470,7 +470,7 @@ timeline
     section Docker boot
         t=35s : PostgreSQL healthy
         t=38s : PgBouncer healthy
-        t=45s : DB service healthy (migrations ran)
+        t=45s : Blaze healthy (migrations ran)
         t=50s : Gateway healthy
         t=55s : Console healthy (SQLite schema checked)
         t=60s : Caddy + CoreDNS healthy

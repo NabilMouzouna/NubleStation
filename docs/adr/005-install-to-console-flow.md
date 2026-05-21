@@ -72,7 +72,7 @@ admin_sessions
 
 infra_events
 ├── id            TEXT PRIMARY KEY
-├── source        TEXT NOT NULL          (service name: 'gateway', 'auth', 'db', ...)
+├── source        TEXT NOT NULL          (service name: 'gateway', 'identity', 'blaze', 'vault', 'orbit', ...)
 ├── event_type    TEXT NOT NULL          (e.g. 'migration.ran', 'key.issued', 'deploy.triggered')
 ├── payload       TEXT                   (JSON)
 └── created_at    INTEGER NOT NULL
@@ -123,12 +123,12 @@ The console and app SSO serve different audiences and must be fully independent.
 | | App SSO (`oidc-provider`) | Console auth |
 |---|---|---|
 | Audience | Clinic staff using apps | Platform admins managing infra |
-| Identity store | `platform.users` (PostgreSQL) | `admin_users` (SQLite) |
+| Identity store | `platform.users` (PostgreSQL, owned by Identity) | `admin_users` (SQLite) |
 | Token type | OIDC ID token + access token | Lucia session cookie |
-| Login endpoint | `/auth/login` | `console.{org}.local/login` |
+| Login endpoint | `/auth/login` (Identity) | `console.{org}.local/login` |
 | Depends on Postgres | Yes | Never |
 
-A broken OIDC config, a crashed auth service, or a corrupted `platform.users` table does not affect console access. The super admin can always log in.
+A broken OIDC config, a crashed Identity service, or a corrupted `platform.users` table does not affect console access. The super admin can always log in.
 
 ---
 
@@ -165,7 +165,7 @@ When services are healthy, they push structured events to the console's internal
 POST http://console/internal/events
 X-Nuble-Sig: <HMAC of payload, shared secret from .env>
 
-{ "source": "db", "event_type": "migration.ran", "payload": { ... } }
+{ "source": "blaze", "event_type": "migration.ran", "payload": { ... } }
 ```
 
 The endpoint is HMAC-signed using the same `INTERNAL_HMAC_SECRET` already in `.env` (reusing the signing logic from `shared/`). Services fire-and-forget — no retry, no crash if the console is unreachable. Events are stored in `infra_events`.

@@ -63,11 +63,11 @@ LAN — *.nuble.local
       └── Docker Compose Stack
             ├── Caddy           (reverse proxy, port 80/443)
             ├── CoreDNS         (DNS authority for *.nuble.local, port 53)
-            ├── API Gateway     (the only service exposed on the LAN; auth/key resolution, routing)
-            ├── Auth Service    (own container — one process per container)
-            ├── DB Service      (own container)
-            ├── Storage Service (own container)
-            ├── Deploy Service  (own container)
+            ├── Gateway         (API gateway — the only service exposed on the LAN; auth/key resolution, routing)
+            ├── Identity        (auth service — sessions, API keys, OIDC/SSO; own container)
+            ├── Blaze           (database service — Postgres access, RLS, migrations; own container)
+            ├── Vault           (storage service — S3-like blob storage; own container)
+            ├── Orbit           (deployment service — frontend bundle uploads; own container)
             ├── Console (UI)    (Next.js admin dashboard)
             ├── PgBouncer       (transaction-pooling in front of Postgres)
             ├── Redis           (API-key cache, sub-ms lookups)
@@ -107,13 +107,13 @@ Phone → HTTP request (port 80) → Caddy → forwards to right container
 There is **one API origin**: `api.{org}.local`. Internally it routes by path:
 
 ```
-api.{org}.local/auth/*     → auth module
-api.{org}.local/db/*       → database module
-api.{org}.local/storage/*  → storage module
-api.{org}.local/deploy/*   → deployment module
+api.{org}.local/auth/*     → Identity
+api.{org}.local/db/*       → Blaze
+api.{org}.local/storage/*  → Vault
+api.{org}.local/deploy/*   → Orbit
 ```
 
-These 4 services are **separate containers** (one process per container — Docker best practice), reachable only on the internal Docker network. Only the **API Gateway** is exposed on the LAN; it resolves the API key → `app_id`, authenticates the session, and forwards to the right service over the internal network with **signed internal headers** (HMAC, shared secret in `.env`) so a compromised app container can't spoof another tenant. Services do not share a process or a connection pool with each other — they share only the Postgres instance (via PgBouncer). See ADR 003 §14 for the authoritative topology.
+These 4 services are **separate containers** (one process per container — Docker best practice), reachable only on the internal Docker network. Only the **Gateway** is exposed on the LAN; it resolves the API key → `app_id`, authenticates the session, and forwards to the right service over the internal network with **signed internal headers** (HMAC, shared secret in `.env`) so a compromised app container can't spoof another tenant. Services do not share a process or a connection pool with each other — they share only the Postgres instance (via PgBouncer). See ADR 003 §14 for the authoritative topology.
 
 **Reason for one origin:** avoids CORS hell, simplifies SDK config, matches Supabase/Firebase convention.
 
@@ -158,11 +158,11 @@ These 4 services are **separate containers** (one process per container — Dock
 ```
 nublestation/
 ├── apps/                        ← each dir = one Docker container (one process per container)
-│   ├── gateway/                 ← API Gateway: only exposed service; key/session auth, routing
-│   ├── auth/                    ← Auth service (sessions, API keys, OIDC/SSO)
-│   ├── db/                      ← Database service (auto-REST, RLS, migrations) — ADR 003
-│   ├── storage/                 ← Storage service (file bytes + metadata)
-│   ├── deploy/                  ← Deploy service (frontend bundle uploads)
+│   ├── gateway/                 ← Gateway: only exposed service; key/session auth, routing
+│   ├── identity/                ← Identity (auth): sessions, API keys, OIDC/SSO
+│   ├── blaze/                   ← Blaze (database): auto-REST, RLS, migrations — ADR 003
+│   ├── vault/                   ← Vault (storage): file bytes + metadata
+│   ├── orbit/                   ← Orbit (deployment): frontend bundle uploads — ADR 007
 │   └── console/                 ← Next.js admin dashboard (consumes /v1/admin/*)
 ├── packages/                    ← things that become npm packages
 │   ├── sdk/                     ← @nublestation/sdk — used by app developers
@@ -226,7 +226,20 @@ nublestation/
 - **Mention limitations, costs, trade-offs upfront** before recommending an approach.
 - **Always update or create an ADR** in `docs/adr/` when making a significant choice — 2-3 sentences of rationale, named `00X-decision-name.md`.
 - **Build order is ops-first:** infrastructure shell before service refactor. Don't rewrite the service layer until Caddy/CoreDNS/Compose/install are working.
-- **Match the existing patterns** in the monorepo. If `apps/api` uses Hono, `apps/console` follows a similar style. Consistency over local optimization.
+- **Match the existing patterns** in the monorepo. If `apps/blaze` uses Hono, `apps/gateway` and other services follow a similar style. Consistency over local optimization.
+
+## Service naming convention (v1 — locked)
+
+| Codename | Role | Folder | Package |
+|---|---|---|---|
+| **Gateway** | API entry point (only LAN-exposed service) | `apps/gateway/` | `@nublestation/gateway` |
+| **Blaze** | Database service (Postgres access, RLS, migrations) | `apps/blaze/` | `@nublestation/blaze` |
+| **Identity** | Auth service (sessions, API keys, OIDC/SSO) | `apps/identity/` | `@nublestation/identity` |
+| **Vault** | Storage service (S3-like blob storage) | `apps/vault/` | `@nublestation/vault` |
+| **Orbit** | Deployment service (static frontend uploads) | `apps/orbit/` | `@nublestation/orbit` |
+| **Console** | Admin dashboard (Next.js) | `apps/console/` | `@nublestation/console` |
+
+Never refer to services by generic names ("the db service", "the auth service"). Use the codename. Filesystem and package names use kebab-case; docs and code comments use PascalCase ("Blaze", "Identity", etc.).
 
 ---
 
@@ -240,7 +253,7 @@ nublestation/
 5. Health checks across services
 6. Milestone: `console.{org}.local` reachable from any LAN device
 
-Service layer (auth/db/storage/deploy) is treated as **placeholders** during this phase. Real services come later.
+Service layer (Identity / Blaze / Vault / Orbit) is treated as **placeholders** during this phase. Real services come later.
 
 ---
 

@@ -1,15 +1,15 @@
-# ADR 007 — Deployment service architecture
+# ADR 007 — Orbit architecture (deployment service)
 
 **Status:** Accepted
 **Date:** 2026-05-21
 
 ## Context
 
-NubleStation needs to host static frontends (React, Vue, Vite, Next.js export mode) built by app developers and serve them at `{app}.{org}.local`. The deployment mechanism must be:
+NubleStation needs to host static frontends (React, Vue, Vite, Next.js export mode) built by app developers and serve them at `{app}.{org}.local`. **Orbit** is the service that owns this responsibility. It must be:
 
 - Simple enough to deliver in v1
 - LAN-native (fast enough to deploy on every change)
-- Decoupled from the blob storage service
+- Decoupled from Vault (blob storage)
 - Accessible through a single CLI command
 
 ## Decisions
@@ -20,32 +20,32 @@ Apps are database rows, not containers (ADR 001 principle). Spinning up a Docker
 
 **Decision:** Caddy serves all deployed frontends directly from the host filesystem via a single wildcard vhost. No Docker API involvement on deploy.
 
-### 2. Deploy service is a separate container
+### 2. Orbit is a separate container
 
-Although the deploy service only moves files, it still runs as its own container in the Compose stack. It exposes HTTP endpoints that the gateway forwards to; it needs Docker's restart policy and health checks; and it is the only service that requires write access to `/var/nuble/apps/` — keeping it isolated limits blast radius.
+Although Orbit only moves files, it still runs as its own container in the Compose stack. It exposes HTTP endpoints that the gateway forwards to; it needs Docker's restart policy and health checks; and it is the only service that requires write access to `/var/nuble/apps/` — keeping it isolated limits blast radius.
 
 Filesystem access is solved with a bind mount:
 
 ```yaml
-deploy:
+orbit:
   volumes:
     - /var/nuble/apps:/var/nuble/apps:rw
 ```
 
 Caddy reads the same host path via its own bind mount (`:ro`). Same files, no copying.
 
-### 3. Storage service is purely blob storage
+### 3. Vault is purely blob storage
 
-The storage service (`/var/nuble/blobs/`) and the deploy service (`/var/nuble/apps/`) own separate paths and serve different access patterns:
+Vault (`/var/nuble/blobs/`) and Orbit (`/var/nuble/apps/`) own separate paths and serve different access patterns:
 
-| | Storage service | Deploy service |
+| | Vault | Orbit |
 |---|---|---|
 | Writer | App developer via SDK | `nuble` CLI via API |
 | Reader | App developer via API | Caddy directly from disk |
 | Semantics | S3-like objects + metadata | Zip extraction + atomic overwrite |
 | Failure coupling | Independent | Independent |
 
-Merging them or running two storage instances would couple two independent failure domains and force the storage service to understand zip extraction and Caddy path conventions.
+Merging them or running two Vault instances would couple two independent failure domains and force Vault to understand zip extraction and Caddy path conventions.
 
 ### 4. Single version per app (current only)
 
@@ -138,7 +138,7 @@ const nuble = new NubleClient({
 
 The API key is embedded in the frontend bundle. This is acceptable because NubleStation is LAN-only — there is no public internet exposure. The console's Envs & Secrets tab surfaces the same values for reference.
 
-## Deploy service HTTP endpoints
+## Orbit HTTP endpoints
 
 All routes sit behind HMAC middleware (ADR 003 §HMAC). The gateway forwards requests from `api.{org}.local/deploy/*`.
 
@@ -147,7 +147,7 @@ All routes sit behind HMAC middleware (ADR 003 §HMAC). The gateway forwards req
 | `POST` | `/v1/upload` | Receive multipart zip, validate, extract, record deployment |
 | `GET` | `/healthz` | Health check (no auth) |
 
-`platform.deployments` write is the only database interaction — via the db service internal route, not a direct Postgres connection.
+`platform.deployments` write is the only database interaction — via Blaze's internal route, not a direct Postgres connection.
 
 ## Filesystem layout
 
@@ -174,7 +174,7 @@ The SPA fallback (`try_files … /index.html`) allows client-side routers (React
 
 ## Consequences
 
-- Deploy service is the simplest service in the stack: one endpoint, no DB connection, no Redis, no SSE
+- Orbit is the simplest service in the stack: one endpoint, no DB connection, no Redis, no SSE
 - No rollback in v1 — acceptable trade-off for delivery speed; v2 adds a `previous/` directory
 - SSE / real-time deploy status deferred to v1.5 as a standalone service
 - Developers must use `output: 'export'` for Next.js — documented in `nuble init` output and CLI error messages
@@ -182,5 +182,5 @@ The SPA fallback (`try_files … /index.html`) allows client-side routers (React
 ## References
 
 - ADR 001 — apps are database rows, not containers
-- ADR 003 — HMAC internal trust model (deploy service sits behind it)
+- ADR 003 — HMAC internal trust model (Orbit sits behind it)
 - ADR 006 — install.sh creates `/var/nuble/apps/` on the host before Compose starts

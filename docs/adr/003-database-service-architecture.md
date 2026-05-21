@@ -1,4 +1,4 @@
-# ADR 003 — Database Service Architecture
+# ADR 003 — Blaze architecture (database service)
 
 **Status:** Accepted
 **Date:** 2026-05-16
@@ -10,9 +10,9 @@
 
 ## Context
 
-NubleStation is a self-hosted, plug-and-play BaaS platform for small clinics. The Database Service is the foundation that every other service (Auth, Storage, Functions) depends on, and the primary touchpoint for app developers using the SDK.
+NubleStation is a self-hosted, plug-and-play BaaS platform for small clinics. **Blaze** is the database service — the foundation that every other service (Identity, Vault, Functions) depends on, and the primary touchpoint for app developers using the SDK.
 
-This document captures the agreed-upon architecture for the Database Service, including the multi-tenant model, schema-as-code developer experience, RLS-based tenant isolation, query interface, and the escape hatches that allow flexibility without compromising safety.
+This document captures the agreed-upon architecture for Blaze, including the multi-tenant model, schema-as-code developer experience, RLS-based tenant isolation, query interface, and the escape hatches that allow flexibility without compromising safety.
 
 ---
 
@@ -309,8 +309,8 @@ Every app gets these for free. The SDK exposes opinionated methods on top.
 
 | Resource | Purpose | Why built-in |
 |---|---|---|
-| `users` | Authentication identities | Shared with auth service, needed by every app |
-| `files` | Storage metadata | Shared with storage service |
+| `users` | Authentication identities | Shared with Identity, needed by every app |
+| `files` | Storage metadata | Shared with Vault |
 | `notifications` | In-app notification queue | Standard need across apps |
 | `audit_log` | Append-only compliance trail | Required for clinic environments |
 
@@ -360,15 +360,15 @@ await nuble.db.tasks.aggregate({ count: true, where: { status: 'done' } });
 
 Each request from the SDK flows through these layers, in order:
 
-### Layer 0 — Gateway Auth (Before the DB Service)
+### Layer 0 — Gateway Auth (Before Blaze)
 
-This happens in the **API Gateway container**, not the database service. The gateway is the only container exposed on the LAN; the database service is reachable only on the internal Docker network. The gateway:
+This happens in the **API Gateway container**, not Blaze. The gateway is the only container exposed on the LAN; Blaze is reachable only on the internal Docker network. The gateway:
 
 1. Extracts the API key, splits `nbl_<key_id>.<secret>`, resolves `key_id → app_id` (Redis cache, fallback `platform.api_keys`), Argon2-verifies the secret.
 2. Resolves the end-user session (cookie/OIDC token) to a `user_id`.
-3. Forwards the request to the database service over the internal network with **signed internal headers** (`X-Nuble-App-Id`, `X-Nuble-User-Id`, `X-Nuble-Sig` = HMAC over the payload using a shared secret from `.env`).
+3. Forwards the request to Blaze over the internal network with **signed internal headers** (`X-Nuble-App-Id`, `X-Nuble-User-Id`, `X-Nuble-Sig` = HMAC over the payload using a shared secret from `.env`).
 
-The database service **trusts these headers only if the HMAC verifies**, so a compromised app container cannot forge another tenant's `app_id`. The REST router (Layer 1) never sees a raw API key.
+Blaze **trusts these headers only if the HMAC verifies**, so a compromised app container cannot forge another tenant's `app_id`. The REST router (Layer 1) never sees a raw API key.
 
 ### Layer 1 — REST Router (Public Face)
 
@@ -570,7 +570,7 @@ Designed as a callable function with multiple entry points:
 |---|---|
 | `nuble db push` CLI | Developer terminal |
 | `POST /v1/apps/:id/migrations` | Admin dashboard |
-| `runMigrations(appId, files)` | Future deploy service |
+| `runMigrations(appId, files)` | Orbit (deployment service) |
 
 All three entry points call the same library function. Never reimplemented.
 
@@ -649,7 +649,7 @@ Two HTTP uploads. No orchestration needed. The developer is sitting at the keybo
 
 Only one architectural concern survives from "deployment thinking":
 
-**The migration runner must be a callable library function**, not a CLI-only script. All three current and future entry points (CLI, dashboard, future deploy service) reuse the same function.
+**The migration runner must be a callable library function**, not a CLI-only script. All three current and future entry points (CLI, dashboard, Orbit) reuse the same function.
 
 Everything else about deployment is YAGNI for v1.
 
@@ -700,19 +700,19 @@ On the server:
 
 ### The Service Topology (Authoritative)
 
-Every service (gateway, auth, db, storage, deploy) is **its own container** — one process per container, Docker best practice. Only the **API Gateway** is published on the LAN; all other services listen only on the internal Docker bridge network. Service-to-service calls are therefore **HTTP over the internal Docker network** — a fast hop, but a real network hop, not an in-process call. There is no shared process and no shared connection pool *between services*; they share only the **Postgres instance** (each opens its own pool to it).
+Every service (gateway, Identity, Blaze, Vault, Orbit) is **its own container** — one process per container, Docker best practice. Only the **API Gateway** is published on the LAN; all other services listen only on the internal Docker bridge network. Service-to-service calls are therefore **HTTP over the internal Docker network** — a fast hop, but a real network hop, not an in-process call. There is no shared process and no shared connection pool *between services*; they share only the **Postgres instance** (each opens its own pool to it).
 
-### Database Service ↔ Auth Service
+### Blaze ↔ Identity
 
-- Auth service writes to `platform.users` and `platform.user_app_access`
-- Database service exposes `tenant_data.users` (view) for app developers
+- Identity writes to `platform.users` and `platform.user_app_access`
+- Blaze exposes `tenant_data.users` (view) for app developers
 - They communicate over the internal Docker network when needed; they do **not** share a process — they share the Postgres instance
 
-### Database Service ↔ Storage Service
+### Blaze ↔ Vault
 
-- Storage service writes file metadata to `platform.files`
-- Database service exposes `tenant_data.files` (view) for app developers
-- File bytes live on disk; database service never touches them
+- Vault writes file metadata to `platform.files`
+- Blaze exposes `tenant_data.files` (view) for app developers
+- File bytes live on disk; Blaze never touches them
 
 ### The S3-like Model for Storage (Confirmed Pattern)
 
@@ -720,28 +720,28 @@ Every service (gateway, auth, db, storage, deploy) is **its own container** — 
 |---|---|---|
 | Bytes | File content | Filesystem: `/var/nuble/files/{app_id}/{file_id}` |
 | Metadata | path, mime, size, owner, custom tags | `platform.files` table |
-| Access | Public or signed URL with expiry | Storage service generates on request |
+| Access | Public or signed URL with expiry | Vault generates on request |
 
-This document does not prescribe the storage service's full design; only the database integration is in scope.
+This document does not prescribe Vault's full design; only the Blaze integration is in scope.
 
-### Database Service ↔ API Gateway
+### Blaze ↔ API Gateway
 
 - Gateway parses `nbl_<key_id>.<secret>`, resolves `key_id → app_id` (Redis cache, fallback `platform.api_keys`), Argon2-verifies the secret
-- Gateway forwards to the database service over the internal Docker network with **signed internal headers**: `X-Nuble-App-Id`, `X-Nuble-User-Id`, and `X-Nuble-Sig` (HMAC of the payload using a shared secret from `.env`)
-- Database service verifies the HMAC before trusting the headers, then sets `SET LOCAL app.current_tenant` from `X-Nuble-App-Id` — a compromised app container cannot forge another tenant's `app_id`
+- Gateway forwards to Blaze over the internal Docker network with **signed internal headers**: `X-Nuble-App-Id`, `X-Nuble-User-Id`, and `X-Nuble-Sig` (HMAC of the payload using a shared secret from `.env`)
+- Blaze verifies the HMAC before trusting the headers, then sets `SET LOCAL app.current_tenant` from `X-Nuble-App-Id` — a compromised app container cannot forge another tenant's `app_id`
 
 ### Single Sign-On Across `*.nuble.local`
 
 All apps live under one eTLD+1 (`nuble.local`), which makes a shared session cookie viable:
 
-1. User authenticates once (login form served by the Console / auth service).
-2. Auth service issues a session and sets a cookie scoped to **`Domain=.nuble.local`** — so it is sent to `console.nuble.local`, `tasks.nuble.local`, every app subdomain.
+1. User authenticates once (login form served by the Console / Identity).
+2. Identity issues a session and sets a cookie scoped to **`Domain=.nuble.local`** — so it is sent to `console.nuble.local`, `tasks.nuble.local`, every app subdomain.
 3. On any request, the **gateway** validates the session cookie before forwarding (it already terminates every subdomain via Caddy), and resolves it to `X-Nuble-User-Id`.
 4. For programmatic / token-based access, `oidc-provider` issues OIDC tokens; the gateway accepts either a valid session cookie or a bearer token.
 
-The cookie is `HttpOnly`, `Secure` (Caddy serves HTTPS via its internal CA), `SameSite=Lax`. No per-app login; revoking the session at the auth service logs the user out of every app at once.
+The cookie is `HttpOnly`, `Secure` (Caddy serves HTTPS via its internal CA), `SameSite=Lax`. No per-app login; revoking the session at Identity logs the user out of every app at once.
 
-### Database Service ↔ Console (Platform Control API)
+### Blaze ↔ Console (Platform Control API)
 
 The auto-REST surface (`/v1/db/*`) only covers `tenant_data` and is authenticated by **API key**. The Console needs a different surface to manage the platform itself:
 
