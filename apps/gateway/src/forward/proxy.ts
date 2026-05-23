@@ -1,6 +1,7 @@
 import { request, type Dispatcher } from "undici";
 import {
   X_NUBLE_APP_ID,
+  X_NUBLE_APP_SLUG,
   X_NUBLE_SIG,
   X_NUBLE_TIMESTAMP,
   X_NUBLE_USER_ID,
@@ -19,7 +20,7 @@ const HOP_BY_HOP = new Set([
 ]);
 
 export interface ForwardArgs {
-  dbBaseUrl: string;
+  upstreamBaseUrl: string;
   method: string;
   path: string;
   body: Uint8Array;
@@ -27,6 +28,7 @@ export interface ForwardArgs {
   userId: string;
   hmacSecret: string;
   contentType?: string | null;
+  appSlug?: string;
 }
 
 export interface ForwardResult {
@@ -37,21 +39,22 @@ export interface ForwardResult {
 
 /**
  * Signs `body` with the shared HMAC secret and forwards the request to the
- * internal DB service. Phase 1: buffers the body for trivial body-hashing.
- * TODO(streaming): switch to chunked hashing once payloads exceed a few MB.
+ * target internal service. The `appSlug` field is forwarded as a trusted
+ * header when provided (Orbit requires it to select the deploy directory).
  *
- * ADR 003 §14: signed internal headers; §8 Layer 0.
+ * ADR 003 §14: signed internal headers.
  */
 export async function forwardSigned(args: ForwardArgs): Promise<ForwardResult> {
   const signed = signRequest(args.method, args.path, args.body, args.hmacSecret);
 
-  const targetUrl = new URL(args.path, args.dbBaseUrl).toString();
+  const targetUrl = new URL(args.path, args.upstreamBaseUrl).toString();
   const headers: Record<string, string> = {
     [X_NUBLE_APP_ID]: args.appId,
     [X_NUBLE_USER_ID]: args.userId,
     [X_NUBLE_TIMESTAMP]: signed.timestamp,
     [X_NUBLE_SIG]: signed.signature,
   };
+  if (args.appSlug) headers[X_NUBLE_APP_SLUG] = args.appSlug;
   if (args.contentType) headers["content-type"] = args.contentType;
 
   const upstream = await request(targetUrl, {

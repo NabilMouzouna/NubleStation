@@ -13,6 +13,7 @@ const schema = z.object({
   DATABASE_URL: z.string().url(),
   INTERNAL_HMAC_SECRET: z.string().min(16),
   DB_INTERNAL_URL: z.string().url(),
+  ORBIT_INTERNAL_URL: z.string().url(),
   PORT: z.coerce.number().int().positive().default(3000),
   LOG_LEVEL: z
     .enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"])
