@@ -19,13 +19,18 @@ api.{$ORG_NAME}.local:80 {
     }
 }
 
-# Wildcard for deployed app frontends (future)
+# Deployed app frontends — served from /var/nuble/apps/{appname}/current/
+# {labels.1} extracts the first subdomain label (e.g. "tasks" from tasks.nuble.local)
 *.{$ORG_NAME}.local:80 {
     @notReserved {
         not host console.{$ORG_NAME}.local api.{$ORG_NAME}.local
     }
     handle @notReserved {
-        # Future: serve from /var/nuble/apps/{appname}/
-        respond "App not deployed yet" 404
+        root * /var/nuble/apps/{labels.1}/current
+        file_server
+        try_files {path} /index.html
+        log {
+            output stdout
+        }
     }
 }

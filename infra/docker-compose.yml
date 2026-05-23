@@ -8,6 +8,7 @@ volumes:
   postgres-data:
   caddy-data:
   caddy-config:
+  nuble-apps:
 
 services:
   caddy:
@@ -27,6 +28,7 @@ services:
     depends_on:
       - console
       - api
+      - orbit
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:80"]
       interval: 30s
@@ -86,6 +88,29 @@ services:
       - nuble
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:80"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  orbit:
+    image: ghcr.io/nabilmouzouna/nublestation-orbit:latest
+    restart: unless-stopped
+    environment:
+      INTERNAL_HMAC_SECRET: ${INTERNAL_HMAC_SECRET}
+      STORAGE_ROOT: /var/nuble/apps
+      PORT: 3002
+      NODE_ENV: production
+    volumes:
+      - nuble-apps:/var/nuble/apps
+    expose:
+      - "3002"
+    networks:
+      - nuble
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3002/healthz"]
       interval: 30s
       timeout: 5s
       retries: 3
