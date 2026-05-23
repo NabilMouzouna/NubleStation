@@ -37,7 +37,7 @@ export default async function ShellLayout({ children }: { children: ReactNode })
     <div className="flex h-screen overflow-hidden bg-background">
 
       {/* Sidebar — desktop only */}
-      <aside className="hidden w-56 flex-shrink-0 flex-col border-r border-border bg-background md:flex">
+      <aside className="hidden w-56 shrink-0 flex-col border-r border-border bg-background md:flex">
         <div className="px-5 py-5">
           <NubleSidebarHeader />
         </div>
