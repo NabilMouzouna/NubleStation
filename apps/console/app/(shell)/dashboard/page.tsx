@@ -11,6 +11,7 @@ import { Progress } from "@nublestation/ui/components/progress";
 import { Separator } from "@nublestation/ui/components/separator";
 import { Avatar, AvatarFallback } from "@nublestation/ui/components/avatar";
 import { validateSession } from "@/lib/auth/session";
+import { getRecentDeployments } from "@/lib/platform/events";
 
 // ─── Static data ────────────────────────────────────────────────────────────
 
@@ -59,8 +60,22 @@ function getGreeting(hour: number) {
 
 // ─── Page ────────────────────────────────────────────────────────────────────
 
+function timeAgo(iso: string): string {
+  const diffMs = Date.now() - new Date(iso).getTime();
+  const mins  = Math.floor(diffMs / 60_000);
+  const hours = Math.floor(diffMs / 3_600_000);
+  const days  = Math.floor(diffMs / 86_400_000);
+  if (mins < 1)   return "just now";
+  if (mins < 60)  return `${mins}m ago`;
+  if (hours < 24) return `${hours}h ago`;
+  return `${days}d ago`;
+}
+
 export default async function DashboardPage() {
-  const session = await validateSession();
+  const [session, recentDeployments] = await Promise.all([
+    validateSession(),
+    getRecentDeployments(),
+  ]);
   const handle  = (session?.email ?? "admin").split("@")[0];
   const initials = handle.slice(0, 2).toUpperCase();
   const hour     = new Date().getHours();
@@ -236,15 +251,42 @@ export default async function DashboardPage() {
                 </Link>
               </div>
               <Separator />
-              <div className="flex flex-col items-center justify-center py-12 text-center px-6">
-                <div className="rounded-full bg-muted p-3">
-                  <Activity className="size-5 text-muted-foreground" />
+              {recentDeployments.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-12 text-center px-6">
+                  <div className="rounded-full bg-muted p-3">
+                    <Activity className="size-5 text-muted-foreground" />
+                  </div>
+                  <p className="mt-3 text-sm font-medium text-foreground">No events yet</p>
+                  <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
+                    Deploy an app to see activity here.
+                  </p>
                 </div>
-                <p className="mt-3 text-sm font-medium text-foreground">No events yet</p>
-                <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
-                  Infrastructure events will appear here as services report activity.
-                </p>
-              </div>
+              ) : (
+                <div className="divide-y divide-border">
+                  {recentDeployments.map((ev) => (
+                    <Link
+                      key={ev.id}
+                      href={`/apps/${ev.app_slug}`}
+                      className="flex items-center gap-3 px-6 py-3.5 transition-colors hover:bg-muted/40"
+                    >
+                      <div className="rounded-lg bg-primary/10 p-2 shrink-0">
+                        <Rocket className="size-3.5 text-primary" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-foreground truncate">
+                          {ev.display_name}
+                        </p>
+                        <p className="text-xs text-muted-foreground font-mono">
+                          v{ev.version}
+                        </p>
+                      </div>
+                      <span className="text-xs text-muted-foreground shrink-0">
+                        {timeAgo(ev.deployed_at)}
+                      </span>
+                    </Link>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
 
