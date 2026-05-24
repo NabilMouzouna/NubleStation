@@ -2,7 +2,7 @@ import Link from "next/link";
 import {
   LayoutDashboard, HardDrive, Clock, Users,
   ShieldCheck, Wifi, Database, Box, Plus,
-  ArrowUpRight, Activity, Cpu, MemoryStick,
+  ArrowUpRight, Activity, Cpu, MemoryStick, Rocket,
 } from "lucide-react";
 import { Card, CardContent } from "@nublestation/ui/components/card";
 import { Badge }    from "@nublestation/ui/components/badge";
