@@ -16,7 +16,9 @@
     "gateway:test": "pnpm --filter @nublestation/gateway test",
     "console:dev": "pnpm --filter @nublestation/console dev",
     "console:build": "pnpm --filter @nublestation/console build",
-    "orbit:dev": "pnpm --filter @nublestation/orbit dev"
+    "orbit:dev": "pnpm --filter @nublestation/orbit dev",
+    "cli:dev": "pnpm --filter @nublestation/cli dev",
+    "cli:test": "pnpm --filter @nublestation/cli test"
   },
   "devDependencies": {
     "prettier": "^3.7.4",
