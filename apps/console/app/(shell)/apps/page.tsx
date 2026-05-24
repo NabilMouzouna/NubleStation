@@ -1,62 +1,70 @@
 import Link from "next/link";
 import { Card, CardContent } from "@nublestation/ui/components/card";
-import { Button } from "@nublestation/ui/components/button";
-import { Plus, Database, HardDrive, Users } from "lucide-react";
+import { Database, HardDrive, Clock } from "lucide-react";
+import { listApps } from "@/lib/platform/apps";
+import { AppsPageClient } from "./_apps-page-client";
 
-const mockApps = [
-  { slug: "tasks",      label: "Tasks",      tables: 3, storageMb: 12,  users: 8  },
-  { slug: "patients",   label: "Patients",   tables: 7, storageMb: 340, users: 24 },
-  { slug: "scheduling", label: "Scheduling", tables: 2, storageMb: 5,   users: 12 },
-];
+export default async function AppsPage() {
+  let apps: Awaited<ReturnType<typeof listApps>> = [];
+  try {
+    apps = await listApps();
+  } catch {
+    // DB not yet reachable (dev without full stack) — show empty state.
+  }
 
-export default function AppsPage() {
   return (
-    <div className="p-8">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground">Apps</h1>
-          <p className="mt-1 text-sm text-muted-foreground">All registered apps in your organization</p>
+    <AppsPageClient>
+      <div className="p-8">
+        <div className="mt-8">
+          {apps.length === 0 ? (
+            <div className="flex flex-col items-center justify-center rounded-3xl border border-dashed border-border py-20 text-center">
+              <div className="rounded-full bg-muted p-4">
+                <Database className="size-6 text-muted-foreground" />
+              </div>
+              <p className="mt-4 font-semibold text-foreground">No apps yet</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Create your first app to get started.
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {apps.map((app) => (
+                <Link key={app.id} href={`/apps/${app.name}`}>
+                  <Card className="transition-shadow hover:shadow-md">
+                    <CardContent className="p-6">
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <p className="font-semibold text-foreground">{app.display_name}</p>
+                          <p className="mt-0.5 text-xs text-muted-foreground">
+                            {app.name}.clinic.local
+                          </p>
+                        </div>
+                        <span className="rounded-full bg-success/10 px-2 py-0.5 text-xs font-medium text-success">
+                          Live
+                        </span>
+                      </div>
+                      <div className="mt-5 flex gap-5 text-xs text-muted-foreground">
+                        <span className="flex items-center gap-1.5">
+                          <Database size={13} />
+                          0 tables
+                        </span>
+                        <span className="flex items-center gap-1.5">
+                          <HardDrive size={13} />
+                          0 MB
+                        </span>
+                        <span className="flex items-center gap-1.5">
+                          <Clock size={13} />
+                          {new Date(app.created_at).toLocaleDateString()}
+                        </span>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </Link>
+              ))}
+            </div>
+          )}
         </div>
-        <Button size="sm">
-          <Plus size={16} />
-          Create app
-        </Button>
       </div>
-
-      <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {mockApps.map((app) => (
-          <Link key={app.slug} href={`/apps/${app.slug}`}>
-            <Card className="transition-shadow hover:shadow-md">
-              <CardContent className="p-6">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <p className="font-semibold text-foreground">{app.label}</p>
-                    <p className="mt-0.5 text-xs text-muted-foreground">{app.slug}.clinic.local</p>
-                  </div>
-                  <span className="rounded-full bg-success/10 px-2 py-0.5 text-xs font-medium text-success">
-                    Live
-                  </span>
-                </div>
-
-                <div className="mt-5 flex gap-5 text-xs text-muted-foreground">
-                  <span className="flex items-center gap-1.5">
-                    <Database size={13} />
-                    {app.tables} tables
-                  </span>
-                  <span className="flex items-center gap-1.5">
-                    <HardDrive size={13} />
-                    {app.storageMb} MB
-                  </span>
-                  <span className="flex items-center gap-1.5">
-                    <Users size={13} />
-                    {app.users} users
-                  </span>
-                </div>
-              </CardContent>
-            </Card>
-          </Link>
-        ))}
-      </div>
-    </div>
+    </AppsPageClient>
   );
 }
