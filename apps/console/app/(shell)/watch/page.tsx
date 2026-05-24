@@ -66,7 +66,7 @@ export default function WatchPage() {
         </div>
 
         <Button
-          variant="outline"
+          variant="ghost"
           size="sm"
           disabled={loading}
           onClick={() => setRefreshKey((k) => k + 1)}

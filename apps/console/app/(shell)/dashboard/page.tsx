@@ -76,7 +76,7 @@ export default async function DashboardPage() {
     validateSession(),
     getRecentDeployments(),
   ]);
-  const handle  = (session?.email ?? "admin").split("@")[0];
+  const handle  = (session?.email ?? "admin").split("@")[0] ?? "admin";
   const initials = handle.slice(0, 2).toUpperCase();
   const hour     = new Date().getHours();
   const greeting = getGreeting(hour);

@@ -196,7 +196,7 @@ function SettingsTab({
       <section className="space-y-4">
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-semibold text-foreground">API Keys</h3>
-          <Button variant="outline" size="sm" disabled={generating} onClick={generateKey}>
+          <Button variant="ghost" size="sm" disabled={generating} onClick={generateKey}>
             {generating ? "Generating…" : "Generate new key"}
           </Button>
         </div>
