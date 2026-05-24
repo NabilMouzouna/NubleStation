@@ -36,3 +36,7 @@ export function loadConfig(): Config {
   cached = parsed.data;
   return cached;
 }
+
+export function resetConfigCache(): void {
+  cached = null;
+}

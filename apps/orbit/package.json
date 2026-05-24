@@ -25,9 +25,11 @@
   "devDependencies": {
     "@nublestation/eslint-config": "workspace:*",
     "@nublestation/typescript-config": "workspace:*",
+    "@types/archiver": "^6.0.3",
     "@types/busboy": "^1.5.4",
     "@types/node": "^22.10.1",
     "@types/unzipper": "^0.10.10",
+    "archiver": "^7.0.1",
     "pino-pretty": "^11.3.0",
     "tsx": "^4.19.2",
     "typescript": "5.9.2",
