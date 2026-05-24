@@ -81,7 +81,7 @@ export default async function DashboardPage() {
         </div>
         <div className="flex items-center gap-3">
           <Button asChild size="sm">
-            <Link href="/apps"><Plus />Create App</Link>
+            <Link href="/apps?new=1"><Plus />Get started</Link>
           </Button>
           <Avatar className="size-9 ring-2 ring-border">
             <AvatarFallback className="bg-primary text-primary-foreground text-xs">
