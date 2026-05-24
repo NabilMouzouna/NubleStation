@@ -1,5 +1,7 @@
 "use server";
 
+import { rm } from "node:fs/promises";
+import { join } from "node:path";
 import { randomBytes } from "node:crypto";
 import { redirect } from "next/navigation";
 import { hash } from "@node-rs/argon2";
@@ -39,7 +41,22 @@ export async function generateApiKeyAction(
 
 export async function deleteAppAction(appId: string): Promise<void> {
   const pool = getPlatformPool();
-  // CASCADE in the schema handles api_keys, deployments, app_tables, etc.
+
+  // Fetch slug before deleting so we can clean up storage.
+  const { rows } = await pool.query<{ name: string }>(
+    `SELECT name FROM platform.apps WHERE id = $1`,
+    [appId],
+  );
+  const slug = rows[0]?.name;
+
+  // CASCADE handles api_keys, deployments, app_tables.
   await pool.query(`DELETE FROM platform.apps WHERE id = $1`, [appId]);
+
+  // Best-effort: remove deployed files from Orbit storage volume.
+  if (slug && process.env.ORBIT_STORAGE_ROOT) {
+    const appDir = join(process.env.ORBIT_STORAGE_ROOT, slug);
+    await rm(appDir, { recursive: true, force: true });
+  }
+
   redirect("/apps");
 }
