@@ -8,9 +8,6 @@
  *   tsx apps/orbit/scripts/e2e-manual.ts
  */
 
-import { mkdir, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import {
   X_NUBLE_APP_ID,
   X_NUBLE_APP_SLUG,
