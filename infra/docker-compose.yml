@@ -21,6 +21,7 @@ services:
       ORG_NAME: ${ORG_NAME}
     volumes:
       - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - nuble-apps:/var/nuble/apps:ro
       - caddy-data:/data
       - caddy-config:/config
     networks:
@@ -64,30 +65,73 @@ services:
       timeout: 5s
       retries: 3
 
+  # ── NubleStation services ────────────────────────────────────────────────────
+
   console:
-    image: nginx:alpine
+    image: ghcr.io/nabilmouzouna/nublestation-console:latest
     restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PLATFORM_DB_URL: ${DATABASE_URL}
+      ORBIT_STORAGE_ROOT: /var/nuble/apps
     volumes:
-      - ./placeholders/console:/usr/share/nginx/html:ro
-      - /var/nuble/admin.db:/app/admin.db:rw
-      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - nuble-apps:/var/nuble/apps:rw
+    expose:
+      - "3000"
     networks:
       - nuble
+    depends_on:
+      postgres:
+        condition: service_healthy
     healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:80"]
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3000"]
       interval: 30s
       timeout: 5s
       retries: 3
 
+  # Gateway — the only LAN-exposed API service (service name "api" matches Caddy)
   api:
-    image: nginx:alpine
+    image: ghcr.io/nabilmouzouna/nublestation-gateway:latest
     restart: unless-stopped
-    volumes:
-      - ./placeholders/api:/usr/share/nginx/html:ro
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: ${DATABASE_URL}
+      INTERNAL_HMAC_SECRET: ${INTERNAL_HMAC_SECRET}
+      DB_INTERNAL_URL: http://blaze:3001
+      ORBIT_INTERNAL_URL: http://orbit:3002
+      PORT: 3000
+    expose:
+      - "3000"
     networks:
       - nuble
+    depends_on:
+      postgres:
+        condition: service_healthy
+      blaze:
+        condition: service_healthy
     healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:80"]
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3000/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  blaze:
+    image: ghcr.io/nabilmouzouna/nublestation-blaze:latest
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: ${DATABASE_URL}
+      INTERNAL_HMAC_SECRET: ${INTERNAL_HMAC_SECRET}
+      PORT: 3001
+    expose:
+      - "3001"
+    networks:
+      - nuble
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3001/healthz"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -96,10 +140,11 @@ services:
     image: ghcr.io/nabilmouzouna/nublestation-orbit:latest
     restart: unless-stopped
     environment:
+      NODE_ENV: production
+      DATABASE_URL: ${DATABASE_URL}
       INTERNAL_HMAC_SECRET: ${INTERNAL_HMAC_SECRET}
       STORAGE_ROOT: /var/nuble/apps
       PORT: 3002
-      NODE_ENV: production
     volumes:
       - nuble-apps:/var/nuble/apps
     expose:

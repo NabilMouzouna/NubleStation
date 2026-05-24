@@ -388,8 +388,7 @@ INTERNAL_HMAC_SECRET=${HMAC_SECRET}
 POSTGRES_USER=nuble
 POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
 POSTGRES_DB=nuble
-NUBLE_API_IMAGE=nginx:alpine
-NUBLE_CONSOLE_IMAGE=nginx:alpine
+DATABASE_URL=postgres://nuble:${POSTGRES_PASSWORD}@postgres:5432/nuble
 EOF
   info ".env written"
   checkpoint "env-generated"

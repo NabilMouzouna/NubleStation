@@ -3,17 +3,17 @@
     auto_https off
 }
 
-# Console — admin dashboard (placeholder nginx until the real app is rebuilt)
+# Console — admin dashboard (Next.js standalone)
 console.{$ORG_NAME}.local:80 {
-    reverse_proxy console:80
+    reverse_proxy console:3000
     log {
         output stdout
     }
 }
 
-# API — single entry for all backend services
+# API — single entry for all backend services (Gateway)
 api.{$ORG_NAME}.local:80 {
-    reverse_proxy api:80
+    reverse_proxy api:3000
     log {
         output stdout
     }
