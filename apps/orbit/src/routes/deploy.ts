@@ -3,7 +3,6 @@ import busboy from "busboy";
 import { Hono } from "hono";
 import { loadConfig } from "../config.js";
 import { getPool } from "../db/pool.js";
-import { logger } from "../logger.js";
 import { atomicDeploy, rollback } from "../services/storage.js";
 import type { HonoVariables } from "../types.js";
 
@@ -85,16 +84,18 @@ async function extractBundleFromMultipart(req: Request): Promise<Uint8Array> {
 }
 
 deploy.post("/v1/orbit/deploy", async (c) => {
-  const cfg = loadConfig();
-  const appId = c.var.appId;
-  const slug = c.var.appSlug;
+  const cfg  = loadConfig();
+  const log  = c.var.log;
+  const appId  = c.var.appId;
+  const userId = c.var.userId;
+  const slug   = c.var.appSlug;
 
   let zipBytes: Uint8Array;
   try {
     zipBytes = await extractBundleFromMultipart(c.req.raw);
   } catch (err) {
     const e = err as { code?: string; status?: number };
-    logger.warn({ code: e.code, appId, slug }, "bundle upload rejected");
+    log.warn({ code: e.code, appId, slug }, "bundle upload rejected");
     return c.json({ ok: false, error: e.code ?? "upload_error" }, (e.status ?? 400) as 400);
   }
 
@@ -104,9 +105,10 @@ deploy.post("/v1/orbit/deploy", async (c) => {
   } catch (err) {
     const e = err as { code?: string };
     if (e.code === "missing_index_html") {
+      log.warn({ appId, slug }, "deploy rejected: missing index.html");
       return c.json({ ok: false, error: "missing_index_html" }, 422);
     }
-    logger.error({ err, appId, slug }, "atomic deploy failed");
+    log.error({ err, appId, slug }, "atomic deploy failed");
     return c.json({ ok: false, error: "deploy_failed" }, 500);
   }
 
@@ -116,29 +118,32 @@ deploy.post("/v1/orbit/deploy", async (c) => {
       [appId, version, `${cfg.STORAGE_ROOT}/${slug}/current`],
     );
   } catch (err) {
-    logger.warn({ err, appId, slug, version }, "failed to record deployment in db");
+    log.warn({ err, appId, slug, version }, "failed to record deployment in db");
   }
 
-  logger.info({ appId, slug, version }, "deploy complete");
+  log.info({ appId, userId, slug, version }, "deploy complete");
   return c.json({ ok: true, version, appSlug: slug });
 });
 
 deploy.post("/v1/orbit/rollback", async (c) => {
-  const cfg = loadConfig();
-  const appId = c.var.appId;
-  const slug = c.var.appSlug;
+  const cfg  = loadConfig();
+  const log  = c.var.log;
+  const appId  = c.var.appId;
+  const userId = c.var.userId;
+  const slug   = c.var.appSlug;
 
   try {
     await rollback(cfg.STORAGE_ROOT, slug);
   } catch (err) {
     const e = err as { code?: string };
     if (e.code === "no_previous_version") {
+      log.warn({ appId, slug }, "rollback rejected: no previous version");
       return c.json({ ok: false, error: "no_previous_version" }, 409);
     }
-    logger.error({ err, appId, slug }, "rollback failed");
+    log.error({ err, appId, slug }, "rollback failed");
     return c.json({ ok: false, error: "rollback_failed" }, 500);
   }
 
-  logger.info({ appId, slug }, "rollback complete");
+  log.info({ appId, userId, slug }, "rollback complete");
   return c.json({ ok: true });
 });

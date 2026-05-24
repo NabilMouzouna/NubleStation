@@ -22,32 +22,38 @@ export const hmacAuth: MiddlewareHandler<{ Variables: HonoVariables }> = async (
   next,
 ) => {
   const cfg = loadConfig();
-  const appId = c.req.header(X_NUBLE_APP_ID);
-  const userId = c.req.header(X_NUBLE_USER_ID);
+  const log = c.var.log;
+
+  const appId     = c.req.header(X_NUBLE_APP_ID);
+  const userId    = c.req.header(X_NUBLE_USER_ID);
   const timestamp = c.req.header(X_NUBLE_TIMESTAMP);
-  const sig = c.req.header(X_NUBLE_SIG);
-  const appSlug = c.req.header(X_NUBLE_APP_SLUG);
+  const sig       = c.req.header(X_NUBLE_SIG);
+  const appSlug   = c.req.header(X_NUBLE_APP_SLUG);
 
   if (!appId || !userId || !timestamp || !sig || !appSlug) {
+    log.warn({ reason: "missing_signature_headers" }, "hmac auth rejected");
     return c.json({ ok: false, error: "missing_signature_headers" }, 401);
   }
 
   const ts = Number(timestamp);
   if (!Number.isFinite(ts) || Math.abs(Date.now() - ts) > HMAC_MAX_SKEW_MS) {
+    log.warn({ reason: "stale_timestamp", skewMs: Date.now() - ts, appId }, "hmac auth rejected");
     return c.json({ ok: false, error: "stale_or_invalid_timestamp" }, 401);
   }
 
   if (!uuidSchema.safeParse(appId).success) {
+    log.warn({ reason: "invalid_app_id", appId }, "hmac auth rejected");
     return c.json({ ok: false, error: "invalid_app_id" }, 400);
   }
 
   if (!slugSchema.safeParse(appSlug).success) {
+    log.warn({ reason: "invalid_app_slug", appSlug }, "hmac auth rejected");
     return c.json({ ok: false, error: "invalid_app_slug" }, 400);
   }
 
   const bodyBytes = new Uint8Array(await c.req.raw.clone().arrayBuffer());
-  const bodyHash = sha256Hex(bodyBytes);
-  const expected = computeHmac(
+  const bodyHash  = sha256Hex(bodyBytes);
+  const expected  = computeHmac(
     c.req.method,
     c.req.path,
     bodyHash,
@@ -56,6 +62,7 @@ export const hmacAuth: MiddlewareHandler<{ Variables: HonoVariables }> = async (
   );
 
   if (!verifyHmac(expected, sig)) {
+    log.warn({ reason: "bad_signature", appId, appSlug }, "hmac auth rejected");
     return c.json({ ok: false, error: "bad_signature" }, 401);
   }
 
