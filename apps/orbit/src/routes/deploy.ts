@@ -2,6 +2,7 @@ import { Writable } from "node:stream";
 import busboy from "busboy";
 import { Hono } from "hono";
 import { loadConfig } from "../config.js";
+import { getPool } from "../db/pool.js";
 import { logger } from "../logger.js";
 import { atomicDeploy, rollback } from "../services/storage.js";
 import type { HonoVariables } from "../types.js";
@@ -107,6 +108,15 @@ deploy.post("/v1/orbit/deploy", async (c) => {
     }
     logger.error({ err, appId, slug }, "atomic deploy failed");
     return c.json({ ok: false, error: "deploy_failed" }, 500);
+  }
+
+  try {
+    await getPool().query(
+      `INSERT INTO platform.deployments (app_id, version, file_path) VALUES ($1, $2, $3)`,
+      [appId, version, `${cfg.STORAGE_ROOT}/${slug}/current`],
+    );
+  } catch (err) {
+    logger.warn({ err, appId, slug, version }, "failed to record deployment in db");
   }
 
   logger.info({ appId, slug, version }, "deploy complete");

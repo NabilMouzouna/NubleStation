@@ -12,7 +12,7 @@ import { Button } from "@nublestation/ui/components/button";
 import { Badge } from "@nublestation/ui/components/badge";
 import { Separator } from "@nublestation/ui/components/separator";
 import type { AppDetail, DeploymentRow, ApiKeyRow, AppTableRow } from "@/lib/platform/app-detail";
-import { revokeApiKeyAction, deleteAppAction } from "./actions";
+import { revokeApiKeyAction, deleteAppAction, generateApiKeyAction } from "./actions";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -125,6 +125,9 @@ function SettingsTab({
   const [, startTransition] = useTransition();
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [revoking, setRevoking] = useState<string | null>(null);
+  const [generating, setGenerating] = useState(false);
+  const [newKey, setNewKey] = useState<string | null>(null);
+  const [copiedNew, setCopiedNew] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
@@ -132,6 +135,24 @@ function SettingsTab({
     navigator.clipboard.writeText(`nbl_${keyId}.***`);
     setCopiedId(keyId);
     setTimeout(() => setCopiedId(null), 2000);
+  }
+
+  async function generateKey() {
+    setGenerating(true);
+    setNewKey(null);
+    const result = await generateApiKeyAction(app.id);
+    setGenerating(false);
+    if (result.ok && result.apiKey) {
+      setNewKey(result.apiKey);
+      startTransition(() => router.refresh());
+    }
+  }
+
+  function copyNewKey() {
+    if (!newKey) return;
+    navigator.clipboard.writeText(newKey);
+    setCopiedNew(true);
+    setTimeout(() => setCopiedNew(false), 2000);
   }
 
   async function revoke(id: string) {
@@ -173,7 +194,27 @@ function SettingsTab({
 
       {/* API Keys */}
       <section className="space-y-4">
-        <h3 className="text-sm font-semibold text-foreground">API Keys</h3>
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-semibold text-foreground">API Keys</h3>
+          <Button variant="outline" size="sm" disabled={generating} onClick={generateKey}>
+            {generating ? "Generating…" : "Generate new key"}
+          </Button>
+        </div>
+
+        {newKey && (
+          <div className="rounded-2xl border border-success/30 bg-success/5 p-4">
+            <p className="text-xs font-medium text-success mb-2">New key generated — copy it now, it won&apos;t be shown again.</p>
+            <div className="flex items-center gap-2">
+              <code className="flex-1 rounded-lg bg-card border border-border px-3 py-2 font-mono text-xs text-foreground break-all">
+                {newKey}
+              </code>
+              <button onClick={copyNewKey} className="shrink-0 text-muted-foreground hover:text-foreground">
+                {copiedNew ? <CheckCheck className="size-4 text-success" /> : <Copy className="size-4" />}
+              </button>
+            </div>
+          </div>
+        )}
+
         {apiKeys.length === 0 ? (
           <EmptyState message="No API keys." />
         ) : (
@@ -352,7 +393,7 @@ export function AppDetailClient({
             </a>
           </div>
         </div>
-        <Badge variant={deployments.length > 0 ? "success" : "default"} className="gap-1.5 mt-1">
+        <Badge variant={deployments.length > 0 ? "success" : "warning"} className="gap-1.5 mt-1">
           {deployments.length > 0 ? (
             <><span className="size-1.5 animate-pulse rounded-full bg-success" /> Live</>
           ) : (
