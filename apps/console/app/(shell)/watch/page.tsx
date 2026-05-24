@@ -10,18 +10,23 @@ const CONTAINERS = [
   "console", "caddy", "coredns", "postgres",
 ];
 
-const mockLogs = [
-  { time: "10:42:01", container: "gateway", level: "info",  msg: "POST /v1/db/tasks → 200 12ms" },
-  { time: "10:42:01", container: "db",      level: "info",  msg: "withTenant(app-1) query completed in 4ms" },
-  { time: "10:42:03", container: "gateway", level: "info",  msg: "GET /v1/storage/files → 200 8ms" },
-  { time: "10:42:05", container: "caddy",   level: "info",  msg: "tasks.clinic.local → 200" },
-  { time: "10:42:07", container: "gateway", level: "warn",  msg: "Rate limit approaching for app-2" },
-  { time: "10:42:09", container: "postgres",level: "info",  msg: "checkpoint complete: wrote 42 buffers" },
-  { time: "10:42:11", container: "db",      level: "info",  msg: "migration applied: 0001_init_platform" },
-  { time: "10:42:14", container: "gateway", level: "error", msg: "HMAC verification failed — rejected request" },
-];
+type LogEntry = {
+  time: string;
+  container: string;
+  level: "info" | "warn" | "error";
+  msg: string;
+};
 
-type LogEntry = typeof mockLogs[number];
+const mockLogs: LogEntry[] = [
+  { time: "10:42:01", container: "gateway",  level: "info",  msg: "POST /v1/db/tasks → 200 12ms" },
+  { time: "10:42:01", container: "db",       level: "info",  msg: "withTenant(app-1) query completed in 4ms" },
+  { time: "10:42:03", container: "gateway",  level: "info",  msg: "GET /v1/storage/files → 200 8ms" },
+  { time: "10:42:05", container: "caddy",    level: "info",  msg: "tasks.clinic.local → 200" },
+  { time: "10:42:07", container: "gateway",  level: "warn",  msg: "Rate limit approaching for app-2" },
+  { time: "10:42:09", container: "postgres", level: "info",  msg: "checkpoint complete: wrote 42 buffers" },
+  { time: "10:42:11", container: "db",       level: "info",  msg: "migration applied: 0001_init_platform" },
+  { time: "10:42:14", container: "gateway",  level: "error", msg: "HMAC verification failed — rejected request" },
+];
 
 const levelColor: Record<string, string> = {
   info:  "text-muted-foreground",
@@ -29,20 +34,27 @@ const levelColor: Record<string, string> = {
   error: "text-destructive",
 };
 
+async function fetchLogs(container: string): Promise<LogEntry[]> {
+  if (container === "deploy") {
+    const res = await fetch("/api/logs/deploy", { cache: "no-store" });
+    if (!res.ok) return [];
+    return res.json();
+  }
+  return mockLogs.filter((l) => l.container === container);
+}
+
 export default function WatchPage() {
-  const [selected, setSelected]   = useState("gateway");
-  const [logs, setLogs]           = useState<LogEntry[]>([]);
-  const [loading, setLoading]     = useState(false);
+  const [selected, setSelected]     = useState("deploy");
+  const [logs, setLogs]             = useState<LogEntry[]>([]);
+  const [loading, setLoading]       = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
     setLoading(true);
-    // TODO: replace with real fetch from /api/logs?container={selected}
-    const timeout = setTimeout(() => {
-      setLogs(mockLogs.filter((l) => l.container === selected));
+    fetchLogs(selected).then((data) => {
+      setLogs(data);
       setLoading(false);
-    }, 300);
-    return () => clearTimeout(timeout);
+    });
   }, [selected, refreshKey]);
 
   return (
