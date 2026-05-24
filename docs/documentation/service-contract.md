@@ -109,7 +109,7 @@ The Gateway holds one map from codename to internal URL. It is the only thing th
 | Identity | `/v1/identity/*` | `IDENTITY_INTERNAL_URL` | SDK | — |
 | Orbit | `/v1/orbit/*` | `ORBIT_INTERNAL_URL` | CLI | `appSlug` |
 
-**Extra signed fields** are an optional, lexicographically-sorted set of `key=value` lines appended to the HMAC payload (ADR 007 §8). Orbit needs the app slug to choose its filesystem directory, so the Gateway signs `appSlug` into the payload — Orbit trusts the slug *because it is inside the signature* and never queries the database to translate `app_id → slug`. Services that pass no extras keep a **byte-identical** payload to the original v1 format, so their signing logic is unchanged.
+**Signed context** — all trusted identity headers (`app-id`, `user-id`, and optionally `app-slug` for Orbit) are included in the HMAC payload, sorted lexicographically by name. This is modelled on AWS SigV4's canonical headers: every claim that affects a request's behavior must be part of the signed payload. A MITM on the Docker bridge cannot swap tenant identity without also holding `INTERNAL_HMAC_SECRET`. See ADR 010 and `hmac-signing-flow.md` for the full specification.
 
 ## SDK clients vs. the CLI client
 
@@ -267,12 +267,22 @@ export const hmacAuth: MiddlewareHandler<{ Variables: HonoVariables }> = async (
 
   const bodyBytes = new Uint8Array(await c.req.raw.clone().arrayBuffer());
   const bodyHash  = sha256Hex(bodyBytes);
-  const expected  = computeHmac(
+
+  // Rebuild the same context the Gateway signed — must match exactly
+  const context: Record<string, string> = {
+    [X_NUBLE_APP_ID]:  appId,
+    [X_NUBLE_USER_ID]: userId,
+    // Services that use appSlug (e.g. Orbit) add it here:
+    // [X_NUBLE_APP_SLUG]: appSlug,
+  };
+
+  const expected = computeHmac(
     c.req.method,
     c.req.path,
     bodyHash,
     timestamp,
     cfg.INTERNAL_HMAC_SECRET,
+    context,
   );
 
   if (!verifyHmac(expected, sig)) {
@@ -299,20 +309,28 @@ The reference implementation lives in `apps/blaze/src/middleware/hmac.ts`. When 
 | `x-nuble-timestamp` | Unix timestamp in ms (string) | skew ≤ 30 s |
 | `x-nuble-sig` | HMAC-SHA256 hex of canonical payload | `timingSafeEqual` |
 
-**Canonical payload signed by the Gateway:**
+**Canonical payload signed by the Gateway (SigV4-inspired):**
 
 ```
-METHOD\nPATH\nBODY_SHA256_HEX\nTIMESTAMP_MS[\nKEY=VALUE...]
+METHOD\n
+PATH\n
+BODY_SHA256_HEX\n
+TIMESTAMP_MS\n
+header-name:value\n
+header-name:value\n
+...
 ```
 
-Without extra fields (Blaze / Vault / Identity) the payload ends at the timestamp — byte-identical to the v1 format. With extra fields (Orbit), sorted `KEY=VALUE` lines are appended, each on its own line:
+Context headers are lower-cased and sorted lexicographically by name. Blaze / Vault / Identity sign `app-id` and `user-id`. Orbit also signs `app-slug` (sorted between the two):
 
 ```
 POST
 /v1/orbit/deploy
 <body sha256 hex>
 1716134400000
-appSlug=tasks
+x-nuble-app-id:f47ac10b-58cc-4372-a567-0e02b2c3d479
+x-nuble-app-slug:tasks
+x-nuble-user-id:b32c1234-1111-2222-3333-444455556666
 ```
 
 All constants live in `packages/shared/src/headers.ts`. Do not hardcode header names in service code.
@@ -398,7 +416,7 @@ Services never see client API keys or session tokens — only Gateway-signed int
 | Only Gateway can reach services | Docker bridge network; no host-mapped ports on services |
 | Gateway cannot be impersonated | `INTERNAL_HMAC_SECRET` — shared only between Gateway and services |
 | Body tampering detected | SHA-256 of body is part of the signed payload |
-| Tenant binding | `app_id` (and `appSlug` for Orbit) carried inside the signed payload |
+| Identity binding | `app-id`, `user-id` (and `app-slug` for Orbit) are inside the signed payload — MITM on the Docker bridge cannot swap tenant identity without holding the secret (ADR 010) |
 | Replay attacks prevented | Timestamp skew window of ±30 seconds |
 | Timing attacks prevented | `timingSafeEqual` for HMAC comparison; `argon2.verify` for the key check |
 | Enumeration prevented | Gateway returns a single generic 401 for all auth failures |

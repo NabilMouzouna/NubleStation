@@ -1,15 +1,16 @@
-# HMAC Signing Flow — API Gateway → Blaze
+# HMAC Signing Flow — API Gateway → Internal Services
 
-This document describes the end-to-end trust chain from a client request arriving at the API Gateway to Blaze accepting or rejecting the forwarded request. Both sides share `INTERNAL_HMAC_SECRET` (injected via environment variable) and the signing/verification logic in `packages/shared/src/hmac.ts`.
+This document describes the end-to-end trust chain from a client request arriving at the API Gateway to an internal service accepting or rejecting the forwarded request. Both sides share `INTERNAL_HMAC_SECRET` (injected via environment variable) and the signing/verification logic in `packages/shared/src/hmac.ts`.
 
-See ADR 003 §14 for the architectural rationale. The same trust model applies to gateway → Identity / Vault / Orbit; Blaze is used here as the worked example.
+**Design decision:** ADR 010 — HMAC canonical request with signed context headers.  
+**Architectural rationale:** ADR 003 §14 — Gateway as sole LAN entry; signed internal headers.
 
 ---
 
 ## Overview
 
 ```
-Client                  API Gateway                      Blaze
+Client                  API Gateway                      Service (e.g. Blaze)
   │                         │                                │
   │  Bearer nbl_<id>.<sec>  │                                │
   │─────────────────────────▶│                                │
@@ -18,20 +19,23 @@ Client                  API Gateway                      Blaze
   │                         │    key_id = $1                 │
   │                         │ 3. argon2.verify(hash, secret) │
   │                         │ 4. sha256(body)                │
-  │                         │ 5. computeHmac(...)            │
+  │                         │ 5. buildContext({ appId, userId, [appSlug] })
+  │                         │ 6. computeHmac(..., context)   │
   │                         │                                │
-  │                         │  X-Nuble-App-Id: <uuid>        │
-  │                         │  X-Nuble-User-Id: <uuid>       │
-  │                         │  X-Nuble-Timestamp: <ms>       │
-  │                         │  X-Nuble-Sig: <hex>            │
+  │                         │  x-nuble-app-id: <uuid>        │
+  │                         │  x-nuble-user-id: <uuid>       │
+  │                         │  x-nuble-timestamp: <ms>       │
+  │                         │  x-nuble-sig: <hex>            │
+  │                         │  [x-nuble-app-slug: <slug>]    │
   │                         │───────────────────────────────▶│
-  │                         │                                │ 6. read 4 headers
-  │                         │                                │ 7. check timestamp skew
-  │                         │                                │ 8. UUID-validate appId
-  │                         │                                │ 9. sha256(body)
-  │                         │                                │10. computeHmac(...)
-  │                         │                                │11. timingSafeEqual(...)
-  │                         │                                │12. set c.var.appId/userId
+  │                         │                                │ 7. read headers
+  │                         │                                │ 8. check timestamp skew
+  │                         │                                │ 9. UUID-validate appId
+  │                         │                                │10. sha256(body)
+  │                         │                                │11. rebuild context
+  │                         │                                │12. computeHmac(..., context)
+  │                         │                                │13. timingSafeEqual(expected, sig)
+  │                         │                                │14. set c.var.appId / userId / [appSlug]
   │◀─────────────────────────────────────────────────────────│
 ```
 
@@ -74,94 +78,162 @@ A single generic `401` is returned for any failure — whether `key_id` not foun
 
 ---
 
-## Phase 2 — Gateway: Request Signing
+## Phase 2 — Gateway: Request Signing (SigV4-inspired)
 
 **Files:**
 - `apps/gateway/src/forward/sign.ts` — produces the HMAC signature
 - `apps/gateway/src/forward/proxy.ts` — attaches signed headers and forwards
-- `packages/shared/src/hmac.ts` — canonical implementation (shared with Blaze)
+- `packages/shared/src/hmac.ts` — canonical implementation shared with all services
 
-### Canonical Payload
+### Why model after AWS SigV4?
+
+SigV4 is the industry standard for signing internal service requests. The core principle: **every claim that affects a request's behavior must be part of the signed payload**. If a header is trusted but not signed, a MITM on the internal network can modify it without breaking the signature.
+
+NubleStation's model applies the same rule: identity headers (`app-id`, `user-id`, and optionally `app-slug`) are included in the canonical payload. A compromised container on the Docker bridge cannot swap tenant identity without also knowing `INTERNAL_HMAC_SECRET`.
+
+### Canonical payload structure
 
 ```
-METHOD\nPATH\nBODY_SHA256_HEX\nTIMESTAMP_MS
+METHOD\n
+PATH\n
+BODY_SHA256_HEX\n
+TIMESTAMP_MS\n
+header-name:value\n
+header-name:value\n
+...
 ```
 
-Example for `POST /v1/db/tasks` with a 14-byte body:
+Context headers are **lower-cased**, **sorted lexicographically by name**, and appended one per line as `header-name:value`. This is the same canonical form AWS SigV4 uses for its "CanonicalHeaders" section.
+
+### Context headers — which services sign which
+
+| Header | Blaze / Vault / Identity | Orbit |
+|---|---|---|
+| `x-nuble-app-id` | ✅ always | ✅ always |
+| `x-nuble-user-id` | ✅ always | ✅ always |
+| `x-nuble-app-slug` | — not included | ✅ always |
+
+Because names are sorted, the canonical order is always deterministic:
+- `app-id` < `app-slug` < `user-id` (byte order)
+
+### Example — Blaze `POST /v1/blaze/query`
 
 ```
 POST
-/v1/db/tasks
+/v1/blaze/query
 a591a6d40bf420404a011733cfb7b190d62c65bf0bcda32b57b277d9ad9f146e
 1716134400000
+x-nuble-app-id:f47ac10b-58cc-4372-a567-0e02b2c3d479
+x-nuble-user-id:b32c1234-1111-2222-3333-444455556666
+```
+
+### Example — Orbit `POST /v1/orbit/deploy`
+
+```
+POST
+/v1/orbit/deploy
+<zip sha256 hex>
+1716134400000
+x-nuble-app-id:f47ac10b-58cc-4372-a567-0e02b2c3d479
+x-nuble-app-slug:tasks
+x-nuble-user-id:b32c1234-1111-2222-3333-444455556666
 ```
 
 ### Signing code
 
 ```typescript
-// apps/gateway/src/forward/sign.ts
-export function signRequest(method, path, body: Uint8Array, secret, now = Date.now()) {
-  const bodyHash = sha256Hex(body);          // SHA-256 of raw bytes
-  const timestamp = String(now);             // Unix ms as string
-  const signature = computeHmac(method, path, bodyHash, timestamp, secret);
-  return { bodyHash, timestamp, signature };
+// packages/shared/src/hmac.ts
+export function computeHmac(
+  method: string,
+  path: string,
+  bodyHashHex: string,
+  timestamp: string,
+  secret: string,
+  context?: Record<string, string>,   // signed identity headers
+): string {
+  let payload = `${method.toUpperCase()}\n${path}\n${bodyHashHex}\n${timestamp}`;
+  if (context) {
+    const lines = Object.entries(context)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([k, v]) => `${k.toLowerCase()}:${v}`)
+      .join("\n");
+    payload += `\n${lines}`;
+  }
+  return createHmac("sha256", secret).update(payload).digest("hex");
 }
 
-// packages/shared/src/hmac.ts
-export function computeHmac(method, path, bodyHashHex, timestamp, secret): string {
-  const payload = `${method.toUpperCase()}\n${path}\n${bodyHashHex}\n${timestamp}`;
-  return createHmac("sha256", secret).update(payload).digest("hex");
+// apps/gateway/src/forward/sign.ts
+export function signRequest(
+  method: string,
+  path: string,
+  body: Uint8Array,
+  secret: string,
+  context: Record<string, string>,
+  now: number = Date.now(),
+): SignedHeaders {
+  const bodyHash  = sha256Hex(body);
+  const timestamp = String(now);
+  const signature = computeHmac(method, path, bodyHash, timestamp, secret, context);
+  return { bodyHash, timestamp, signature };
 }
 ```
 
-### Headers sent to Blaze
+### Headers forwarded to the service
 
-| Header | Value | Purpose |
+| Header | Value | In signed payload |
 |---|---|---|
-| `x-nuble-app-id` | `<uuid>` | Tenant identifier, resolved from `api_keys.app_id` |
-| `x-nuble-user-id` | `<uuid>` | User/session identifier (Phase 1: `api_keys.id` placeholder) |
-| `x-nuble-timestamp` | `<unix ms>` | Replay attack prevention |
-| `x-nuble-sig` | `<sha256 hex>` | HMAC-SHA256 of canonical payload |
-
-Blaze is **not exposed on the LAN** — it only listens on the internal Docker bridge network. These headers are the sole mechanism Blaze uses to identify and trust requests.
+| `x-nuble-app-id` | `<uuid>` | ✅ |
+| `x-nuble-user-id` | `<uuid>` | ✅ |
+| `x-nuble-timestamp` | `<unix ms>` | ✅ (part of base payload) |
+| `x-nuble-sig` | `<sha256 hex>` | — (this IS the signature) |
+| `x-nuble-app-slug` | `<slug>` (Orbit only) | ✅ |
 
 ---
 
-## Phase 3 — Blaze: HMAC Verification Middleware
+## Phase 3 — Service: HMAC Verification Middleware
 
-**File:** `apps/blaze/src/middleware/hmac.ts`
-
+**Reference implementation:** `apps/orbit/src/middleware/hmac.ts`  
 Applied globally to all routes **except** `/healthz` and `/readyz`.
 
 ### Verification steps
 
 ```typescript
-// 1. All 4 headers must be present → 401 missing_signature_headers
-const appId     = c.req.header("x-nuble-app-id");
-const userId    = c.req.header("x-nuble-user-id");
-const timestamp = c.req.header("x-nuble-timestamp");
-const sig       = c.req.header("x-nuble-sig");
+// 1. Read all required headers
+const appId     = c.req.header(X_NUBLE_APP_ID);
+const userId    = c.req.header(X_NUBLE_USER_ID);
+const timestamp = c.req.header(X_NUBLE_TIMESTAMP);
+const sig       = c.req.header(X_NUBLE_SIG);
+// Orbit also reads: const appSlug = c.req.header(X_NUBLE_APP_SLUG);
 
-// 2. Timestamp skew check → 401 stale_or_invalid_timestamp
-//    Rejects requests older or newer than ±30 seconds (HMAC_MAX_SKEW_MS = 30_000)
-if (Math.abs(Date.now() - Number(timestamp)) > HMAC_MAX_SKEW_MS) reject();
+// 2. Reject if any required header is missing → 401 missing_signature_headers
+if (!appId || !userId || !timestamp || !sig) return reject();
 
-// 3. UUID-validate appId → 400 invalid_app_id
+// 3. Timestamp skew check → 401 stale_or_invalid_timestamp
+//    Rejects requests older or newer than ±30 seconds
+if (Math.abs(Date.now() - Number(timestamp)) > HMAC_MAX_SKEW_MS) return reject();
+
+// 4. UUID-validate appId → 400 invalid_app_id
 z.string().uuid().safeParse(appId);
 
-// 4. Re-hash body using the same sha256Hex function
+// 5. Rebuild the same context the Gateway signed
+const context: Record<string, string> = {
+  [X_NUBLE_APP_ID]:  appId,
+  [X_NUBLE_USER_ID]: userId,
+  // Orbit adds:  [X_NUBLE_APP_SLUG]: appSlug
+};
+
+// 6. Re-hash body + recompute expected HMAC
 const bodyBytes = new Uint8Array(await c.req.raw.clone().arrayBuffer());
 const bodyHash  = sha256Hex(bodyBytes);
+const expected  = computeHmac(c.req.method, c.req.path, bodyHash, timestamp, INTERNAL_HMAC_SECRET, context);
 
-// 5. Recompute expected HMAC with the shared secret
-const expected = computeHmac(c.req.method, c.req.path, bodyHash, timestamp, INTERNAL_HMAC_SECRET);
+// 7. Constant-time comparison → 401 bad_signature
+if (!verifyHmac(expected, sig)) return reject();
 
-// 6. Constant-time comparison → 401 bad_signature
-if (!verifyHmac(expected, sig)) reject();
-
-// 7. Expose trusted values on Hono context
-c.set("appId", appId);   // downstream: c.var.appId
-c.set("userId", userId); // downstream: c.var.userId
+// 8. Expose trusted values — routes use c.var, never raw headers
+c.set("appId",   appId);
+c.set("userId",  userId);
+// Orbit: c.set("appSlug", appSlug);
 ```
 
 ### Why `timingSafeEqual`
@@ -174,44 +246,44 @@ Hono's request body stream can only be consumed once. `.clone()` lets the middle
 
 ---
 
-## A note on `apps/blaze`
-
-In the codebase Blaze still uses `src/db/` internally — that folder is the database-access layer of the service (pool, schema, migrations), not the service name. Don't confuse the two:
-
-| Layer | Path |
-|---|---|
-| Service folder | `apps/blaze/` |
-| Database-access layer inside Blaze | `apps/blaze/src/db/` |
-
----
-
 ## Shared package — single source of truth
 
-`packages/shared/src/hmac.ts` is imported by both services. This means the canonical payload format, SHA-256 function, and HMAC function can **never drift** between the signer and verifier. Any change to the format is a single commit that affects both sides simultaneously.
+`packages/shared/src/hmac.ts` is imported by every service. The canonical payload format, SHA-256 function, HMAC function, and header name constants can **never drift** between the signer and verifier. Any format change is a single commit that affects all sides simultaneously.
 
 ```
 packages/shared/
   src/
-    hmac.ts       computeHmac(), verifyHmac(), sha256Hex()
-    headers.ts    header name constants + HMAC_MAX_SKEW_MS
-    api-key.ts    parseApiKey(), parseBearerToken()
+    hmac.ts      computeHmac(), verifyHmac(), sha256Hex()
+    headers.ts   header name constants + HMAC_MAX_SKEW_MS
+    api-key.ts   parseApiKey(), parseBearerToken()
 ```
 
 ---
 
 ## Security properties
 
-| Property | How it's achieved |
+| Property | Mechanism |
 |---|---|
-| Authenticity | HMAC-SHA256 with `INTERNAL_HMAC_SECRET` — only gateway knows the secret |
-| Integrity | Body hash is part of the signed payload — body tampering breaks the sig |
-| Replay prevention | Timestamp must be within ±30 s of Blaze's clock |
+| Authenticity | HMAC-SHA256 with `INTERNAL_HMAC_SECRET` — only Gateway knows the secret |
+| Integrity | Body SHA-256 is part of the signed payload — body tampering breaks the sig |
+| Identity binding | `app-id`, `user-id` (and `app-slug` for Orbit) are inside the signed payload — MITM cannot swap tenant identity |
+| Replay prevention | Timestamp skew window of ±30 seconds |
 | Timing safety | `timingSafeEqual` on HMAC comparison; `argon2.verify` on API key check |
 | Enumeration prevention | Gateway returns a single generic 401 for all auth failures |
-| Network isolation | Blaze not exposed on LAN — only reachable via Docker bridge |
+| Network isolation | Services not exposed on LAN — only reachable via Docker bridge |
 
 ---
 
 ## Phase 1 limitation: userId is a placeholder
 
-In Phase 1, `X-Nuble-User-Id` is set to `api_keys.id` (the row UUID of the key itself), not a real user session ID. This is documented with a `// Phase 1 placeholder` comment in `apps/gateway/src/routes/proxy.ts:18`. Real session resolution will be introduced when Identity is built (Phase 2), and the gateway will then resolve session tokens to actual `users.id` UUIDs before forwarding.
+In Phase 1, `X-Nuble-User-Id` is set to `api_keys.id` (the row UUID of the key itself), not a real user session ID. This is documented with a `// Phase 1 placeholder` comment in `apps/gateway/src/routes/proxy.ts`. Real session resolution will be introduced when Identity is built (Phase 2), and the gateway will then resolve session tokens to actual `users.id` UUIDs before forwarding.
+
+---
+
+## References
+
+- ADR 010 — canonical request design and SigV4 rationale
+- ADR 003 §14 — Gateway as sole LAN entry; signed internal headers
+- ADR 009 — service plug-and-play contract
+- `docs/documentation/service-contract.md` — new-service checklist
+- AWS SigV4 spec — canonical headers: `https://docs.aws.amazon.com/general/latest/gr/sigv4-create-canonical-request.html`
