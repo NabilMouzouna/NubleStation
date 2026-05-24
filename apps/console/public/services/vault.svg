@@ -1,11 +1,28 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
-  <rect width="64" height="64" rx="16" fill="#FEF9EC"/>
-  <!-- Shackle (arch), centered: peaks ~y=17, base at y=26 -->
-  <path d="M21 26 C21 14 43 14 43 26" stroke="#D97706" stroke-width="3" stroke-linecap="round"/>
-  <!-- Body, centered: y=24 to y=48 -->
-  <rect x="15" y="24" width="34" height="24" rx="6"
-    fill="#D97706" fill-opacity="0.12" stroke="#D97706" stroke-width="2.5"/>
-  <!-- Keyhole -->
-  <circle cx="32" cy="34" r="3.5" fill="#D97706"/>
-  <rect x="30.5" y="34" width="3" height="6" rx="1.5" fill="#D97706"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" fill="none">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#F4F8FF"/>
+      <stop offset="100%" stop-color="#E6EEFF"/>
+    </linearGradient>
+
+    <linearGradient id="block" x1="30" y1="24" x2="98" y2="102">
+      <stop offset="0%" stop-color="#60A5FA"/>
+      <stop offset="100%" stop-color="#2563EB"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="128" height="128" rx="32" fill="url(#bg)"/>
+
+  <!-- Main cube -->
+  <path d="M64 24L96 42L64 60L32 42L64 24Z" fill="#93C5FD"/>
+  <path d="M32 42V84L64 104V60L32 42Z" fill="#3B82F6"/>
+  <path d="M96 42V84L64 104V60L96 42Z" fill="url(#block)"/>
+
+  <!-- Distributed storage nodes -->
+  <g fill="#FFFFFF" opacity="0.92">
+    <rect x="54" y="46" width="8" height="8" rx="2"/>
+    <rect x="66" y="52" width="8" height="8" rx="2"/>
+    <rect x="54" y="64" width="8" height="8" rx="2"/>
+    <rect x="66" y="70" width="8" height="8" rx="2"/>
+  </g>
 </svg>

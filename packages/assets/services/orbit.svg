@@ -1,23 +1,47 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
-  <rect width="64" height="64" rx="16" fill="#E6FFFE"/>
-  <!-- Orbit ring back half -->
-  <ellipse cx="32" cy="36" rx="20" ry="7"
-    stroke="#0891B2" stroke-width="2"
-    stroke-dasharray="28 34"
-    stroke-dashoffset="0"
-    opacity="0.25"
-    transform="rotate(-22 32 36)"/>
-  <!-- Planet, centered: cy=30, r=10, y range 20–40 -->
-  <circle cx="32" cy="30" r="10"
-    fill="#0891B2" fill-opacity="0.15"
-    stroke="#0891B2" stroke-width="2"/>
-  <!-- Orbit ring front half -->
-  <ellipse cx="32" cy="36" rx="20" ry="7"
-    stroke="#0891B2" stroke-width="2"
-    stroke-dasharray="28 34"
-    stroke-dashoffset="-34"
-    transform="rotate(-22 32 36)"/>
-  <!-- Satellite -->
-  <circle cx="46" cy="25" r="3" fill="#0891B2"/>
-  <circle cx="46" cy="25" r="1.4" fill="#E6FFFE"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" fill="none">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#F0FDF4"/>
+      <stop offset="100%" stop-color="#DCFCE7"/>
+    </linearGradient>
+
+    <linearGradient id="deploy" x1="32" y1="24" x2="96" y2="104">
+      <stop offset="0%" stop-color="#10B981"/>
+      <stop offset="100%" stop-color="#059669"/>
+    </linearGradient>
+
+    <linearGradient id="arrow" x1="64" y1="36" x2="64" y2="96">
+      <stop offset="0%" stop-color="#34D399"/>
+      <stop offset="100%" stop-color="#047857"/>
+    </linearGradient>
+
+    <filter id="shadow" x="-50%" y="-50%" width="200%" height="200%">
+      <feDropShadow dx="0" dy="6" stdDeviation="8" flood-opacity="0.12"/>
+    </filter>
+  </defs>
+
+  <rect width="128" height="128" rx="32" fill="url(#bg)"/>
+
+  <!-- Infrastructure layers -->
+  <g filter="url(#shadow)">
+    <rect x="26" y="72" width="76" height="18" rx="9" fill="url(#deploy)" opacity="0.92"/>
+    <rect x="34" y="52" width="60" height="16" rx="8" fill="url(#deploy)" opacity="0.78"/>
+    <rect x="42" y="34" width="44" height="14" rx="7" fill="url(#deploy)" opacity="0.62"/>
+  </g>
+
+  <!-- Deploy arrow -->
+  <path
+    d="M64 26L86 52H72V86H56V52H42L64 26Z"
+    fill="url(#arrow)"
+    stroke="#FFFFFF"
+    stroke-width="2"
+    stroke-linejoin="round"
+  />
+
+  <!-- Network nodes -->
+  <g fill="#ECFDF5" opacity="0.9">
+    <circle cx="42" cy="80" r="3"/>
+    <circle cx="64" cy="80" r="3"/>
+    <circle cx="86" cy="80" r="3"/>
+  </g>
 </svg>
