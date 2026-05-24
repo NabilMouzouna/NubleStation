@@ -1,7 +1,9 @@
 import { readConfig } from "../config.js";
 import { checkGatewayHealth } from "../utils/upload.js";
+import { printBranding } from "../branding.js";
 
 export async function runStatus(): Promise<void> {
+  printBranding("nuble status");
   const config = await readConfig();
   const profiles = Object.keys(config);
 

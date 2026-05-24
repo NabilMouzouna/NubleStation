@@ -2,6 +2,7 @@ import { resolve } from "node:path";
 import { getProfile } from "../config.js";
 import { zipDirectory } from "../utils/zip.js";
 import { uploadBundle } from "../utils/upload.js";
+import { printBranding } from "../branding.js";
 
 export interface DeployOptions {
   dist?: string;
@@ -9,6 +10,7 @@ export interface DeployOptions {
 }
 
 export async function runDeploy(options: DeployOptions): Promise<void> {
+  printBranding("nuble deploy");
   const profile = await getProfile(options.profile);
   const distPath = resolve(options.dist ?? "dist");
 
