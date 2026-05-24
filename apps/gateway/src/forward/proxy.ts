@@ -45,7 +45,13 @@ export interface ForwardResult {
  * ADR 003 §14: signed internal headers.
  */
 export async function forwardSigned(args: ForwardArgs): Promise<ForwardResult> {
-  const signed = signRequest(args.method, args.path, args.body, args.hmacSecret);
+  const context: Record<string, string> = {
+    [X_NUBLE_APP_ID]:  args.appId,
+    [X_NUBLE_USER_ID]: args.userId,
+  };
+  if (args.appSlug) context[X_NUBLE_APP_SLUG] = args.appSlug;
+
+  const signed = signRequest(args.method, args.path, args.body, args.hmacSecret, context);
 
   const targetUrl = new URL(args.path, args.upstreamBaseUrl).toString();
   const headers: Record<string, string> = {

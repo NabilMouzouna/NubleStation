@@ -53,12 +53,18 @@ export const hmacAuth: MiddlewareHandler<{ Variables: HonoVariables }> = async (
 
   const bodyBytes = new Uint8Array(await c.req.raw.clone().arrayBuffer());
   const bodyHash  = sha256Hex(bodyBytes);
+  const context: Record<string, string> = {
+    [X_NUBLE_APP_ID]:   appId,
+    [X_NUBLE_APP_SLUG]: appSlug,
+    [X_NUBLE_USER_ID]:  userId,
+  };
   const expected  = computeHmac(
     c.req.method,
     c.req.path,
     bodyHash,
     timestamp,
     cfg.INTERNAL_HMAC_SECRET,
+    context,
   );
 
   if (!verifyHmac(expected, sig)) {

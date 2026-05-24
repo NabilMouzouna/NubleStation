@@ -10,8 +10,16 @@ export function computeHmac(
   bodyHashHex: string,
   timestamp: string,
   secret: string,
+  context?: Record<string, string>,
 ): string {
-  const payload = `${method.toUpperCase()}\n${path}\n${bodyHashHex}\n${timestamp}`;
+  let payload = `${method.toUpperCase()}\n${path}\n${bodyHashHex}\n${timestamp}`;
+  if (context && Object.keys(context).length > 0) {
+    const lines = Object.entries(context)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([k, v]) => `${k.toLowerCase()}:${v}`)
+      .join("\n");
+    payload += `\n${lines}`;
+  }
   return createHmac("sha256", secret).update(payload).digest("hex");
 }
 

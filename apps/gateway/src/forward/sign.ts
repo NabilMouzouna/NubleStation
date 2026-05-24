@@ -11,10 +11,11 @@ export function signRequest(
   path: string,
   body: Uint8Array,
   secret: string,
+  context: Record<string, string>,
   now: number = Date.now(),
 ): SignedHeaders {
   const bodyHash = sha256Hex(body);
   const timestamp = String(now);
-  const signature = computeHmac(method, path, bodyHash, timestamp, secret);
+  const signature = computeHmac(method, path, bodyHash, timestamp, secret, context);
   return { bodyHash, timestamp, signature };
 }

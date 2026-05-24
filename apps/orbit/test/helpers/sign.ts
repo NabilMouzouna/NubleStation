@@ -19,11 +19,16 @@ export function makeSignedHeaders(
   body: Uint8Array,
 ): Record<string, string> {
   const timestamp = String(Date.now());
-  const bodyHash = sha256Hex(body);
-  const sig = computeHmac(method, path, bodyHash, timestamp, TEST_HMAC_SECRET);
+  const bodyHash  = sha256Hex(body);
+  const context: Record<string, string> = {
+    [X_NUBLE_APP_ID]:   TEST_APP_ID,
+    [X_NUBLE_APP_SLUG]: TEST_APP_SLUG,
+    [X_NUBLE_USER_ID]:  TEST_USER_ID,
+  };
+  const sig = computeHmac(method, path, bodyHash, timestamp, TEST_HMAC_SECRET, context);
   return {
-    [X_NUBLE_APP_ID]: TEST_APP_ID,
-    [X_NUBLE_USER_ID]: TEST_USER_ID,
+    [X_NUBLE_APP_ID]:   TEST_APP_ID,
+    [X_NUBLE_USER_ID]:  TEST_USER_ID,
     [X_NUBLE_APP_SLUG]: TEST_APP_SLUG,
     [X_NUBLE_TIMESTAMP]: timestamp,
     [X_NUBLE_SIG]: sig,
