@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card } from "@nublestation/ui/components/card";
 import { Button } from "@nublestation/ui/components/button";
 import { RefreshCw } from "lucide-react";
@@ -21,6 +21,8 @@ const mockLogs = [
   { time: "10:42:14", container: "gateway", level: "error", msg: "HMAC verification failed — rejected request" },
 ];
 
+type LogEntry = typeof mockLogs[number];
+
 const levelColor: Record<string, string> = {
   info:  "text-muted-foreground",
   warn:  "text-warning",
@@ -28,10 +30,20 @@ const levelColor: Record<string, string> = {
 };
 
 export default function WatchPage() {
-  const [selected, setSelected] = useState("gateway");
+  const [selected, setSelected]   = useState("gateway");
+  const [logs, setLogs]           = useState<LogEntry[]>([]);
+  const [loading, setLoading]     = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
 
-  const logs = mockLogs.filter((l) => l.container === selected);
+  useEffect(() => {
+    setLoading(true);
+    // TODO: replace with real fetch from /api/logs?container={selected}
+    const timeout = setTimeout(() => {
+      setLogs(mockLogs.filter((l) => l.container === selected));
+      setLoading(false);
+    }, 300);
+    return () => clearTimeout(timeout);
+  }, [selected, refreshKey]);
 
   return (
     <div className="flex h-full flex-col p-8">
@@ -41,8 +53,13 @@ export default function WatchPage() {
           <p className="mt-1 text-sm text-muted-foreground">Live log stream per container</p>
         </div>
 
-        <Button variant="outline" size="sm" onClick={() => setRefreshKey((k) => k + 1)}>
-          <RefreshCw size={14} />
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={loading}
+          onClick={() => setRefreshKey((k) => k + 1)}
+        >
+          <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
           Refresh
         </Button>
       </div>
@@ -65,7 +82,9 @@ export default function WatchPage() {
 
       <Card className="mt-4 flex-1 overflow-hidden">
         <div className="h-full overflow-y-auto p-5 font-mono text-xs">
-          {logs.length === 0 ? (
+          {loading ? (
+            <p className="text-muted-foreground">Loading…</p>
+          ) : logs.length === 0 ? (
             <p className="text-muted-foreground">No logs yet for {selected}.</p>
           ) : (
             logs.map((log, i) => (
