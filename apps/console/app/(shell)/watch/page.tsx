@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Card } from "@nublestation/ui/components/card";
 import { Button } from "@nublestation/ui/components/button";
-import { Play, Pause, Trash2 } from "lucide-react";
+import { RefreshCw } from "lucide-react";
 
 const CONTAINERS = [
   "gateway", "db", "auth", "storage", "deploy",
@@ -29,7 +29,7 @@ const levelColor: Record<string, string> = {
 
 export default function WatchPage() {
   const [selected, setSelected] = useState("gateway");
-  const [running, setRunning] = useState(true);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   const logs = mockLogs.filter((l) => l.container === selected);
 
@@ -41,19 +41,10 @@ export default function WatchPage() {
           <p className="mt-1 text-sm text-muted-foreground">Live log stream per container</p>
         </div>
 
-        <div className="flex items-center gap-2">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setRunning((r) => !r)}
-            title={running ? "Pause" : "Resume"}
-          >
-            {running ? <Pause size={16} /> : <Play size={16} />}
-          </Button>
-          <Button variant="ghost" size="icon" title="Clear">
-            <Trash2 size={16} />
-          </Button>
-        </div>
+        <Button variant="outline" size="sm" onClick={() => setRefreshKey((k) => k + 1)}>
+          <RefreshCw size={14} />
+          Refresh
+        </Button>
       </div>
 
       <div className="mt-6 flex flex-wrap gap-2">
