@@ -10,6 +10,9 @@ RUN turbo prune @nublestation/blaze --docker
 # ── Stage 2: Install deps from pruned lockfile ───────────────────────────────
 FROM base AS installer
 WORKDIR /app
+# python3 + make + g++ are required by node-gyp to compile native addons
+# (better-sqlite3 appears in the pruned lockfile via workspace hoisting)
+RUN apk add --no-cache python3 make g++
 COPY --from=pruner /app/out/json/ .
 COPY --from=pruner /app/out/pnpm-lock.yaml ./pnpm-lock.yaml
 RUN pnpm install --frozen-lockfile
