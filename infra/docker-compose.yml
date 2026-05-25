@@ -68,7 +68,7 @@ services:
   # ── NubleStation services ────────────────────────────────────────────────────
 
   console:
-    image: ghcr.io/nabilmouzouna/nublestation-console:latest
+    image: ghcr.io/nabilmouzouna/nublestation-console:${IMAGE_TAG:-latest}
     restart: unless-stopped
     environment:
       NODE_ENV: production
@@ -93,7 +93,7 @@ services:
 
   # Gateway — the only LAN-exposed API service (service name "api" matches Caddy)
   api:
-    image: ghcr.io/nabilmouzouna/nublestation-gateway:latest
+    image: ghcr.io/nabilmouzouna/nublestation-gateway:${IMAGE_TAG:-latest}
     restart: unless-stopped
     environment:
       NODE_ENV: production
@@ -118,7 +118,7 @@ services:
       retries: 3
 
   blaze:
-    image: ghcr.io/nabilmouzouna/nublestation-blaze:latest
+    image: ghcr.io/nabilmouzouna/nublestation-blaze:${IMAGE_TAG:-latest}
     restart: unless-stopped
     environment:
       NODE_ENV: production
@@ -139,7 +139,7 @@ services:
       retries: 3
 
   orbit:
-    image: ghcr.io/nabilmouzouna/nublestation-orbit:latest
+    image: ghcr.io/nabilmouzouna/nublestation-orbit:${IMAGE_TAG:-latest}
     restart: unless-stopped
     environment:
       NODE_ENV: production
