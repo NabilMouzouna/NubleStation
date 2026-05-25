@@ -43,7 +43,7 @@ services:
       - "53:53/udp"
       - "53:53/tcp"
     volumes:
-      - ./coredns/Corefile:/Corefile:ro
+      - /var/nuble/coredns/Corefile:/Corefile:ro
     command: ["-conf", "/Corefile"]
     networks:
       - nuble

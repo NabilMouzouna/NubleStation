@@ -396,7 +396,7 @@ EOF
   # ── 6. Generate CoreDNS Corefile ─────────────────────────────────────────────
   mkdir -p "$INSTALL_DIR/coredns"
   sed "s/\${ORG_DOMAIN}/${ORG_DOMAIN}/g; s/\${HOST_IP}/${HOST_IP}/g" \
-    "$(bundle_file infra/Corefile.template)" > "$INSTALL_DIR/coredns/Corefile"
+    "$(bundle_file infra/coredns/Corefile.template)" > "$INSTALL_DIR/coredns/Corefile"
   info "CoreDNS Corefile generated"
 
   # ── 7. Create and seed admin.db ──────────────────────────────────────────────
