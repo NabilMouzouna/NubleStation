@@ -76,8 +76,8 @@ services:
       ORBIT_STORAGE_ROOT: /var/nuble/apps
       ADMIN_DB_PATH: /var/nuble/admin.db
     volumes:
+      - /var/nuble:/var/nuble:rw
       - nuble-apps:/var/nuble/apps:rw
-      - /var/nuble/admin.db:/var/nuble/admin.db:rw
     expose:
       - "3000"
     networks:
