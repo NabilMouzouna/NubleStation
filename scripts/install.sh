@@ -152,9 +152,9 @@ handle_existing_install() {
       step "Upgrading to $VERSION"
       download_bundle
       docker compose --env-file "$INSTALL_DIR/.env" \
-        -f "$(bundle_file docker-compose.yml)" pull
+        -f "$(bundle_file infra/docker-compose.yml)" pull
       docker compose --env-file "$INSTALL_DIR/.env" \
-        -f "$(bundle_file docker-compose.yml)" up -d
+        -f "$(bundle_file infra/docker-compose.yml)" up -d
       printf '%s' "$VERSION" > "$VERSION_FILE"
       info "Upgraded to $VERSION"
       exit 0
@@ -433,7 +433,7 @@ SQL
   # ── 9. Start services ─────────────────────────────────────────────────────────
   step "Starting NubleStation stack"
   docker compose --env-file "$INSTALL_DIR/.env" \
-    -f "$(bundle_file docker-compose.yml)" up -d
+    -f "$(bundle_file infra/docker-compose.yml)" up -d
   checkpoint "compose-started"
 
   # ── 10. Health checks ────────────────────────────────────────────────────────

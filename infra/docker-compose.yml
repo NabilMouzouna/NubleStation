@@ -18,7 +18,7 @@ services:
       - "80:80"
       - "443:443"
     environment:
-      ORG_NAME: ${ORG_NAME}
+      ORG_DOMAIN: ${ORG_DOMAIN}
     volumes:
       - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
       - nuble-apps:/var/nuble/apps:ro
@@ -74,8 +74,10 @@ services:
       NODE_ENV: production
       PLATFORM_DB_URL: ${DATABASE_URL}
       ORBIT_STORAGE_ROOT: /var/nuble/apps
+      ADMIN_DB_PATH: /var/nuble/admin.db
     volumes:
       - nuble-apps:/var/nuble/apps:rw
+      - /var/nuble/admin.db:/var/nuble/admin.db:rw
     expose:
       - "3000"
     networks:

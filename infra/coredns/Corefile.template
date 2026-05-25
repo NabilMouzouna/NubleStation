@@ -1,5 +1,5 @@
-${ORG_NAME}.local:53 {
-    template IN A ${ORG_NAME}.local {
+${ORG_DOMAIN}.local:53 {
+    template IN A ${ORG_DOMAIN}.local {
         answer "{{ .Name }} 60 IN A ${HOST_IP}"
     }
     forward . 8.8.8.8 1.1.1.1

@@ -4,7 +4,7 @@
 }
 
 # Console — admin dashboard (Next.js standalone)
-console.{$ORG_NAME}.local:80 {
+console.{$ORG_DOMAIN}.local:80 {
     reverse_proxy console:3000
     log {
         output stdout
@@ -12,7 +12,7 @@ console.{$ORG_NAME}.local:80 {
 }
 
 # API — single entry for all backend services (Gateway)
-api.{$ORG_NAME}.local:80 {
+api.{$ORG_DOMAIN}.local:80 {
     reverse_proxy api:3000
     log {
         output stdout
@@ -21,9 +21,9 @@ api.{$ORG_NAME}.local:80 {
 
 # Deployed app frontends — served from /var/nuble/apps/{appname}/current/
 # {labels.1} extracts the first subdomain label (e.g. "tasks" from tasks.nuble.local)
-*.{$ORG_NAME}.local:80 {
+*.{$ORG_DOMAIN}.local:80 {
     @notReserved {
-        not host console.{$ORG_NAME}.local api.{$ORG_NAME}.local
+        not host console.{$ORG_DOMAIN}.local api.{$ORG_DOMAIN}.local
     }
     handle @notReserved {
         root * /var/nuble/apps/{labels.1}/current
