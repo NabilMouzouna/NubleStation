@@ -305,6 +305,8 @@ main() {
 
   # ── 5. Generate .env ─────────────────────────────────────────────────────────
   mkdir -p "$INSTALL_DIR"
+  # uid 1001 (nextjs inside the console container) needs write access to create SQLite journals
+  chmod o+rwx "$INSTALL_DIR"
   HMAC_SECRET="$(openssl rand -hex 32)"
   POSTGRES_PASSWORD="$(openssl rand -hex 16)"
 
