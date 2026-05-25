@@ -2,7 +2,7 @@
 
 import { verify } from "@node-rs/argon2";
 import { redirect } from "next/navigation";
-import db from "@/lib/db";
+import { getPool } from "@/lib/db";
 import { createSession } from "@/lib/auth/session";
 
 export async function login(
@@ -12,18 +12,23 @@ export async function login(
   const email = (formData.get("email") as string).trim().toLowerCase();
   const password = formData.get("password") as string;
 
-  const row = db
-    .prepare(`SELECT id, password_hash FROM admin_users WHERE email = ?`)
-    .get(email) as { id: string; password_hash: string } | undefined;
+  const pool = getPool();
+  const { rows } = await pool.query<{ id: string; password_hash: string; role: string }>(
+    `SELECT id, password_hash, role
+     FROM platform.users
+     WHERE email = $1
+       AND role IN ('super_admin', 'admin')
+       AND is_active = true`,
+    [email],
+  );
 
-  // Same message for unknown email and wrong password — never leak which one
   const INVALID = { error: "Invalid email or password." };
-
+  const row = rows[0];
   if (!row) return INVALID;
 
   const valid = await verify(row.password_hash, password);
   if (!valid) return INVALID;
 
-  await createSession(row.id);
+  await createSession(row.id, email, row.role);
   redirect("/dashboard");
 }

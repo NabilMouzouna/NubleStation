@@ -1,9 +1,13 @@
-import Database, { type Database as BetterSqliteDB } from "better-sqlite3";
+import pg from "pg";
 
-const DB_PATH = process.env.ADMIN_DB_PATH ?? "/app/admin.db";
+const { Pool } = pg;
 
-const db: BetterSqliteDB = new Database(DB_PATH);
-db.pragma("journal_mode = WAL");
-db.pragma("foreign_keys = ON");
+let pool: pg.Pool | null = null;
 
-export default db;
+export function getPool(): pg.Pool {
+  if (pool) return pool;
+  const url = process.env.PLATFORM_DB_URL;
+  if (!url) throw new Error("PLATFORM_DB_URL is not set");
+  pool = new Pool({ connectionString: url, max: 5 });
+  return pool;
+}

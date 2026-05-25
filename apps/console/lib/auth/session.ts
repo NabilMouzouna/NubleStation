@@ -1,58 +1,63 @@
-import { randomBytes } from "node:crypto";
+import { createHmac, timingSafeEqual } from "node:crypto";
 import { cookies } from "next/headers";
-import db from "@/lib/db";
 
 const COOKIE_NAME = "nuble_session";
 const SESSION_TTL_MS = 8 * 60 * 60 * 1000; // 8 hours
 
 export interface AdminSession {
-  sessionId: string;
-  expires_at: number;
-  id: string;
+  userId: string;
   email: string;
-  role: "super_admin" | "admin";
-  org_id: string;
+  role: string;
 }
 
-export async function createSession(adminId: string): Promise<void> {
-  const id = randomBytes(32).toString("hex");
-  const expiresAt = Date.now() + SESSION_TTL_MS;
+function secret(): string {
+  const s = process.env.INTERNAL_HMAC_SECRET;
+  if (!s) throw new Error("INTERNAL_HMAC_SECRET is not set");
+  return s;
+}
 
-  db.prepare(
-    `INSERT INTO admin_sessions (id, admin_id, expires_at, created_at)
-     VALUES (?, ?, ?, ?)`
-  ).run(id, adminId, expiresAt, Date.now());
+function sign(payload: string): string {
+  return createHmac("sha256", secret()).update(payload).digest("hex");
+}
 
-  (await cookies()).set(COOKIE_NAME, id, {
+function encode(data: AdminSession & { exp: number }): string {
+  const payload = Buffer.from(JSON.stringify(data)).toString("base64url");
+  return `${payload}.${sign(payload)}`;
+}
+
+function decode(token: string): (AdminSession & { exp: number }) | null {
+  const dot = token.lastIndexOf(".");
+  if (dot === -1) return null;
+  const payload = token.slice(0, dot);
+  const sig = token.slice(dot + 1);
+  try {
+    if (!timingSafeEqual(Buffer.from(sig, "hex"), Buffer.from(sign(payload), "hex"))) return null;
+    return JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
+  } catch {
+    return null;
+  }
+}
+
+export async function createSession(userId: string, email: string, role: string): Promise<void> {
+  const exp = Date.now() + SESSION_TTL_MS;
+  const token = encode({ userId, email, role, exp });
+  (await cookies()).set(COOKIE_NAME, token, {
     httpOnly: true,
     sameSite: "lax",
     secure: process.env.SECURE_COOKIES === "true",
-    expires: new Date(expiresAt),
+    expires: new Date(exp),
     path: "/",
   });
 }
 
 export async function validateSession(): Promise<AdminSession | null> {
-  const sessionId = (await cookies()).get(COOKIE_NAME)?.value;
-  if (!sessionId) return null;
-
-  const row = db
-    .prepare(
-      `SELECT s.id as sessionId, s.expires_at,
-              u.id, u.email, u.role, u.org_id
-       FROM admin_sessions s
-       JOIN admin_users u ON u.id = s.admin_id
-       WHERE s.id = ? AND s.expires_at > ?`
-    )
-    .get(sessionId, Date.now()) as AdminSession | undefined;
-
-  return row ?? null;
+  const token = (await cookies()).get(COOKIE_NAME)?.value;
+  if (!token) return null;
+  const data = decode(token);
+  if (!data || data.exp < Date.now()) return null;
+  return { userId: data.userId, email: data.email, role: data.role };
 }
 
 export async function destroySession(): Promise<void> {
-  const sessionId = (await cookies()).get(COOKIE_NAME)?.value;
-  if (sessionId) {
-    db.prepare(`DELETE FROM admin_sessions WHERE id = ?`).run(sessionId);
-  }
   (await cookies()).delete(COOKIE_NAME);
 }

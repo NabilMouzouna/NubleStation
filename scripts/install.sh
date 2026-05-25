@@ -116,7 +116,7 @@ download_bundle() {
   fi
   step "Downloading release bundle ($VERSION)"
   mkdir -p "$INSTALL_DIR/install/scripts" "$INSTALL_DIR/install/infra"
-  for _f in docker-compose.yml scripts/seed-admin.sql infra/Caddyfile infra/Corefile.template; do
+  for _f in docker-compose.yml infra/Caddyfile infra/coredns/Corefile.template; do
     _attempts=0
     while [ "$_attempts" -lt 3 ]; do
       _attempts=$(( _attempts + 1 ))
@@ -162,8 +162,10 @@ handle_existing_install() {
       prompt_password "New super admin password" _new_pass
       [ -z "$_new_pass" ] && error "Password cannot be empty"
       _new_hash="$(hash_password "$_new_pass")"
-      sqlite3 "$INSTALL_DIR/admin.db" \
-        "UPDATE admin_users SET password_hash='$_new_hash' WHERE role='super_admin';"
+      docker compose --env-file "$INSTALL_DIR/.env" \
+        -f "$(bundle_file infra/docker-compose.yml)" \
+        exec -T postgres psql -U nuble -d nuble \
+        -c "UPDATE platform.users SET password_hash='${_new_hash}' WHERE role='super_admin';"
       info "Password updated"
       exit 0
       ;;
@@ -173,7 +175,6 @@ handle_existing_install() {
       [ "$_confirm" = "RESET" ] || error "Reinstall cancelled"
       printf 'Also replace docker-compose.yml, .env, Caddyfile, Corefile? [y/N]: '
       read -r _replace_infra
-      rm -f "$INSTALL_DIR/admin.db"
       [ "$_replace_infra" = "y" ] && rm -f "$INSTALL_DIR/.env"
       info "Reset — continuing with fresh install"
       ;;
@@ -247,21 +248,8 @@ main() {
   docker compose version >/dev/null 2>&1 || error "Docker Compose v2 is required"
   info "Docker ready"
 
-  command -v sqlite3 >/dev/null 2>&1 || { step "Installing sqlite3"; install_dep sqlite3; }
-  info "sqlite3 ready"
-
   command -v argon2 >/dev/null 2>&1 || { step "Installing argon2"; install_dep argon2; }
   info "argon2 ready"
-
-  command -v uuidgen >/dev/null 2>&1 || {
-    step "Installing uuidgen"
-    case "$PKG" in
-      apt)        install_dep uuid-runtime ;;
-      dnf|pacman) install_dep util-linux ;;
-      brew)       install_dep ossp-uuid ;;
-    esac
-  }
-  info "uuidgen ready"
 
   if ! command -v whiptail >/dev/null 2>&1 && ! command -v dialog >/dev/null 2>&1; then
     step "Installing whiptail"
@@ -305,10 +293,12 @@ main() {
 
   # ── 5. Generate .env ─────────────────────────────────────────────────────────
   mkdir -p "$INSTALL_DIR"
-  # uid 1001 (nextjs inside the console container) needs write access to create SQLite journals
-  chmod o+rwx "$INSTALL_DIR"
   HMAC_SECRET="$(openssl rand -hex 32)"
   POSTGRES_PASSWORD="$(openssl rand -hex 16)"
+
+  step "Hashing admin password"
+  ADMIN_PASSWORD_HASH="$(hash_password "$ADMIN_PASSWORD")"
+  [ -z "$ADMIN_PASSWORD_HASH" ] && error "Password hashing failed"
 
   cat > "$INSTALL_DIR/.env" <<EOF
 ORG_NAME=${ORG_NAME}
@@ -319,6 +309,8 @@ POSTGRES_USER=nuble
 POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
 POSTGRES_DB=nuble
 DATABASE_URL=postgres://nuble:${POSTGRES_PASSWORD}@postgres:5432/nuble
+ADMIN_EMAIL=${ADMIN_EMAIL}
+ADMIN_PASSWORD_HASH='${ADMIN_PASSWORD_HASH}'
 IMAGE_TAG=${IMAGE_TAG:-latest}
 EOF
   info ".env written"
@@ -330,30 +322,7 @@ EOF
     "$(bundle_file infra/coredns/Corefile.template)" > "$INSTALL_DIR/coredns/Corefile"
   info "CoreDNS Corefile generated"
 
-  # ── 7. Create and seed admin.db ──────────────────────────────────────────────
-  step "Creating admin database"
-  rm -f "$INSTALL_DIR/admin.db"
-  sqlite3 "$INSTALL_DIR/admin.db" < "$(bundle_file scripts/seed-admin.sql)" >/dev/null
-
-  step "Hashing admin password"
-  ADMIN_PASSWORD_HASH="$(hash_password "$ADMIN_PASSWORD")"
-  [ -z "$ADMIN_PASSWORD_HASH" ] && error "Password hashing failed"
-
-  ORG_ID="$(uuidgen | tr '[:upper:]' '[:lower:]')"
-  ADMIN_ID="$(uuidgen | tr '[:upper:]' '[:lower:]')"
-
-  sqlite3 "$INSTALL_DIR/admin.db" <<SQL
-PRAGMA foreign_keys = ON;
-INSERT INTO organization (id, name, description, installed_at)
-  VALUES ('${ORG_ID}', '${ORG_NAME}', '${ORG_DESCRIPTION:-}', unixepoch());
-INSERT INTO admin_users (id, org_id, email, password_hash, role, created_at)
-  VALUES ('${ADMIN_ID}', '${ORG_ID}', '${ADMIN_EMAIL}', '${ADMIN_PASSWORD_HASH}', 'super_admin', unixepoch());
-SQL
-  chown 1001:1001 "$INSTALL_DIR/admin.db"
-  info "admin.db seeded"
-  checkpoint "db-created"
-
-  # ── 8. /etc/hosts entries ─────────────────────────────────────────────────────
+  # ── 7. /etc/hosts entries ─────────────────────────────────────────────────────
   HOSTS_LINE="$HOST_IP console.${ORG_DOMAIN}.local api.${ORG_DOMAIN}.local"
   if ! grep -q "${ORG_DOMAIN}.local" /etc/hosts 2>/dev/null; then
     printf '%s\n' "$HOSTS_LINE" | sudo tee -a /etc/hosts >/dev/null
@@ -362,19 +331,19 @@ SQL
     warn "/etc/hosts already has ${ORG_DOMAIN}.local — skipping"
   fi
 
-  # ── 9. Start services ─────────────────────────────────────────────────────────
+  # ── 8. Start services ─────────────────────────────────────────────────────────
   step "Starting NubleStation stack"
   docker compose --env-file "$INSTALL_DIR/.env" \
     -f "$(bundle_file infra/docker-compose.yml)" up -d
   checkpoint "compose-started"
 
-  # ── 10. Health checks ────────────────────────────────────────────────────────
+  # ── 9. Health checks ────────────────────────────────────────────────────────
   sleep 5
   wait_healthy "console" "http://console.${ORG_DOMAIN}.local"
   wait_healthy "api"     "http://api.${ORG_DOMAIN}.local"
   checkpoint "health-verified"
 
-  # ── 11. Finish ───────────────────────────────────────────────────────────────
+  # ── 10. Finish ───────────────────────────────────────────────────────────────
   printf '%s' "$VERSION" > "$VERSION_FILE"
   rm -f "$CHECKPOINT_FILE"
 

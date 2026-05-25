@@ -73,10 +73,11 @@ services:
     environment:
       NODE_ENV: production
       PLATFORM_DB_URL: ${DATABASE_URL}
+      INTERNAL_HMAC_SECRET: ${INTERNAL_HMAC_SECRET}
+      ADMIN_EMAIL: ${ADMIN_EMAIL}
+      ADMIN_PASSWORD_HASH: ${ADMIN_PASSWORD_HASH}
       ORBIT_STORAGE_ROOT: /var/nuble/apps
-      ADMIN_DB_PATH: /var/nuble/admin.db
     volumes:
-      - /var/nuble:/var/nuble:rw
       - nuble-apps:/var/nuble/apps:rw
     expose:
       - "3000"
@@ -84,6 +85,8 @@ services:
       - nuble
     depends_on:
       postgres:
+        condition: service_healthy
+      blaze:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:3000"]
@@ -96,7 +99,7 @@ services:
     image: ghcr.io/nabilmouzouna/nublestation-gateway:${IMAGE_TAG:-latest}
     restart: unless-stopped
     environment:
-      NODE_ENV: production
+      NODE_ENV: staging
       DATABASE_URL: ${DATABASE_URL}
       INTERNAL_HMAC_SECRET: ${INTERNAL_HMAC_SECRET}
       DB_INTERNAL_URL: http://blaze:3001
@@ -121,7 +124,7 @@ services:
     image: ghcr.io/nabilmouzouna/nublestation-blaze:${IMAGE_TAG:-latest}
     restart: unless-stopped
     environment:
-      NODE_ENV: production
+      NODE_ENV: staging
       DATABASE_URL: ${DATABASE_URL}
       INTERNAL_HMAC_SECRET: ${INTERNAL_HMAC_SECRET}
       PORT: 3001
@@ -142,7 +145,7 @@ services:
     image: ghcr.io/nabilmouzouna/nublestation-orbit:${IMAGE_TAG:-latest}
     restart: unless-stopped
     environment:
-      NODE_ENV: production
+      NODE_ENV: staging
       DATABASE_URL: ${DATABASE_URL}
       INTERNAL_HMAC_SECRET: ${INTERNAL_HMAC_SECRET}
       STORAGE_ROOT: /var/nuble/apps
