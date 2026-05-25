@@ -26,6 +26,10 @@ export async function withTenant<T>(
   const client = await getPool().connect();
   try {
     await client.query("BEGIN");
+    // Demote from superuser so RLS policies are enforced for the duration of
+    // this transaction. FORCE ROW LEVEL SECURITY only applies to the table
+    // owner, not superusers — SET LOCAL ROLE closes that gap.
+    await client.query("SET LOCAL ROLE blaze_app");
     await client.query("SELECT set_config('app.current_tenant', $1, true)", [appId]);
     const result = await fn(client);
     await client.query("COMMIT");

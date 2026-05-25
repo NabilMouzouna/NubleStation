@@ -8,6 +8,16 @@ import type pg from "pg";
  * and `WITH CHECK` blocks inserts/updates that would write a row under another tenant's id.
  */
 export async function resetTenantData(pool: pg.Pool): Promise<void> {
+  // Create the non-superuser role that withTenant uses for SET LOCAL ROLE.
+  // Idempotent — safe to call in beforeEach.
+  await pool.query(`
+    DO $$ BEGIN
+      IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'blaze_app') THEN
+        CREATE ROLE blaze_app NOLOGIN;
+      END IF;
+    END $$;
+  `);
+
   // CASCADE handles any FKs against tenant_data.tasks added by future fixtures.
   await pool.query("DROP SCHEMA IF EXISTS tenant_data CASCADE");
   await pool.query("CREATE SCHEMA tenant_data");
@@ -21,6 +31,8 @@ export async function resetTenantData(pool: pg.Pool): Promise<void> {
     );
   `);
   await pool.query("CREATE INDEX tasks_app_id_idx ON tenant_data.tasks (app_id)");
+  await pool.query("GRANT USAGE ON SCHEMA tenant_data TO blaze_app");
+  await pool.query("GRANT SELECT, INSERT, UPDATE, DELETE ON tenant_data.tasks TO blaze_app");
   await pool.query("ALTER TABLE tenant_data.tasks ENABLE ROW LEVEL SECURITY");
   await pool.query("ALTER TABLE tenant_data.tasks FORCE ROW LEVEL SECURITY");
   await pool.query(`
