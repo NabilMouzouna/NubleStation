@@ -34,7 +34,9 @@ ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
 
 RUN addgroup --system --gid 1001 nodejs \
- && adduser --system --uid 1001 nextjs
+ && adduser --system --uid 1001 nextjs \
+ && mkdir -p /var/nuble/apps \
+ && chown -R nextjs:nodejs /var/nuble
 
 # standalone output already includes its own node_modules — no full install needed
 COPY --from=builder --chown=nextjs:nodejs /app/apps/console/.next/standalone ./
