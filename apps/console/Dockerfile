@@ -18,10 +18,10 @@ COPY --from=pruner /app/out/pnpm-lock.yaml ./pnpm-lock.yaml
 RUN pnpm install --frozen-lockfile
 
 # ── Stage 3: Build ───────────────────────────────────────────────────────────
-FROM base AS builder
+# Inherit from installer so all pnpm symlinks (including packages/ui/node_modules)
+# are in place — then overlay the full source on top.
+FROM installer AS builder
 WORKDIR /app
-COPY --from=installer /app/node_modules ./node_modules
-COPY --from=installer /app/apps/console/node_modules ./apps/console/node_modules
 COPY --from=pruner /app/out/full/ .
 RUN turbo run build --filter=@nublestation/console
 
