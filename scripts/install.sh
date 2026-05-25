@@ -2,7 +2,6 @@
 set -eu
 
 VERSION="dev"
-LOCAL_MODE=0
 INSTALL_DIR="/var/nuble"
 CHECKPOINT_FILE="$INSTALL_DIR/.install-checkpoint"
 VERSION_FILE="$INSTALL_DIR/.nuble-version"
@@ -225,80 +224,9 @@ wait_healthy() {
   warn "$_svc did not become healthy — check: docker compose logs $_svc"
 }
 
-# ── Local dev mode ────────────────────────────────────────────────────────────
-# --local: seeds dev.db in apps/console/, skips Docker/CoreDNS/hosts/compose.
-run_local() {
-  step "Local dev mode — Docker and network steps skipped"
-
-  detect_pkg_manager
-  detect_tui
-
-  command -v sqlite3 >/dev/null 2>&1 || { step "Installing sqlite3"; install_dep sqlite3; }
-  info "sqlite3 ready"
-  command -v argon2  >/dev/null 2>&1 || { step "Installing argon2";  install_dep argon2;  }
-  info "argon2 ready"
-  command -v uuidgen >/dev/null 2>&1 || {
-    step "Installing uuidgen"
-    case "$PKG" in
-      apt)        install_dep uuid-runtime ;;
-      dnf|pacman) install_dep util-linux   ;;
-      brew)       install_dep ossp-uuid    ;;
-    esac
-  }
-  info "uuidgen ready"
-
-  collect_inputs
-
-  DB_PATH="$REPO_ROOT/apps/console/dev.db"
-  step "Creating admin database at $DB_PATH"
-  rm -f "$DB_PATH"
-  sqlite3 "$DB_PATH" < "$(bundle_file scripts/seed-admin.sql)" >/dev/null
-
-  step "Hashing admin password"
-  ADMIN_PASSWORD_HASH="$(hash_password "$ADMIN_PASSWORD")"
-  [ -z "$ADMIN_PASSWORD_HASH" ] && error "Password hashing failed"
-
-  ORG_ID="$(uuidgen | tr '[:upper:]' '[:lower:]')"
-  ADMIN_ID="$(uuidgen | tr '[:upper:]' '[:lower:]')"
-
-  sqlite3 "$DB_PATH" <<SQL
-PRAGMA foreign_keys = ON;
-INSERT INTO organization (id, name, description, installed_at)
-  VALUES ('${ORG_ID}', '${ORG_NAME}', '${ORG_DESCRIPTION:-}', unixepoch());
-INSERT INTO admin_users (id, org_id, email, password_hash, role, created_at)
-  VALUES ('${ADMIN_ID}', '${ORG_ID}', '${ADMIN_EMAIL}', '${ADMIN_PASSWORD_HASH}', 'super_admin', unixepoch());
-SQL
-  info "admin.db seeded"
-
-  printf '\n%s╔════════════════════════════════════════════════════╗%s\n' "$G" "$NC"
-  printf '%s║     Local dev environment ready!                   ║%s\n' "$G" "$NC"
-  printf '%s╚════════════════════════════════════════════════════╝%s\n' "$G" "$NC"
-  printf '\n'
-  printf '  DB     →  %s\n' "$DB_PATH"
-  printf '  Admin  →  %s\n' "$ADMIN_EMAIL"
-  printf '\n'
-  printf '%s  Start the console:%s\n' "$B" "$NC"
-  printf '\n'
-  printf '    cd "%s/apps/console"\n' "$REPO_ROOT"
-  printf '    ADMIN_DB_PATH="%s" pnpm dev\n' "$DB_PATH"
-  printf '\n'
-  printf '  Or persist it in apps/console/.env.local:\n'
-  printf '    echo ADMIN_DB_PATH="%s" > apps/console/.env.local\n' "$DB_PATH"
-  printf '\n'
-}
-
 # ── Main ──────────────────────────────────────────────────────────────────────
 main() {
-  for _arg in "$@"; do
-    case "$_arg" in --local) LOCAL_MODE=1 ;; esac
-  done
-
   print_logo "$VERSION"
-
-  if [ "$LOCAL_MODE" = "1" ]; then
-    run_local
-    return
-  fi
 
   [ -f "$VERSION_FILE" ] && handle_existing_install
 
