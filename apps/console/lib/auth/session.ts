@@ -26,7 +26,7 @@ export async function createSession(adminId: string): Promise<void> {
   (await cookies()).set(COOKIE_NAME, id, {
     httpOnly: true,
     sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
+    secure: process.env.SECURE_COOKIES === "true",
     expires: new Date(expiresAt),
     path: "/",
   });
