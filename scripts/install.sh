@@ -349,6 +349,7 @@ INSERT INTO organization (id, name, description, installed_at)
 INSERT INTO admin_users (id, org_id, email, password_hash, role, created_at)
   VALUES ('${ADMIN_ID}', '${ORG_ID}', '${ADMIN_EMAIL}', '${ADMIN_PASSWORD_HASH}', 'super_admin', unixepoch());
 SQL
+  chmod o+rw "$INSTALL_DIR/admin.db"
   info "admin.db seeded"
   checkpoint "db-created"
 
