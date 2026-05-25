@@ -1,0 +1,58 @@
+---
+title: NubleStation
+description: Self-hosted, plug-and-play backend infrastructure for small organizations.
+template: splash
+hero:
+  tagline: Turn any machine on your network into a private cloud — one install, zero internet dependency.
+  actions:
+    - text: Get started
+      link: /getting-started/introduction/
+      icon: right-arrow
+      variant: primary
+    - text: View on GitHub
+      link: https://github.com/nabilmouzouna/nublestation
+      icon: github
+      variant: minimal
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+
+## What you get
+
+<CardGrid stagger>
+  <Card title="One-command install" icon="rocket">
+    Run `curl -sSL .../install.sh | bash`, answer two questions, and every service is live on your LAN in under ten minutes.
+  </Card>
+  <Card title="Private by design" icon="shield">
+    Patient or client data never leaves your premises. NubleStation runs entirely on your hardware — no cloud, no telemetry.
+  </Card>
+  <Card title="Shared backend for all your apps" icon="puzzle">
+    Auth, database, file storage, and frontend hosting — all accessible from one stable subdomain per app (`tasks.org.local`).
+  </Card>
+  <Card title="SDK + CLI for developers" icon="laptop">
+    Build SPAs locally against `@nublestation/sdk`, then deploy with a single `nuble deploy --app tasks`.
+  </Card>
+  <Card title="Database-enforced isolation" icon="approve-check-circle">
+    Postgres Row-Level Security means one application physically cannot read another's rows — not a trust problem, a database problem.
+  </Card>
+  <Card title="LAN-native networking" icon="seti:config">
+    CoreDNS resolves `*.org.local` on your network; Caddy reverse-proxies every subdomain with automatic HTTPS.
+  </Card>
+</CardGrid>
+
+## The services
+
+<CardGrid>
+  <Card title="Blaze — Database" icon="open-book">
+    Multi-tenant REST database with auto-generated CRUD, schema-as-code DSL, and Postgres RLS-enforced per-app isolation.
+  </Card>
+  <Card title="Identity — Auth" icon="approve-check-circle">
+    Sessions, API key management, and single sign-on across all `*.org.local` subdomains via a shared cookie.
+  </Card>
+  <Card title="Vault — Storage" icon="document">
+    File upload and download backed by the local filesystem. Signed URLs, MIME detection, per-app isolation.
+  </Card>
+  <Card title="Orbit — Deploy" icon="rocket">
+    Upload a built SPA with `nuble deploy` and it's live on your LAN in seconds. No pipeline, no distance to bridge.
+  </Card>
+</CardGrid>

@@ -18,7 +18,9 @@
     "console:build": "pnpm --filter @nublestation/console build",
     "orbit:dev": "pnpm --filter @nublestation/orbit dev",
     "cli:dev": "pnpm --filter @nublestation/cli dev",
-    "cli:test": "pnpm --filter @nublestation/cli test"
+    "cli:test": "pnpm --filter @nublestation/cli test",
+    "docs:dev": "pnpm --filter @nublestation/docs dev",
+    "docs:build": "pnpm --filter @nublestation/docs build"
   },
   "devDependencies": {
     "prettier": "^3.7.4",

@@ -5,6 +5,10 @@
   "exports": {
     "./logo.svg": "./logo.svg",
     "./logo-light.svg": "./logo-light.svg",
-    "./icon.svg": "./icon.svg"
+    "./icon.svg": "./icon.svg",
+    "./services/blaze.svg": "./services/blaze.svg",
+    "./services/vault.svg": "./services/vault.svg",
+    "./services/identity.svg": "./services/identity.svg",
+    "./services/orbit.svg": "./services/orbit.svg"
   }
 }

@@ -1,0 +1,119 @@
+---
+title: Networking (Caddy + CoreDNS)
+description: How LAN DNS resolution and reverse proxying work in NubleStation.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+## Two parallel systems
+
+Caddy and CoreDNS do different jobs and never talk to each other.
+
+```
+Device on LAN
+  │
+  ├── DNS query: "what is tasks.clinic.local?" (port 53)
+  │         └──→ CoreDNS responds: "192.168.1.100"
+  │
+  └── HTTP request: "GET tasks.clinic.local/" (port 80)
+            └──→ Caddy receives it, routes to the right backend
+```
+
+CoreDNS tells devices *where* to connect. Caddy decides *what* to serve.
+
+## CoreDNS
+
+CoreDNS runs in a container and listens on **port 53** (the standard DNS port). It is the **authoritative DNS server** for `*.{org}.local` — meaning it gives the definitive answer for every subdomain under that domain.
+
+### What it does
+
+For any query matching `*.clinic.local`, CoreDNS responds with the host machine's LAN IP. It doesn't matter whether the subdomain is `console`, `api`, `tasks`, or `anything-else` — they all resolve to the same IP. Caddy then decides what to do based on the `Host` header of the incoming HTTP request.
+
+### Corefile structure
+
+```text
+clinic.local:53 {
+    template IN A clinic.local {
+        answer "{{ .Name }} 60 IN A 192.168.1.100"
+    }
+    log
+    errors
+}
+
+.:53 {
+    forward . 8.8.8.8 1.1.1.1
+    log
+    errors
+}
+```
+
+The first block handles `*.clinic.local` — it always answers with the host IP. The second block forwards all other DNS queries (google.com, etc.) to upstream resolvers, so devices that use CoreDNS as their DNS server can still reach the internet.
+
+### Org name and IP are baked in
+
+The installer substitutes `{ORG_NAME}` and `{HOST_IP}` from environment variables when rendering the Corefile. If the host's IP changes, run the installer again (or manually update the Corefile and restart the CoreDNS container).
+
+<Aside type="caution">
+  **Common Corefile mistakes** that cause the container to crash-loop:
+
+  - A space between `.` and `:53` → write `.:53` not `. :53`
+  - Missing zone in the `template` plugin → always include the zone explicitly
+  - CRLF line endings from Windows editing → the installer strips them with `tr -d '\r'`
+
+  See the [Troubleshooting guide](/reference/troubleshooting/) for exact fixes.
+</Aside>
+
+## Caddy
+
+Caddy runs in a container and listens on **ports 80 and 443**. It handles:
+
+1. **Reverse proxying** — forwarding `api.clinic.local` to the API Gateway container and `console.clinic.local` to the Console container
+2. **Static file serving** — serving frontend bundles for app subdomains from `/var/nuble/{appname}/`
+3. **HTTPS** — automatic certificate generation via its internal CA (no internet needed)
+
+### Caddyfile structure
+
+```text
+console.clinic.local {
+    reverse_proxy console:3000
+}
+
+api.clinic.local {
+    reverse_proxy gateway:3000
+}
+
+*.clinic.local {
+    root * /var/nuble/{labels.1}
+    file_server
+}
+```
+
+The wildcard block `*.clinic.local` catches all app subdomains. `{labels.1}` extracts the first label from the subdomain — for `tasks.clinic.local` that's `tasks` — and serves the corresponding directory from the shared volume.
+
+### HTTPS on the LAN
+
+Caddy generates TLS certificates using its internal CA. Browsers trust these once the CA root certificate is installed on each device. The installer documents this step. All HTTP traffic within the NubleStation stack uses HTTPS by default.
+
+## Devices need to use CoreDNS as their DNS
+
+CoreDNS only runs inside the Docker stack — it doesn't broadcast itself. Each device (or the network router) must be explicitly configured to use the host's IP as its DNS server.
+
+**The recommended approach** is router-level: configure DHCP option 6 to hand out the host's IP as the primary DNS server. Every device that gets a DHCP lease automatically uses CoreDNS. One-time setup, zero per-device configuration.
+
+**The fallback** is per-device `/etc/hosts` entries — workable for testing but doesn't support wildcard subdomains, so you must add a line for every new app.
+
+## What happens if CoreDNS is down
+
+DNS resolution for `*.clinic.local` fails — browsers can't find any NubleStation subdomain. HTTP traffic doesn't reach Caddy at all. Caddy continues running and would serve requests if they arrived, but no client can resolve the hostname.
+
+**Recovery:** `docker compose restart coredns`. Because CoreDNS is stateless (its config is a file), it restarts in under a second.
+
+## Adding a new app subdomain
+
+No manual Caddy or CoreDNS changes are needed. When the admin creates an app named `billing` in the Console:
+
+- CoreDNS already handles `*.clinic.local` — `billing.clinic.local` resolves automatically
+- The Deploy Service uploads the frontend to `/var/nuble/billing/`
+- Caddy's wildcard rule serves it immediately
+
+New subdomains are live the moment their frontend is deployed — no service restart required.

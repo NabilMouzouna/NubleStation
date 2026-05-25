@@ -1,0 +1,59 @@
+---
+title: "Vault — Storage Service"
+description: File bytes on the local filesystem with metadata in Postgres. Coming soon.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+<Aside type="caution">
+  The Storage Service is planned for a future phase. This page documents the intended design.
+</Aside>
+
+## Design
+
+NubleStation file storage follows an S3-like model without S3:
+
+| Layer | What it holds | Lives where |
+|---|---|---|
+| **Bytes** | File content | Filesystem: `/var/nuble/files/{app_id}/{file_id}` |
+| **Metadata** | path, MIME type, size, owner, custom tags | `platform.files` table |
+| **Access** | Public or signed URL with expiry | Storage Service generates on request |
+
+No external object store (MinIO, S3) — local filesystem only in v1.
+
+## Planned SDK methods
+
+```typescript
+// Upload
+const file = await nuble.files.upload(blob, {
+  folder: 'patient-records',
+  access: 'private',
+});
+
+// Download via signed URL
+const url = await nuble.files.signedUrl(file.id, { expiresIn: '1h' });
+
+// List
+const records = await nuble.files.list({ folder: 'patient-records' });
+
+// Delete
+await nuble.files.delete(file.id);
+```
+
+## Signed URLs
+
+For private files, the Storage Service generates signed URLs using JWT:
+
+```
+GET /v1/storage/files/{file_id}?token=<jwt>
+```
+
+The JWT encodes `file_id`, `app_id`, and `expires_at`. The storage service verifies it without a database lookup — stateless and fast.
+
+## MIME detection
+
+The service uses `file-type` (npm) for magic-byte MIME detection — not extension-based guessing. An attacker cannot upload a PHP file named `photo.jpg` and have it served as the wrong content type.
+
+## Per-app isolation
+
+File paths include `app_id` — `/var/nuble/files/{app_id}/{file_id}`. The storage service verifies the caller's `app_id` (from the HMAC-verified gateway header) matches the file's `app_id` before serving it.

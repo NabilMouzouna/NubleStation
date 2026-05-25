@@ -1,0 +1,32 @@
+/* NubleStation brand — cobalt #0064E0 accent */
+:root {
+  --sl-color-accent-low: #dbeafe;
+  --sl-color-accent: #0064e0;
+  --sl-color-accent-high: #003d8a;
+  --sl-color-white: #ffffff;
+  --sl-color-gray-1: #f1f5f9;
+  --sl-color-gray-2: #e2e8f0;
+  --sl-color-gray-3: #94a3b8;
+  --sl-color-gray-4: #475569;
+  --sl-color-gray-5: #1e293b;
+  --sl-color-gray-6: #0f172a;
+  --sl-color-black: #020617;
+}
+
+[data-theme='dark'] {
+  --sl-color-accent-low: #003d8a;
+  --sl-color-accent: #3b9dff;
+  --sl-color-accent-high: #dbeafe;
+}
+
+/* Slightly rounder sidebar item active state */
+.sidebar-pane a[aria-current='page'] {
+  border-radius: 6px;
+}
+
+/* Badge styling */
+.sl-badge {
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}

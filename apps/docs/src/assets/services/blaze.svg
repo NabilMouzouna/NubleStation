@@ -1,0 +1,29 @@
+<svg width="64" height="64" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" fill="none">
+  <defs>
+    <linearGradient id="blaze-g" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1F4FE0"/>
+      <stop offset="100%" stop-color="#9B5BFF"/>
+    </linearGradient>
+  </defs>
+  <!-- Flame body -->
+  <path d="M32 6
+    C32 6, 44 16, 44 28
+    C44 22, 38 20, 38 20
+    C42 30, 36 38, 32 42
+    C28 38, 22 30, 26 20
+    C26 20, 20 22, 20 28
+    C20 16, 32 6, 32 6 Z"
+    fill="url(#blaze-g)"/>
+  <!-- Inner flame -->
+  <path d="M32 26
+    C32 26, 37 32, 36 38
+    C34 35, 32 34, 32 34
+    C32 34, 30 35, 28 38
+    C27 32, 32 26, 32 26 Z"
+    fill="white" opacity="0.35"/>
+  <!-- Base line -->
+  <line x1="16" y1="56" x2="48" y2="56" stroke="url(#blaze-g)" stroke-width="3.5" stroke-linecap="round"/>
+  <!-- Legs -->
+  <line x1="22" y1="42" x2="22" y2="56" stroke="url(#blaze-g)" stroke-width="2.5" stroke-linecap="round"/>
+  <line x1="42" y1="42" x2="42" y2="56" stroke="url(#blaze-g)" stroke-width="2.5" stroke-linecap="round"/>
+</svg>
