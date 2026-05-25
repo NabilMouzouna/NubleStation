@@ -54,6 +54,12 @@ Option B is cleaner from a UX perspective but introduces an internet dependency 
 
 Option A keeps NubleStation fully self-contained. The one-time CA install is a known, solved UX pattern (mkcert, Smallstep, and internal enterprise CAs all use this model). Embedding it in the setup wizard makes it unavoidable rather than a buried docs step.
 
+## Staging Finding (2026-05-25)
+
+TLS is also a prerequisite for **session cookies**. The Next.js Console sets the `HttpOnly` session cookie with `Secure: true` when built in production mode. Because `process.env.NODE_ENV` is inlined as the string `"production"` at `next build` time, the runtime environment variable cannot override it — the flag is always present in production images. A browser on plain HTTP will not store a `Secure` cookie, so the session is lost immediately after login. Without TLS, the admin cannot stay logged in to the Console.
+
+This adds urgency to implementing Option A (Caddy internal CA). Until TLS is in place, a workaround env var (`SECURE_COOKIES`) controls the flag, but this is a temporary measure only.
+
 ## Consequences
 
 - The NubleStation setup wizard must include a **mandatory "Trust this device" step** before any API calls are made.

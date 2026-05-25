@@ -29,3 +29,12 @@ The `sqlite3` CLI dependency and `admin.db` seeding steps are removed from `inst
 - Admin data is now in the same Postgres instance as platform data — one fewer moving part, one fewer backup target.
 - The Console Dockerfile no longer needs build tools (`python3`, `make`, `g++`) for native compilation, producing a smaller image.
 - Postgres must be healthy before the Console can start — already enforced by the `depends_on: postgres: condition: service_healthy` in `docker-compose.yml`.
+
+## Staging Findings (2026-05-25)
+
+Confirmed during first staging test on Ubuntu. Every issue below is eliminated by this migration:
+
+- **`SQLITE_READONLY_DIRECTORY`** — When the Console container runs as uid 1001 (`nextjs`) and the host bind-mounts `/var/nuble/admin.db`, the parent directory `/var/nuble/` is created inside the container as `root:root`. SQLite needs write access to the directory to create WAL journal files alongside the database, so every write failed at startup.
+- **`SQLITE_READONLY` on the database file** — Even after fixing the directory, the `admin.db` file itself was owned by `root` (created by `sqlite3` running under `sudo` in `install.sh`). The container user could not write to it. Required a post-install `chown 1001:1001` to recover.
+- **Stale WAL/SHM files** — Failed startup attempts left behind `admin.db-shm` (non-zero) and `admin.db-wal` (zero-byte) files in an inconsistent state. Subsequent starts would fail with `SQLITE_READONLY` even after permission fixes, until the files were manually deleted.
+- **Three manual recovery steps per fresh install** — Each of the above required a separate `docker exec` or `chmod` command that `install.sh` had no way to guarantee. None of these problems exist with a TCP-connected Postgres instance.
