@@ -13,7 +13,9 @@
     "db:test": "pnpm --filter @nublestation/db test",
     "db:generate": "pnpm --filter @nublestation/db generate",
     "gateway:dev": "pnpm --filter @nublestation/gateway dev",
-    "gateway:test": "pnpm --filter @nublestation/gateway test"
+    "gateway:test": "pnpm --filter @nublestation/gateway test",
+    "docs:dev": "pnpm --filter @nublestation/docs dev",
+    "docs:build": "pnpm --filter @nublestation/docs build"
   },
   "devDependencies": {
     "prettier": "^3.7.4",

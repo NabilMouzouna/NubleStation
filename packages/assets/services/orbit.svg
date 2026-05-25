@@ -1,0 +1,16 @@
+<svg width="64" height="64" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" fill="none">
+  <defs>
+    <linearGradient id="orbit-g" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1F4FE0"/>
+      <stop offset="100%" stop-color="#9B5BFF"/>
+    </linearGradient>
+  </defs>
+  <!-- Outer orbit ellipse -->
+  <ellipse cx="32" cy="32" rx="26" ry="10" stroke="url(#orbit-g)" stroke-width="2.5"/>
+  <!-- Tilted inner orbit ellipse -->
+  <ellipse cx="32" cy="32" rx="10" ry="26" stroke="url(#orbit-g)" stroke-width="2.5"/>
+  <!-- Center planet -->
+  <circle cx="32" cy="32" r="6" fill="url(#orbit-g)"/>
+  <!-- Orbiting satellite dot -->
+  <circle cx="55" cy="26" r="3.5" fill="url(#orbit-g)" opacity="0.75"/>
+</svg>

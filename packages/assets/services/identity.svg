@@ -1,0 +1,16 @@
+<svg width="64" height="64" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" fill="none">
+  <defs>
+    <linearGradient id="id-g" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1F4FE0"/>
+      <stop offset="100%" stop-color="#9B5BFF"/>
+    </linearGradient>
+  </defs>
+  <!-- Shield -->
+  <path d="M32 6 L52 14 L52 32 C52 44, 42 52, 32 58 C22 52, 12 44, 12 32 L12 14 Z"
+    stroke="url(#id-g)" stroke-width="3.5" stroke-linejoin="round"/>
+  <!-- Person head -->
+  <circle cx="32" cy="26" r="6" fill="url(#id-g)" opacity="0.85"/>
+  <!-- Person body arc -->
+  <path d="M20 44 C20 36, 44 36, 44 44"
+    stroke="url(#id-g)" stroke-width="3" stroke-linecap="round" fill="none"/>
+</svg>

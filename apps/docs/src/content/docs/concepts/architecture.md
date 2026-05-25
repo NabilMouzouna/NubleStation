@@ -1,0 +1,159 @@
+---
+title: Architecture
+description: How every NubleStation component fits together — containers, networking, and data flow.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+## The big picture
+
+NubleStation runs as a single Docker Compose stack on one machine. Every service is its own container — no shared processes, no shared connection pools between services.
+
+```
+LAN — *.clinic.local
+│
+└── Single Host Machine  (192.168.1.100)
+      │
+      ├── Port 53/UDP  → CoreDNS     (DNS authority for *.clinic.local)
+      ├── Port 80/443  → Caddy       (reverse proxy, HTTPS termination)
+      │
+      └── Docker Compose Stack (internal network: nuble)
+            ├── Caddy           reverse proxy + static file serving
+            ├── CoreDNS         LAN DNS authority
+            ├── API Gateway     the only service Caddy forwards to directly
+            │                   resolves API keys, authenticates sessions, routes to services
+            ├── DB Service      multi-tenant database (REST API over tenant_data)
+            ├── Auth Service    sessions, API keys, OIDC/SSO  [coming soon]
+            ├── Storage Service file bytes + metadata         [coming soon]
+            ├── Deploy Service  frontend bundle uploads       [coming soon]
+            ├── Console         Next.js admin dashboard
+            ├── PgBouncer       connection pooler in front of Postgres
+            ├── Redis           API-key cache (sub-ms lookups)
+            └── PostgreSQL      all platform and tenant data
+```
+
+## How a request flows
+
+### A developer's SDK call
+
+```
+Developer's machine
+  │
+  │  POST api.clinic.local/v1/db/tasks
+  │  Authorization: Bearer nbl_abc.secret
+  │
+  ▼
+CoreDNS resolves api.clinic.local → 192.168.1.100
+
+Caddy (port 80/443)
+  → matches api.clinic.local
+  → forwards to API Gateway container (internal network)
+
+API Gateway
+  1. Parses nbl_abc.secret → key_id="abc", secret="secret"
+  2. Looks up key_id in Redis cache (or falls back to Postgres)
+  3. Argon2-verifies secret against stored hash
+  4. Resolves key_id → app_id (UUID)
+  5. Signs forwarded request with HMAC header set
+  6. Forwards to DB Service (internal network, port not exposed on LAN)
+
+DB Service
+  1. Verifies HMAC signature (rejects if invalid or timestamp stale)
+  2. Extracts app_id from verified X-Nuble-App-Id header
+  3. Routes request to correct table handler
+  4. BEGIN transaction
+  5. SET LOCAL app.current_tenant = '<app_id>'
+  6. Runs parameterized SQL — Postgres RLS auto-filters by app_id
+  7. COMMIT
+  8. Returns JSON response
+
+API Gateway → Caddy → Developer's machine
+```
+
+### An end-user browser request
+
+```
+Nurse's tablet (DNS set to 192.168.1.100)
+  │
+  │  GET tasks.clinic.local/
+  ▼
+CoreDNS → 192.168.1.100
+Caddy → matches tasks.clinic.local → serves /var/nuble/tasks/ (static files)
+
+SPA loads, makes API call:
+  POST api.clinic.local/v1/db/records
+  Cookie: session=... (set by Auth service, scoped to .clinic.local)
+
+API Gateway
+  → validates session cookie → resolves user_id
+  → signs + forwards to DB Service (with X-Nuble-User-Id)
+
+DB Service → Postgres (RLS scoped to app_id) → response
+```
+
+## URL routing map
+
+| URL | Routes to |
+|---|---|
+| `console.{org}.local` | Next.js admin dashboard (Console container) |
+| `api.{org}.local` | API Gateway (single LAN entry point for all APIs) |
+| `api.{org}.local/v1/auth/*` | → Auth Service (internal) |
+| `api.{org}.local/v1/db/*` | → DB Service (internal) |
+| `api.{org}.local/v1/storage/*` | → Storage Service (internal) |
+| `api.{org}.local/v1/deploy/*` | → Deploy Service (internal) |
+| `api.{org}.local/v1/admin/*` | → Admin control API (platform management, Console only) |
+| `{appname}.{org}.local` | Static files served by Caddy from `/var/nuble/{appname}/` |
+
+## What is and isn't exposed on the LAN
+
+**Only two things listen on your LAN interface:**
+
+- **Port 53 (UDP/TCP)** — CoreDNS. Answers DNS queries for `*.{org}.local`.
+- **Port 80/443 (TCP)** — Caddy. Serves all HTTP/HTTPS traffic.
+
+Every service container (DB, Auth, Storage, Deploy) listens only on the **internal Docker bridge network (`nuble`)** — they are physically unreachable from any LAN device. Only the API Gateway can call them, and only after HMAC verification passes.
+
+<Aside type="tip">
+  CoreDNS and Caddy are parallel, not chained. CoreDNS answers DNS (port 53). Caddy answers HTTP (port 80). They never talk to each other. A device asks CoreDNS "what is the IP of tasks.clinic.local?" and gets back the host's IP. Then it connects directly to Caddy on port 80 of that IP.
+</Aside>
+
+## The two Postgres schemas
+
+All data lives in a single Postgres instance. Two schemas divide platform from tenant data:
+
+```
+PostgreSQL (one instance)
+│
+├── schema: platform        RLS OFF — managed by platform code only
+│   ├── organizations       (one row per NubleStation install)
+│   ├── users               (every human: admins, devs, end users)
+│   ├── apps                (one row per app the admin creates)
+│   ├── api_keys            (key_id + Argon2 secret_hash)
+│   ├── user_app_access     (which user can use which app + role)
+│   ├── app_tables          (registry of custom table names per app)
+│   ├── deployments         (frontend version history)
+│   ├── migrations          (applied developer migrations log)
+│   ├── schema_version      (platform's own migration tracking)
+│   └── audit_log           (compliance trail — append-only)
+│
+└── schema: tenant_data     RLS ON — every row has app_id
+    ├── users (VIEW)        filtered by user_app_access
+    ├── files (VIEW)        filtered by user_app_access
+    ├── notifications (VIEW)
+    └── [app-defined tables]   tasks, records, invoices, …
+```
+
+Platform tables have RLS **off** — they are protected at the application layer (only the gateway-verified service can touch them, via HMAC-signed requests). Tenant tables have RLS **on** — the database itself enforces per-app isolation.
+
+## Single Sign-On
+
+All apps live under one domain (`*.clinic.local`), which makes a shared session cookie possible:
+
+1. User logs in once at `console.clinic.local` or any app's login flow.
+2. The Auth service sets a cookie scoped to `Domain=.clinic.local` — browsers send it to every `*.clinic.local` subdomain automatically.
+3. The API Gateway validates this cookie on every request before forwarding.
+4. Revoking the session at the Auth service logs the user out of every app at once.
+
+## Why Docker Compose, not Kubernetes
+
+NubleStation is a single-host product. Kubernetes is cluster orchestration — the right tool for multi-machine deployments but overkill (and operationally expensive) for one mini-PC in a clinic server room. Docker Compose gives independent restarts, resource limits per service, and readable per-service logs with zero cluster overhead.
