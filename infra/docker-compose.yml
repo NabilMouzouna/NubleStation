@@ -90,10 +90,11 @@ services:
       blaze:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3000"]
-      interval: 30s
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:3000"]
+      interval: 10s
       timeout: 5s
       retries: 3
+      start_period: 30s
 
   # Gateway — the only LAN-exposed API service (service name "api" matches Caddy)
   api:

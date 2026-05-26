@@ -215,20 +215,24 @@ collect_inputs() {
 
 # ── Health check ──────────────────────────────────────────────────────────────
 wait_healthy() {
-  _svc="$1"; _attempts=0; _max=24
-  printf '%s[→]%s Waiting for %s ' "$Y" "$NC" "$_svc"
-  while [ "$_attempts" -lt "$_max" ]; do
-    _attempts=$(( _attempts + 1 ))
-    _state=$(docker inspect --format='{{.State.Health.Status}}' "nublestation-${_svc}-1" 2>/dev/null)
-    if [ "$_state" = "healthy" ]; then
-      printf ' %s✓%s\n' "$G" "$NC"
-      return 0
+  _svc="$1"; _elapsed=0; _max=120
+  while [ "$_elapsed" -lt "$_max" ]; do
+    case $(( _elapsed % 4 )) in
+      0) _frame='-' ;; 1) _frame='\\' ;; 2) _frame='|' ;; 3) _frame='/' ;;
+    esac
+    printf '\r%s[→]%s Waiting for %-8s %s %ds ' "$Y" "$NC" "$_svc" "$_frame" "$_elapsed"
+    if [ $(( _elapsed % 5 )) -eq 0 ]; then
+      _state=$(docker inspect --format='{{.State.Health.Status}}' "nublestation-${_svc}-1" 2>/dev/null)
+      if [ "$_state" = "healthy" ]; then
+        printf '\r%s[✓]%s %-8s ready%-30s\n' "$G" "$NC" "$_svc" " "
+        return 0
+      fi
     fi
-    printf '.'
-    sleep 5
+    _elapsed=$(( _elapsed + 1 ))
+    sleep 1
   done
-  printf '\n'
-  warn "$_svc did not become healthy after $(( _max * 5 ))s — check: docker compose logs $_svc"
+  printf '\r%s[⚠]%s %-8s did not become healthy after %ds%-10s\n' "$Y" "$NC" "$_svc" "$_max" " "
+  warn "check: docker compose logs $_svc"
 }
 
 # ── Main ──────────────────────────────────────────────────────────────────────
@@ -343,6 +347,10 @@ EOF
   fi
 
   # ── 8. Start services ─────────────────────────────────────────────────────────
+  step "Pulling latest images"
+  docker compose --env-file "$INSTALL_DIR/.env" \
+    -f "$(bundle_file infra/docker-compose.yml)" pull
+
   step "Starting NubleStation stack"
   docker compose --env-file "$INSTALL_DIR/.env" \
     -f "$(bundle_file infra/docker-compose.yml)" up -d
