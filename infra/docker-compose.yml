@@ -99,7 +99,7 @@ services:
     image: ghcr.io/nabilmouzouna/nublestation-gateway:${IMAGE_TAG:-latest}
     restart: unless-stopped
     environment:
-      NODE_ENV: staging
+      NODE_ENV: production
       DATABASE_URL: ${DATABASE_URL}
       INTERNAL_HMAC_SECRET: ${INTERNAL_HMAC_SECRET}
       DB_INTERNAL_URL: http://blaze:3001
@@ -124,7 +124,7 @@ services:
     image: ghcr.io/nabilmouzouna/nublestation-blaze:${IMAGE_TAG:-latest}
     restart: unless-stopped
     environment:
-      NODE_ENV: staging
+      NODE_ENV: production
       DATABASE_URL: ${DATABASE_URL}
       INTERNAL_HMAC_SECRET: ${INTERNAL_HMAC_SECRET}
       PORT: 3001
@@ -145,7 +145,7 @@ services:
     image: ghcr.io/nabilmouzouna/nublestation-orbit:${IMAGE_TAG:-latest}
     restart: unless-stopped
     environment:
-      NODE_ENV: staging
+      NODE_ENV: production
       DATABASE_URL: ${DATABASE_URL}
       INTERNAL_HMAC_SECRET: ${INTERNAL_HMAC_SECRET}
       STORAGE_ROOT: /var/nuble/apps
