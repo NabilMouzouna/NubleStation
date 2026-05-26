@@ -44,16 +44,18 @@ async function fetchLogs(container: string): Promise<LogEntry[]> {
 }
 
 export default function WatchPage() {
-  const [selected, setSelected]     = useState("deploy");
-  const [logs, setLogs]             = useState<LogEntry[]>([]);
-  const [loading, setLoading]       = useState(false);
-  const [refreshKey, setRefreshKey] = useState(0);
+  const [selected, setSelected]         = useState("deploy");
+  const [logs, setLogs]                 = useState<LogEntry[]>([]);
+  const [loadedFor, setLoadedFor]       = useState<string | null>(null);
+  const [refreshKey, setRefreshKey]     = useState(0);
+
+  const loading = loadedFor !== `${selected}:${refreshKey}`;
 
   useEffect(() => {
-    setLoading(true);
+    const key = `${selected}:${refreshKey}`;
     fetchLogs(selected).then((data) => {
       setLogs(data);
-      setLoading(false);
+      setLoadedFor(key);
     });
   }, [selected, refreshKey]);
 

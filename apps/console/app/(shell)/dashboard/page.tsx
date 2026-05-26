@@ -2,7 +2,7 @@ import Link from "next/link";
 import {
   LayoutDashboard, HardDrive, Clock, Users,
   ShieldCheck, Wifi, Database, Box, Plus,
-  ArrowUpRight, Activity, Cpu, MemoryStick, Rocket,
+  ArrowUpRight, Activity, Cpu, Rocket,
 } from "lucide-react";
 import { Card, CardContent } from "@nublestation/ui/components/card";
 import { Badge }    from "@nublestation/ui/components/badge";
@@ -22,12 +22,6 @@ const statusDot: Record<Status, string> = {
   degraded: "bg-warning",
   down:     "bg-destructive",
 };
-const statusBadge: Record<Status, "success" | "warning" | "destructive"> = {
-  running:  "success",
-  degraded: "warning",
-  down:     "destructive",
-};
-
 const nubleServices: { brand: string; slug: string; role: string; container: string; status: Status }[] = [
   { brand: "Vault",     slug: "vault",     role: "Storage",  container: "nuble-storage", status: "running" },
   { brand: "BlazingDB", slug: "blazingdb", role: "Database", container: "nuble-db",      status: "running" },
@@ -148,11 +142,12 @@ export default async function DashboardPage() {
               </div>
               <Separator />
               <div className="divide-y divide-border">
-                {nubleServices.map((svc, i) => (
+                {nubleServices.map((svc) => (
                   <div
                     key={svc.brand}
                     className="flex items-center gap-4 px-6 py-4 transition-colors hover:bg-muted/40"
                   >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       src={`/services/${svc.slug}.svg`}
                       alt={svc.brand}

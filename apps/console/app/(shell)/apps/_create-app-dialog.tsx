@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Check, Copy, CheckCheck, ArrowRight, ChevronLeft, Loader2 } from "lucide-react";
 import {
@@ -59,7 +59,6 @@ const SERVICES = [
 function StepName({
   displayName,
   slug,
-  slugEdited,
   onDisplayNameChange,
   onSlugChange,
   onSlugEdit,
@@ -67,7 +66,6 @@ function StepName({
 }: {
   displayName: string;
   slug: string;
-  slugEdited: boolean;
   onDisplayNameChange: (v: string) => void;
   onSlugChange: (v: string) => void;
   onSlugEdit: () => void;
@@ -120,6 +118,7 @@ function StepServices() {
             key={svc.slug}
             className="flex items-center gap-3 rounded-2xl border border-border bg-muted/30 p-3"
           >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={`/services/${svc.slug}.svg`}
               alt={svc.brand}
@@ -265,10 +264,10 @@ export function CreateAppDialog({
   const [completedCount, setCompletedCount] = useState(0);
   const [result, setResult] = useState<CreateAppState | null>(null);
 
-  // Auto-derive slug from display name until user manually edits it.
-  useEffect(() => {
-    if (!slugEdited) setSlug(toSlug(displayName));
-  }, [displayName, slugEdited]);
+  function handleDisplayNameChange(v: string) {
+    setDisplayName(v);
+    if (!slugEdited) setSlug(toSlug(v));
+  }
 
   // Reset when dialog closes.
   function reset() {
@@ -379,8 +378,7 @@ export function CreateAppDialog({
             <StepName
               displayName={displayName}
               slug={slug}
-              slugEdited={slugEdited}
-              onDisplayNameChange={setDisplayName}
+              onDisplayNameChange={handleDisplayNameChange}
               onSlugChange={setSlug}
               onSlugEdit={() => setSlugEdited(true)}
               error={nameError}
