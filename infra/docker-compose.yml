@@ -72,6 +72,7 @@ services:
     restart: unless-stopped
     environment:
       NODE_ENV: production
+      HOSTNAME: "0.0.0.0"
       PLATFORM_DB_URL: ${DATABASE_URL}
       INTERNAL_HMAC_SECRET: ${INTERNAL_HMAC_SECRET}
       ADMIN_EMAIL: ${ADMIN_EMAIL}
