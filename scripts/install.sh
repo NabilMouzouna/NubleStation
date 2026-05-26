@@ -215,14 +215,20 @@ collect_inputs() {
 
 # ── Health check ──────────────────────────────────────────────────────────────
 wait_healthy() {
-  _svc="$1"; _url="$2"; _attempts=0
-  step "Waiting for $_svc"
-  while [ "$_attempts" -lt 9 ]; do
+  _svc="$1"; _attempts=0; _max=24
+  printf '%s[→]%s Waiting for %s ' "$Y" "$NC" "$_svc"
+  while [ "$_attempts" -lt "$_max" ]; do
     _attempts=$(( _attempts + 1 ))
-    if curl -sf "$_url" >/dev/null 2>&1; then info "$_svc is healthy"; return 0; fi
+    _state=$(docker inspect --format='{{.State.Health.Status}}' "nublestation-${_svc}-1" 2>/dev/null)
+    if [ "$_state" = "healthy" ]; then
+      printf ' %s✓%s\n' "$G" "$NC"
+      return 0
+    fi
+    printf '.'
     sleep 5
   done
-  warn "$_svc did not become healthy — check: docker compose logs $_svc"
+  printf '\n'
+  warn "$_svc did not become healthy after $(( _max * 5 ))s — check: docker compose logs $_svc"
 }
 
 # ── Main ──────────────────────────────────────────────────────────────────────
@@ -344,8 +350,8 @@ EOF
 
   # ── 9. Health checks ────────────────────────────────────────────────────────
   sleep 5
-  wait_healthy "console" "http://console.${ORG_DOMAIN}.local"
-  wait_healthy "api"     "http://api.${ORG_DOMAIN}.local"
+  wait_healthy "console"
+  wait_healthy "api"
   checkpoint "health-verified"
 
   # ── 10. Finish ───────────────────────────────────────────────────────────────
