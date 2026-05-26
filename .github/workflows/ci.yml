@@ -33,7 +33,7 @@ jobs:
       - run: pnpm check-types
 
   test:
-    name: Tests (blaze + gateway)
+    name: Tests (blaze + gateway + orbit + cli)
     runs-on: ubuntu-latest
 
     services:
