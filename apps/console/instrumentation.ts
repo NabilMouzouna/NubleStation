@@ -1,6 +1,6 @@
 export async function register() {
   if (process.env.NEXT_RUNTIME === "nodejs") {
-    const { ensureSuperAdmin } = await import("./lib/db/seed.js");
+    const { ensureSuperAdmin } = await import("./lib/db/seed");
     await ensureSuperAdmin();
   }
 }

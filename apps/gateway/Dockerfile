@@ -1,4 +1,4 @@
-FROM node:20-alpine AS base
+FROM node:22-alpine AS base
 RUN npm install -g pnpm turbo
 
 # ── Stage 1: Prune monorepo to gateway + its workspace deps ──────────────────
@@ -21,7 +21,7 @@ COPY --from=pruner /app/out/full/ .
 RUN pnpm --filter @nublestation/gateway deploy --prod /deploy
 
 # ── Stage 4: Runner ───────────────────────────────────────────────────────────
-FROM node:20-alpine AS runner
+FROM node:22-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 
