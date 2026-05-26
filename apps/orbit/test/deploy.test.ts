@@ -33,7 +33,7 @@ async function makeDeployRequest(
   overrideHeaders: Record<string, string> = {},
 ): Promise<Request> {
   const form = new FormData();
-  form.append("bundle", new Blob([zipBytes], { type: "application/zip" }), "bundle.zip");
+  form.append("bundle", new Blob([Buffer.from(zipBytes)], { type: "application/zip" }), "bundle.zip");
 
   // Materialize multipart bytes so HMAC covers the actual body that Orbit will receive.
   const tmp = new Request("http://localhost/v1/orbit/deploy", { method: "POST", body: form });
@@ -95,7 +95,7 @@ describe("POST /v1/orbit/deploy — auth", () => {
   it("returns 401 when HMAC headers are absent", async () => {
     const zip = await makeMinimalZip();
     const form = new FormData();
-    form.append("bundle", new Blob([zip], { type: "application/zip" }), "bundle.zip");
+    form.append("bundle", new Blob([Buffer.from(zip)], { type: "application/zip" }), "bundle.zip");
 
     const res = await app.request("/v1/orbit/deploy", { method: "POST", body: form });
     expect(res.status).toBe(401);
