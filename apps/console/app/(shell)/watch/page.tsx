@@ -5,10 +5,11 @@ import { Card } from "@nublestation/ui/components/card";
 import { Button } from "@nublestation/ui/components/button";
 import { RefreshCw } from "lucide-react";
 
-const CONTAINERS = [
-  "gateway", "db", "auth", "storage", "deploy",
-  "console", "caddy", "coredns", "postgres",
-];
+// "deploy" and "audit" have real API-backed log sources.
+// Other container tabs require Docker API access (not wired up).
+const REAL_CONTAINERS = ["deploy", "audit"] as const;
+const OTHER_CONTAINERS = ["gateway", "blaze", "orbit", "console", "caddy", "coredns", "postgres"];
+const CONTAINERS = [...REAL_CONTAINERS, ...OTHER_CONTAINERS];
 
 type LogEntry = {
   time: string;
@@ -17,17 +18,6 @@ type LogEntry = {
   msg: string;
 };
 
-const mockLogs: LogEntry[] = [
-  { time: "10:42:01", container: "gateway",  level: "info",  msg: "POST /v1/db/tasks → 200 12ms" },
-  { time: "10:42:01", container: "db",       level: "info",  msg: "withTenant(app-1) query completed in 4ms" },
-  { time: "10:42:03", container: "gateway",  level: "info",  msg: "GET /v1/storage/files → 200 8ms" },
-  { time: "10:42:05", container: "caddy",    level: "info",  msg: "tasks.clinic.local → 200" },
-  { time: "10:42:07", container: "gateway",  level: "warn",  msg: "Rate limit approaching for app-2" },
-  { time: "10:42:09", container: "postgres", level: "info",  msg: "checkpoint complete: wrote 42 buffers" },
-  { time: "10:42:11", container: "db",       level: "info",  msg: "migration applied: 0001_init_platform" },
-  { time: "10:42:14", container: "gateway",  level: "error", msg: "HMAC verification failed — rejected request" },
-];
-
 const levelColor: Record<string, string> = {
   info:  "text-muted-foreground",
   warn:  "text-warning",
@@ -35,21 +25,22 @@ const levelColor: Record<string, string> = {
 };
 
 async function fetchLogs(container: string): Promise<LogEntry[]> {
-  if (container === "deploy") {
-    const res = await fetch("/api/logs/deploy", { cache: "no-store" });
+  if (container === "deploy" || container === "audit") {
+    const res = await fetch(`/api/logs/${container}`, { cache: "no-store" });
     if (!res.ok) return [];
     return res.json();
   }
-  return mockLogs.filter((l) => l.container === container);
+  return [];
 }
 
 export default function WatchPage() {
-  const [selected, setSelected]         = useState("deploy");
-  const [logs, setLogs]                 = useState<LogEntry[]>([]);
-  const [loadedFor, setLoadedFor]       = useState<string | null>(null);
-  const [refreshKey, setRefreshKey]     = useState(0);
+  const [selected, setSelected]     = useState("deploy");
+  const [logs, setLogs]             = useState<LogEntry[]>([]);
+  const [loadedFor, setLoadedFor]   = useState<string | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   const loading = loadedFor !== `${selected}:${refreshKey}`;
+  const isRealSource = (REAL_CONTAINERS as readonly string[]).includes(selected);
 
   useEffect(() => {
     const key = `${selected}:${refreshKey}`;
@@ -70,7 +61,7 @@ export default function WatchPage() {
         <Button
           variant="ghost"
           size="sm"
-          disabled={loading}
+          disabled={loading || !isRealSource}
           onClick={() => setRefreshKey((k) => k + 1)}
         >
           <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
@@ -79,24 +70,34 @@ export default function WatchPage() {
       </div>
 
       <div className="mt-6 flex flex-wrap gap-2">
-        {CONTAINERS.map((c) => (
-          <button
-            key={c}
-            onClick={() => setSelected(c)}
-            className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
-              selected === c
-                ? "bg-primary text-white"
-                : "bg-muted text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            {c}
-          </button>
-        ))}
+        {CONTAINERS.map((c) => {
+          const isReal = (REAL_CONTAINERS as readonly string[]).includes(c);
+          return (
+            <button
+              key={c}
+              onClick={() => setSelected(c)}
+              className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                selected === c
+                  ? "bg-primary text-white"
+                  : "bg-muted text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {c}
+              {isReal && (
+                <span className="ml-1.5 inline-block size-1.5 rounded-full bg-success align-middle" />
+              )}
+            </button>
+          );
+        })}
       </div>
 
       <Card className="mt-4 flex-1 overflow-hidden">
         <div className="h-full overflow-y-auto p-5 font-mono text-xs">
-          {loading ? (
+          {!isRealSource ? (
+            <p className="text-muted-foreground">
+              Container log streaming requires Docker API access — not configured in this release.
+            </p>
+          ) : loading ? (
             <p className="text-muted-foreground">Loading…</p>
           ) : logs.length === 0 ? (
             <p className="text-muted-foreground">No logs yet for {selected}.</p>

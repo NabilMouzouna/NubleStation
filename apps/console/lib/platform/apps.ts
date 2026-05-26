@@ -7,14 +7,16 @@ export interface AppRow {
   name: string;
   display_name: string;
   created_at: string;
+  has_deployment: boolean;
 }
 
 export async function listApps(): Promise<AppRow[]> {
   const pool = getPlatformPool();
   const { rows } = await pool.query<AppRow>(
-    `SELECT id, name, display_name, created_at
-     FROM platform.apps
-     ORDER BY created_at DESC`,
+    `SELECT a.id, a.name, a.display_name, a.created_at,
+            (EXISTS (SELECT 1 FROM platform.deployments d WHERE d.app_id = a.id)) AS has_deployment
+     FROM platform.apps a
+     ORDER BY a.created_at DESC`,
   );
   return rows;
 }

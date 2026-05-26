@@ -1,8 +1,14 @@
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@nublestation/ui/components/card";
 import { Input } from "@nublestation/ui/components/input";
 import { Button } from "@nublestation/ui/components/button";
+import { getOrg } from "@/lib/platform/org";
+import { updateOrgAction } from "./actions";
 
-export default function SettingsPage() {
+export default async function SettingsPage() {
+  const org = await getOrg();
+  const domain = process.env.ORG_DOMAIN ?? "nuble";
+  const hostIp = process.env.HOST_IP ?? "—";
+
   return (
     <div className="p-5 lg:p-8">
       <h1 className="text-2xl font-semibold tracking-tight text-foreground">Settings</h1>
@@ -12,20 +18,16 @@ export default function SettingsPage() {
         <Card>
           <CardHeader>
             <CardTitle>Organization</CardTitle>
-            <CardDescription>Name and description shown across the console</CardDescription>
+            <CardDescription>Name shown across the console</CardDescription>
           </CardHeader>
           <CardContent>
-            <form className="flex flex-col gap-4">
+            <form action={updateOrgAction} className="flex flex-col gap-4">
               <div className="flex flex-col gap-1.5">
                 <label className="text-sm font-medium text-foreground">Name</label>
-                <Input defaultValue="My Clinic" />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <label className="text-sm font-medium text-foreground">Description</label>
-                <Input defaultValue="Local healthcare organization" />
+                <Input name="name" defaultValue={org?.name ?? ""} />
               </div>
               <div className="flex justify-end">
-                <Button>Save changes</Button>
+                <Button type="submit">Save changes</Button>
               </div>
             </form>
           </CardContent>
@@ -40,15 +42,15 @@ export default function SettingsPage() {
             <div className="flex flex-col gap-4">
               <div className="flex flex-col gap-1.5">
                 <label className="text-sm font-medium text-foreground">Org domain</label>
-                <Input defaultValue="clinic.local" disabled />
+                <Input defaultValue={`${domain}.local`} disabled />
               </div>
               <div className="flex flex-col gap-1.5">
                 <label className="text-sm font-medium text-foreground">Host IP</label>
-                <Input defaultValue="192.168.1.100" disabled />
+                <Input defaultValue={hostIp} disabled />
               </div>
               <div className="flex items-center gap-2">
-                <span className="size-2 rounded-full bg-success" />
-                <span className="text-sm text-muted-foreground">TLS active — Caddy auto-HTTPS</span>
+                <span className="size-2 rounded-full bg-warning" />
+                <span className="text-sm text-muted-foreground">HTTP only — TLS pending (see ADR 004)</span>
               </div>
             </div>
           </CardContent>
@@ -56,20 +58,15 @@ export default function SettingsPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Internal secret</CardTitle>
+            <CardTitle>Internal HMAC secret</CardTitle>
             <CardDescription>
-              HMAC secret used to sign requests between services. Rotating causes a ~2s interruption as containers restart.
+              Signs requests between services and session tokens. Rotating requires restarting all containers.
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="flex flex-col gap-4">
-              <div className="flex flex-col gap-1.5">
-                <label className="text-sm font-medium text-foreground">Last rotated</label>
-                <Input defaultValue="2026-05-01 — at install" disabled />
-              </div>
-              <div className="flex justify-end">
-                <Button variant="secondary">Rotate secret</Button>
-              </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-medium text-foreground">Status</label>
+              <Input defaultValue="Managed via .env — set at install" disabled />
             </div>
           </CardContent>
         </Card>
@@ -77,7 +74,7 @@ export default function SettingsPage() {
         <div className="rounded-3xl border border-destructive/30 bg-destructive/5 p-6">
           <p className="text-sm font-semibold text-destructive">Danger zone</p>
           <p className="mt-1 text-sm text-muted-foreground">
-            Reinstalling NubleStation will wipe admin.db and require re-seeding credentials. PostgreSQL data is preserved.
+            Reinstalling NubleStation will wipe all organization data. PostgreSQL tenant data is preserved.
           </p>
           <div className="mt-5">
             <Button variant="destructive">Reinstall NubleStation</Button>

@@ -1,7 +1,11 @@
 {
   "$schema": "https://turborepo.dev/schema.json",
   "ui": "tui",
-  "globalEnv": ["NUBLE_ENV_FILE", "ORBIT_URL", "TEST_APP_ID", "TEST_USER_ID", "TEST_APP_SLUG"],
+  "globalEnv": [
+    "NUBLE_ENV_FILE", "ORBIT_URL", "TEST_APP_ID", "TEST_USER_ID", "TEST_APP_SLUG",
+    "PLATFORM_DB_URL", "ORG_NAME", "ORG_DOMAIN", "HOST_IP",
+    "INTERNAL_HMAC_SECRET", "SECURE_COOKIES"
+  ],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],

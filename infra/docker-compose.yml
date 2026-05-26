@@ -78,6 +78,10 @@ services:
       ADMIN_EMAIL: ${ADMIN_EMAIL}
       ADMIN_PASSWORD_HASH: ${ADMIN_PASSWORD_HASH}
       ORBIT_STORAGE_ROOT: /var/nuble/apps
+      ORG_NAME: ${ORG_NAME}
+      ORG_DOMAIN: ${ORG_DOMAIN}
+      HOST_IP: ${HOST_IP}
+      SECURE_COOKIES: "false"
     volumes:
       - nuble-apps:/var/nuble/apps:rw
     expose:

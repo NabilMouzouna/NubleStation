@@ -5,54 +5,45 @@ import {
   ArrowUpRight, Activity, Cpu, Rocket,
 } from "lucide-react";
 import { Card, CardContent } from "@nublestation/ui/components/card";
-import { Badge }    from "@nublestation/ui/components/badge";
-import { Button }   from "@nublestation/ui/components/button";
-import { Progress } from "@nublestation/ui/components/progress";
+import { Badge }     from "@nublestation/ui/components/badge";
+import { Button }    from "@nublestation/ui/components/button";
+import { Progress }  from "@nublestation/ui/components/progress";
 import { Separator } from "@nublestation/ui/components/separator";
 import { Avatar, AvatarFallback } from "@nublestation/ui/components/avatar";
 import { validateSession } from "@/lib/auth/session";
 import { getRecentDeployments } from "@/lib/platform/events";
+import { checkServices, type ServiceHealth, type ServiceStatus } from "@/lib/platform/health";
+import { listApps } from "@/lib/platform/apps";
 
-// ─── Static data ────────────────────────────────────────────────────────────
+import type React from "react";
 
-type Status = "running" | "degraded" | "down";
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+type Status = ServiceStatus;
 
 const statusDot: Record<Status, string> = {
   running:  "animate-pulse bg-success",
   degraded: "bg-warning",
   down:     "bg-destructive",
 };
-const nubleServices: { brand: string; slug: string; role: string; container: string; status: Status }[] = [
-  { brand: "Vault",     slug: "vault",     role: "Storage",  container: "nuble-storage", status: "running" },
-  { brand: "BlazingDB", slug: "blazingdb", role: "Database", container: "nuble-db",      status: "running" },
-  { brand: "Identity",  slug: "identity",  role: "Auth",     container: "nuble-auth",    status: "running" },
-  { brand: "Orbit",     slug: "orbit",     role: "Deploy",   container: "nuble-deploy",  status: "running" },
-];
 
-const infraServices: { name: string; icon: React.ElementType; container: string; status: Status }[] = [
-  { name: "Caddy",    icon: ShieldCheck, container: "nuble-caddy",    status: "running" },
-  { name: "CoreDNS",  icon: Wifi,        container: "nuble-coredns",  status: "running" },
-  { name: "Postgres", icon: Database,    container: "nuble-postgres", status: "running" },
-  { name: "Docker",   icon: Box,         container: "host daemon",    status: "running" },
-];
+const statusLabel: Record<Status, string> = {
+  running:  "Running",
+  degraded: "Degraded",
+  down:     "Down",
+};
 
-const systemMetrics = [
-  { label: "Disk",    value: 0,  detail: "0 GB used",    icon: HardDrive, color: "bg-primary"  },
-  { label: "Memory",  value: 0,  detail: "— MB used",    icon: Cpu,       color: "bg-brand-violet" },
-  { label: "Network", value: 0,  detail: "— KB/s",       icon: Activity,  color: "bg-success"  },
-];
-
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-
-import type React from "react";
+const statusTextColor: Record<Status, string> = {
+  running:  "text-success",
+  degraded: "text-warning",
+  down:     "text-destructive",
+};
 
 function getGreeting(hour: number) {
   if (hour < 12) return "Good morning";
   if (hour < 18) return "Good afternoon";
   return "Good evening";
 }
-
-// ─── Page ────────────────────────────────────────────────────────────────────
 
 function timeAgo(iso: string): string {
   const diffMs = Date.now() - new Date(iso).getTime();
@@ -65,15 +56,50 @@ function timeAgo(iso: string): string {
   return `${days}d ago`;
 }
 
+// ─── Page ────────────────────────────────────────────────────────────────────
+
 export default async function DashboardPage() {
-  const [session, recentDeployments] = await Promise.all([
+  const [session, recentDeployments, services, apps] = await Promise.all([
     validateSession(),
     getRecentDeployments(),
+    checkServices().catch((): ServiceHealth[] => []),
+    listApps().catch(() => []),
   ]);
-  const handle  = (session?.email ?? "admin").split("@")[0] ?? "admin";
+
+  const handle   = (session?.email ?? "admin").split("@")[0] ?? "admin";
   const initials = handle.slice(0, 2).toUpperCase();
   const hour     = new Date().getHours();
   const greeting = getGreeting(hour);
+  const domain   = `${process.env.ORG_DOMAIN ?? "nuble"}.local`;
+
+  const statusOf = (key: string): Status =>
+    (services.find((s) => s.name === key)?.status ?? "running") as Status;
+
+  // blaze and orbit are real services; vault/identity are future placeholders shown as static
+  const nubleServices = [
+    { brand: "BlazingDB", slug: "blazingdb", role: "Database",  container: "blaze",    status: statusOf("blaze")  },
+    { brand: "Orbit",     slug: "orbit",     role: "Deploy",    container: "orbit",    status: statusOf("orbit")  },
+    { brand: "Vault",     slug: "vault",     role: "Storage",   container: "vault",    status: "running" as Status },
+    { brand: "Identity",  slug: "identity",  role: "Auth",      container: "identity", status: "running" as Status },
+  ];
+
+  const infraServices: { name: string; icon: React.ElementType; container: string; status: Status }[] = [
+    { name: "Caddy",    icon: ShieldCheck, container: "caddy",       status: "running"            },
+    { name: "CoreDNS",  icon: Wifi,        container: "coredns",     status: "running"            },
+    { name: "Postgres", icon: Database,    container: "postgres",    status: statusOf("postgres") },
+    { name: "Docker",   icon: Box,         container: "host daemon", status: "running"            },
+  ];
+
+  const checkedStatuses = [statusOf("blaze"), statusOf("orbit"), statusOf("postgres")];
+  const allRunning   = checkedStatuses.every((s) => s === "running");
+  const anyDown      = checkedStatuses.some((s) => s === "down");
+  const overallBadge: Status = allRunning ? "running" : anyDown ? "down" : "degraded";
+
+  const systemMetrics = [
+    { label: "Disk",    value: 0, detail: "0 GB used", icon: HardDrive, color: "bg-primary"      },
+    { label: "Memory",  value: 0, detail: "— MB used", icon: Cpu,       color: "bg-brand-violet"  },
+    { label: "Network", value: 0, detail: "— KB/s",    icon: Activity,  color: "bg-success"       },
+  ];
 
   return (
     <div className="min-h-full p-5 lg:p-8">
@@ -85,7 +111,7 @@ export default async function DashboardPage() {
             {greeting}, {handle}
           </h1>
           <p className="mt-0.5 text-sm text-muted-foreground">
-            Infrastructure overview · clinic.local
+            Infrastructure overview · {domain}
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -103,10 +129,10 @@ export default async function DashboardPage() {
       {/* ── Stat cards ── */}
       <div className="mt-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
         {[
-          { label: "Apps",       value: "0",   sub: "registered",    icon: LayoutDashboard, tint: "bg-primary/10      text-primary"      },
-          { label: "Storage",    value: "0 GB", sub: "disk used",    icon: HardDrive,       tint: "bg-success/10      text-success"      },
-          { label: "Uptime",     value: "—",    sub: "last 24 h",    icon: Clock,           tint: "bg-brand-blue/10   text-brand-blue"   },
-          { label: "Sessions",   value: "1",    sub: "active",       icon: Users,           tint: "bg-brand-violet/10 text-brand-violet" },
+          { label: "Apps",     value: String(apps.length), sub: "registered", icon: LayoutDashboard, tint: "bg-primary/10      text-primary"      },
+          { label: "Storage",  value: "0 GB",              sub: "disk used",  icon: HardDrive,       tint: "bg-success/10      text-success"      },
+          { label: "Uptime",   value: "—",                 sub: "last 24 h",  icon: Clock,           tint: "bg-brand-blue/10   text-brand-blue"   },
+          { label: "Sessions", value: "1",                 sub: "active",     icon: Users,           tint: "bg-brand-violet/10 text-brand-violet" },
         ].map((s) => {
           const Icon = s.icon;
           return (
@@ -135,10 +161,22 @@ export default async function DashboardPage() {
             <CardContent className="p-0">
               <div className="flex items-center justify-between px-6 py-4">
                 <h2 className="text-sm font-semibold text-foreground">NubleStation Services</h2>
-                <Badge variant="success" className="gap-1.5">
-                  <span className="size-1.5 animate-pulse rounded-full bg-success" />
-                  All Running
-                </Badge>
+                {overallBadge === "running" ? (
+                  <Badge variant="success" className="gap-1.5">
+                    <span className="size-1.5 animate-pulse rounded-full bg-success" />
+                    All Running
+                  </Badge>
+                ) : overallBadge === "degraded" ? (
+                  <Badge variant="warning" className="gap-1.5">
+                    <span className="size-1.5 rounded-full bg-warning" />
+                    Degraded
+                  </Badge>
+                ) : (
+                  <Badge variant="destructive" className="gap-1.5">
+                    <span className="size-1.5 rounded-full bg-destructive" />
+                    Service Down
+                  </Badge>
+                )}
               </div>
               <Separator />
               <div className="divide-y divide-border">
@@ -163,7 +201,9 @@ export default async function DashboardPage() {
                     </div>
                     <div className="hidden sm:flex items-center gap-1.5">
                       <span className={`size-1.5 rounded-full ${statusDot[svc.status]}`} />
-                      <span className="text-xs font-medium text-success">Running</span>
+                      <span className={`text-xs font-medium ${statusTextColor[svc.status]}`}>
+                        {statusLabel[svc.status]}
+                      </span>
                     </div>
                     <span className="text-xs text-muted-foreground hidden md:block w-12 text-right">—</span>
                   </div>

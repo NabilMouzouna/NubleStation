@@ -1,23 +1,40 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@nublestation/ui/components/card";
+import { checkServices, type ServiceHealth } from "@/lib/platform/health";
+import { listApps } from "@/lib/platform/apps";
 
-const subdomains = [
-  { subdomain: "console.clinic.local", target: "console container", type: "system" },
-  { subdomain: "api.clinic.local",     target: "gateway container", type: "system" },
-  { subdomain: "tasks.clinic.local",   target: "/var/nuble/apps/tasks/current", type: "app" },
-  { subdomain: "patients.clinic.local",target: "/var/nuble/apps/patients/current", type: "app" },
-  { subdomain: "scheduling.clinic.local", target: "/var/nuble/apps/scheduling/current", type: "app" },
-];
+export default async function NetworkPage() {
+  const domain  = process.env.ORG_DOMAIN ?? "nuble";
+  const hostIp  = process.env.HOST_IP ?? "—";
 
-const upstreams = [
-  { name: "console",  container: "console:80",  status: "reachable" },
-  { name: "gateway",  container: "gateway:3000", status: "reachable" },
-  { name: "db",       container: "db:3001",      status: "reachable" },
-  { name: "auth",     container: "auth:3002",    status: "reachable" },
-  { name: "storage",  container: "storage:3003", status: "reachable" },
-  { name: "deploy",   container: "deploy:3004",  status: "reachable" },
-];
+  const [apps, services] = await Promise.all([
+    listApps().catch(() => []),
+    checkServices().catch((): ServiceHealth[] => []),
+  ]);
 
-export default function NetworkPage() {
+  const statusOf = (key: string) =>
+    services.find((s) => s.name === key)?.status ?? "running";
+
+  const systemSubdomains = [
+    { subdomain: `console.${domain}.local`, target: "console container", type: "system" as const },
+    { subdomain: `api.${domain}.local`,     target: "api container",     type: "system" as const },
+  ];
+
+  const appSubdomains = apps.map((app) => ({
+    subdomain: `${app.name}.${domain}.local`,
+    target:    `/var/nuble/apps/${app.name}/current`,
+    type:      "app" as const,
+  }));
+
+  const allSubdomains = [...systemSubdomains, ...appSubdomains];
+
+  // Services routable through Caddy — checked against internal healthz endpoints
+  const upstreams = [
+    { name: "console", addr: "console:3000", key: null        },
+    { name: "api",     addr: "api:3000",     key: "gateway"   },
+    { name: "blaze",   addr: "blaze:3001",   key: "blaze"     },
+    { name: "orbit",   addr: "orbit:3002",   key: "orbit"     },
+  ];
+
   return (
     <div className="p-8">
       <h1 className="text-2xl font-semibold tracking-tight text-foreground">Network</h1>
@@ -32,7 +49,7 @@ export default function NetworkPage() {
             <div className="flex flex-col gap-3 text-sm">
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Zone</span>
-                <span className="font-mono text-foreground">*.clinic.local</span>
+                <span className="font-mono text-foreground">*.{domain}.local</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Resolver</span>
@@ -40,7 +57,7 @@ export default function NetworkPage() {
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Host IP</span>
-                <span className="font-mono text-foreground">192.168.1.100</span>
+                <span className="font-mono text-foreground">{hostIp}</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-muted-foreground">Status</span>
@@ -59,15 +76,19 @@ export default function NetworkPage() {
           </CardHeader>
           <CardContent>
             <div className="flex flex-col gap-2">
-              {upstreams.map((u) => (
-                <div key={u.name} className="flex items-center justify-between text-sm">
-                  <span className="font-mono text-xs text-foreground">{u.container}</span>
-                  <span className="flex items-center gap-1.5 text-success text-xs">
-                    <span className="size-2 rounded-full bg-success" />
-                    {u.status}
-                  </span>
-                </div>
-              ))}
+              {upstreams.map((u) => {
+                const status = u.key ? statusOf(u.key) : "running";
+                const isUp   = status === "running";
+                return (
+                  <div key={u.name} className="flex items-center justify-between text-sm">
+                    <span className="font-mono text-xs text-foreground">{u.addr}</span>
+                    <span className={`flex items-center gap-1.5 text-xs ${isUp ? "text-success" : "text-destructive"}`}>
+                      <span className={`size-2 rounded-full ${isUp ? "bg-success" : "bg-destructive"}`} />
+                      {isUp ? "reachable" : status}
+                    </span>
+                  </div>
+                );
+              })}
             </div>
           </CardContent>
         </Card>
@@ -83,7 +104,13 @@ export default function NetworkPage() {
             </tr>
           </thead>
           <tbody className="divide-y divide-border bg-card">
-            {subdomains.map((s) => (
+            {allSubdomains.length === 0 ? (
+              <tr>
+                <td colSpan={3} className="px-5 py-8 text-center text-sm text-muted-foreground">
+                  No subdomains registered.
+                </td>
+              </tr>
+            ) : allSubdomains.map((s) => (
               <tr key={s.subdomain}>
                 <td className="px-5 py-3 font-mono text-xs text-foreground">{s.subdomain}</td>
                 <td className="px-5 py-3 font-mono text-xs text-muted-foreground">{s.target}</td>

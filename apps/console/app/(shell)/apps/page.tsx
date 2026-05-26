@@ -36,12 +36,18 @@ export default async function AppsPage() {
                         <div>
                           <p className="font-semibold text-foreground">{app.display_name}</p>
                           <p className="mt-0.5 text-xs text-muted-foreground">
-                            {app.name}.clinic.local
+                            {app.name}.{process.env.ORG_DOMAIN ?? "nuble"}.local
                           </p>
                         </div>
-                        <span className="rounded-full bg-success/10 px-2 py-0.5 text-xs font-medium text-success">
-                          Live
-                        </span>
+                        {app.has_deployment ? (
+                          <span className="rounded-full bg-success/10 px-2 py-0.5 text-xs font-medium text-success">
+                            Live
+                          </span>
+                        ) : (
+                          <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+                            Not deployed
+                          </span>
+                        )}
                       </div>
                       <div className="mt-5 flex gap-5 text-xs text-muted-foreground">
                         <span className="flex items-center gap-1.5">

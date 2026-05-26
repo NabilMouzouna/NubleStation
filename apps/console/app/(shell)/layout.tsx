@@ -33,6 +33,7 @@ const adminItems = [
 export default async function ShellLayout({ children }: { children: ReactNode }) {
   const session = await validateSession();
   if (!session) redirect("/auth");
+  const orgLabel = `${process.env.ORG_NAME ?? "Organization"} · ${process.env.ORG_DOMAIN ?? "nuble"}.local`;
   return (
     <div className="flex h-screen overflow-hidden bg-background">
 
@@ -53,8 +54,7 @@ export default async function ShellLayout({ children }: { children: ReactNode })
         </nav>
 
         <div className="border-t border-border px-5 py-4">
-          <p className="text-xs font-medium text-foreground">Organization</p>
-          <p className="text-xs text-muted-foreground">clinic.local</p>
+          <p className="text-xs font-medium text-foreground">{orgLabel}</p>
           <form action="/auth/logout" method="POST" className="mt-3">
             <button
               type="submit"
