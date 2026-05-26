@@ -76,3 +76,62 @@ jobs:
           tags: ${{ matrix.image }}:${{ steps.tag.outputs.tag }}
           cache-from: type=gha,scope=${{ matrix.service }}
           cache-to: type=gha,mode=max,scope=${{ matrix.service }}
+
+  github-release:
+    name: GitHub Release (install.sh)
+    runs-on: ubuntu-latest
+    if: github.ref_name == 'main'
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get CLI version
+        id: version
+        run: echo "version=$(node -p "require('./packages/cli/package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - name: Create or update release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          gh release create "v${VERSION}" scripts/install.sh \
+            --title "v${VERSION}" \
+            --latest \
+            2>/dev/null || \
+          gh release upload "v${VERSION}" scripts/install.sh --clobber
+
+  publish-cli:
+    name: Publish CLI to npm
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.0.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Build CLI
+        run: pnpm --filter @nublestation/cli run build
+
+      - name: Resolve npm tag
+        id: npm-tag
+        run: |
+          if [ "${{ github.ref_name }}" = "main" ]; then
+            echo "tag=latest" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=staging" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Publish
+        run: pnpm --filter @nublestation/cli publish --no-git-checks --access public --tag ${{ steps.npm-tag.outputs.tag }}
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
