@@ -26,7 +26,7 @@ api.{$ORG_DOMAIN}.local:80 {
         not host console.{$ORG_DOMAIN}.local api.{$ORG_DOMAIN}.local
     }
     handle @notReserved {
-        root * /var/nuble/apps/{labels.1}/current
+        root * /var/nuble/apps/{labels.2}/current
         file_server
         try_files {path} /index.html
     }
