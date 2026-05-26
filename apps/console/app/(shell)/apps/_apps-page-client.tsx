@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Plus } from "lucide-react";
 import { Button } from "@nublestation/ui/components/button";
@@ -8,12 +8,8 @@ import { CreateAppDialog } from "./_create-app-dialog";
 
 export function AppsPageClient({ children }: { children: React.ReactNode }) {
   const params = useSearchParams();
-  const [open, setOpen] = useState(false);
-
-  // Auto-open when navigated from dashboard "Get started" button.
-  useEffect(() => {
-    if (params.get("new") === "1") setOpen(true);
-  }, [params]);
+  // Initialize open from URL so there's no effect-triggered setState cascade.
+  const [open, setOpen] = useState(() => params.get("new") === "1");
 
   return (
     <>

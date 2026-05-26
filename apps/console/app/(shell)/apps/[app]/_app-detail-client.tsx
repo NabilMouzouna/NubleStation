@@ -7,10 +7,8 @@ import {
   ChevronRight, Rocket, Database, HardDrive, Users, Settings,
   Copy, CheckCheck, ShieldOff, Trash2, ExternalLink, Clock,
 } from "lucide-react";
-import { Card, CardContent } from "@nublestation/ui/components/card";
 import { Button } from "@nublestation/ui/components/button";
 import { Badge } from "@nublestation/ui/components/badge";
-import { Separator } from "@nublestation/ui/components/separator";
 import type { AppDetail, DeploymentRow, ApiKeyRow, AppTableRow } from "@/lib/platform/app-detail";
 import { revokeApiKeyAction, deleteAppAction, generateApiKeyAction } from "./actions";
 
@@ -28,12 +26,6 @@ const TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
   { id: "settings",   label: "Settings",     icon: Settings  },
 ];
 
-const SERVICE_TILE_TAB: Record<string, Tab> = {
-  blazingdb: "database",
-  orbit:     "deployments",
-  vault:     "storage",
-  identity:  "users",
-};
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -339,6 +331,7 @@ function ServiceTiles({
                 : "border-border bg-card hover:border-primary/40"
             }`}
           >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={`/services/${svc.slug}.svg`} alt={svc.brand} width={36} height={36} className="rounded-xl shrink-0" />
             <div className="min-w-0">
               <p className="text-sm font-semibold text-foreground">{svc.brand}</p>
