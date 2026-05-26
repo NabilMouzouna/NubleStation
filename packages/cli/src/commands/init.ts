@@ -3,21 +3,26 @@ import { setProfile } from "../config.js";
 import { checkGatewayHealth } from "../utils/upload.js";
 import { printBranding } from "../branding.js";
 
-export async function runInit(options: { profile?: string }): Promise<void> {
+export interface InitOptions {
+  profile?: string;
+  url?: string;
+  key?: string;
+  slug?: string;
+}
+
+export async function runInit(options: InitOptions): Promise<void> {
   printBranding("nuble init");
 
-  // In staging/production the install script sets NUBLE_GATEWAY_URL so the
-  // user doesn't need to type it in.
-  const envUrl = process.env.NUBLE_GATEWAY_URL;
-
+  // Priority: --url flag → NUBLE_GATEWAY_URL env → interactive prompt
+  const rawUrl = options.url ?? process.env.NUBLE_GATEWAY_URL;
   let orgUrl: string;
-  if (envUrl) {
-    try { new URL(envUrl); } catch {
-      console.error(`NUBLE_GATEWAY_URL is set but not a valid URL: ${envUrl}`);
+  if (rawUrl) {
+    try { new URL(rawUrl); } catch {
+      console.error(`Invalid gateway URL: ${rawUrl}`);
       process.exit(1);
     }
-    console.log(`  Gateway: ${envUrl}  (from NUBLE_GATEWAY_URL)\n`);
-    orgUrl = envUrl;
+    console.log(`  Gateway: ${rawUrl}\n`);
+    orgUrl = rawUrl;
   } else {
     orgUrl = await input({
       message: "Gateway URL (e.g. http://api.clinic.local):",
@@ -28,12 +33,12 @@ export async function runInit(options: { profile?: string }): Promise<void> {
     });
   }
 
-  const apiKey = await input({
+  const apiKey = options.key ?? await input({
     message: "API key (nbl_<keyId>.<secret>):",
     validate: (v) => v.startsWith("nbl_") || "Key must start with nbl_",
   });
 
-  const appSlug = await input({
+  const appSlug = options.slug ?? await input({
     message: "App slug (e.g. tasks):",
     validate: (v) =>
       /^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/.test(v) ||

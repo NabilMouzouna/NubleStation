@@ -376,7 +376,11 @@ EOF
   printf '\n'
   printf '%s  Router DNS → point to %s%s\n' "$Y" "$HOST_IP" "$NC"
   printf '  Or add to each device hosts file:\n'
-  printf '    %s\n\n' "$HOSTS_LINE"
+  printf '    %s\n' "$HOSTS_LINE"
+  printf '\n'
+  printf '%s  Developer quick-start (run on any LAN machine):%s\n' "$B" "$NC"
+  printf '    nuble init --url http://api.%s.local --slug <app-slug> --key <api-key>\n' "$ORG_DOMAIN"
+  printf '    nuble deploy\n\n'
 }
 
 main "$@"

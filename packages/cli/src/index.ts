@@ -14,8 +14,11 @@ program
 program
   .command("init")
   .description("Connect to a NubleStation org and write config")
-  .option("--profile <name>", "Config profile name", "default")
-  .action((opts: { profile: string }) => runInit(opts));
+  .option("--url <url>",     "Gateway URL (e.g. http://api.clinic.local)")
+  .option("--key <key>",     "API key (nbl_...)")
+  .option("--slug <slug>",   "App slug")
+  .option("--profile <name>","Config profile name", "default")
+  .action((opts: { url?: string; key?: string; slug?: string; profile: string }) => runInit(opts));
 
 program
   .command("deploy")
