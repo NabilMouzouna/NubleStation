@@ -293,8 +293,13 @@ main() {
 
   # ── 5. Generate .env ─────────────────────────────────────────────────────────
   mkdir -p "$INSTALL_DIR"
-  HMAC_SECRET="$(openssl rand -hex 32)"
-  POSTGRES_PASSWORD="$(openssl rand -hex 16)"
+  # Reuse existing secrets so re-runs don't break an already-initialized Postgres volume.
+  if [ -f "$INSTALL_DIR/.env" ]; then
+    _old_pg=$(grep '^POSTGRES_PASSWORD=' "$INSTALL_DIR/.env" | cut -d= -f2-)
+    _old_hmac=$(grep '^INTERNAL_HMAC_SECRET=' "$INSTALL_DIR/.env" | cut -d= -f2-)
+  fi
+  POSTGRES_PASSWORD="${_old_pg:-$(openssl rand -hex 16)}"
+  HMAC_SECRET="${_old_hmac:-$(openssl rand -hex 32)}"
 
   step "Hashing admin password"
   ADMIN_PASSWORD_HASH="$(hash_password "$ADMIN_PASSWORD")"
