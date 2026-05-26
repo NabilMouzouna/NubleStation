@@ -311,7 +311,7 @@ POSTGRES_DB=nuble
 DATABASE_URL=postgres://nuble:${POSTGRES_PASSWORD}@postgres:5432/nuble
 ADMIN_EMAIL=${ADMIN_EMAIL}
 ADMIN_PASSWORD_HASH='${ADMIN_PASSWORD_HASH}'
-IMAGE_TAG=${IMAGE_TAG:-latest}
+IMAGE_TAG=${IMAGE_TAG:-staging}
 EOF
   info ".env written"
   checkpoint "env-generated"
