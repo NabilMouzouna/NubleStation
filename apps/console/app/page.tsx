@@ -6,13 +6,8 @@ export default function LandingPage() {
   return (
     <main className="flex min-h-screen flex-col items-center justify-center bg-background px-4">
       <div className="flex flex-col items-center gap-10 text-center">
-        <Image
-          src="/logo-light.png"
-          alt="NubleStation"
-          width={320}
-          height={64}
-          priority
-        />
+        <Image src="/logo-light.png" alt="NubleStation" width={320} height={64} priority className="dark:hidden" />
+        <Image src="/logo.png"       alt="NubleStation" width={320} height={64} priority className="hidden dark:block" />
 
         <p className="max-w-xs text-sm text-muted-foreground">
           Private cloud infrastructure for your organization.
