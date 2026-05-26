@@ -1,4 +1,4 @@
-import { getPool } from "./index.js";
+import { getPool } from "./index";
 
 export async function ensureSuperAdmin(): Promise<void> {
   const email = process.env.ADMIN_EMAIL;
