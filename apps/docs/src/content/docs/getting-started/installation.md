@@ -23,19 +23,21 @@ import { Aside, Steps, Tabs, TabItem } from '@astrojs/starlight/components';
 ## One-command install
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/nabilmouzouna/nublestation/main/scripts/install.sh | bash
+curl -sSL https://github.com/NabilMouzouna/NubleStation/releases/latest/download/install.sh | bash
 ```
 
-The installer will ask you two questions:
+The installer will ask you for:
 
 1. **Organization name** — becomes the subdomain root (e.g., `clinic` → `*.clinic.local`)
-2. **Admin password** — used to log into `console.clinic.local`
+2. **Organization description** — optional, stored in the platform config
+3. **Admin email** — used to log into `console.clinic.local`
+4. **Admin password** — minimum 8 characters
 
 It then:
 
 <Steps>
 1. Detects your host's LAN IP
-2. Writes `infra/.env` with all generated secrets
+2. Writes `/var/nuble/.env` with all generated secrets
 3. Renders `Corefile` and `Caddyfile` from templates
 4. Starts the full Docker Compose stack
 5. Prints the console URL
@@ -93,7 +95,7 @@ dig @127.0.0.1 console.clinic.local +short
 # → 192.168.1.100
 
 # All containers are healthy
-docker compose -f infra/docker-compose.yml ps
+cd /var/nuble && docker compose ps
 ```
 
 All services should show `healthy` or `running`. Open `http://console.clinic.local` in a browser — you should see the NubleStation console login.
@@ -101,15 +103,13 @@ All services should show `healthy` or `running`. Open `http://console.clinic.loc
 ## Re-running the installer
 
 <Aside type="caution">
-  The installer generates a new `POSTGRES_PASSWORD` each run. If PostgreSQL data already exists (the `postgres-data` volume), the new password won't match the one baked into the data directory, causing connection failures.
+  The installer detects existing secrets in `/var/nuble/.env` and reuses them — your data is safe if you re-run on an existing installation.
 
-  To reinstall cleanly:
+  To reinstall cleanly and wipe all data:
   ```bash
-  docker compose -f infra/docker-compose.yml down -v   # removes volumes!
-  curl -sSL .../install.sh | bash
+  cd /var/nuble && docker compose down -v   # removes volumes!
+  curl -sSL https://github.com/NabilMouzouna/NubleStation/releases/latest/download/install.sh | bash
   ```
-
-  To preserve data, keep `infra/.env` intact and run `docker compose up -d` instead of re-running the installer.
 </Aside>
 
 ## Manual setup (development)
@@ -117,20 +117,20 @@ All services should show `healthy` or `running`. Open `http://console.clinic.loc
 If you're contributing to NubleStation or running services locally without Docker:
 
 ```bash
-git clone https://github.com/nabilmouzouna/nublestation
-cd nublestation
+git clone https://github.com/NabilMouzouna/NubleStation
+cd NubleStation
 pnpm install
 
 # Copy and fill in environment variables
-cp apps/db/.env.example apps/db/.env
 cp apps/gateway/.env.example apps/gateway/.env
+cp apps/blaze/.env.example apps/blaze/.env
 
 # Start a local Postgres (must be running)
 pnpm db:migrate
 
 # Start services
-pnpm db:dev        # database service on :3001
+pnpm blaze:dev     # database service on :3001
 pnpm gateway:dev   # API gateway on :3000
 ```
 
-See the [Troubleshooting](/reference/troubleshooting/) page for common installation issues.
+See the [Troubleshooting](/NubleStation/reference/troubleshooting/) page for common installation issues.

@@ -1,124 +1,134 @@
 ---
 title: Quick Start
-description: From a fresh install to your first app running on the LAN in five minutes.
+description: Deploy your first frontend to NubleStation in under five minutes.
 ---
 
-import { Aside, Steps } from '@astrojs/starlight/components';
+import { Aside, Steps, Tabs, TabItem } from '@astrojs/starlight/components';
 
-This guide assumes NubleStation is already [installed and running](/getting-started/installation/). You'll create an app, issue an API key, and query the database from a minimal TypeScript project.
+This guide assumes NubleStation is already [installed and running](/NubleStation/getting-started/installation/). You'll create an app in the Console, configure the CLI, and deploy a frontend that is live on your LAN immediately.
 
-## 1. Create an app in the Console
+## Step 1 — Create an app in the Console
 
 <Steps>
-1. Open `http://console.{org}.local` and sign in as admin.
+1. Open `http://console.{org}.local` in a browser and sign in with your admin email and password.
 2. Go to **Apps → New App**.
-3. Enter a name, e.g. `tasks`. NubleStation reserves `tasks.{org}.local` and generates an API key.
-4. Copy the API key — it looks like `nbl_abc123.supersecret`. You won't see the secret again.
+3. Enter an app name, e.g. `tasks`. NubleStation reserves `tasks.{org}.local` and generates an API key.
+4. Copy the API key — it looks like `nbl_<keyId>.<secret>`. You will not see the secret again after closing the dialog.
 </Steps>
 
-## 2. Initialize a local project
+## Step 2 — Install and configure the CLI
+
+Install the NubleStation CLI globally:
 
 ```bash
-mkdir my-clinic-app && cd my-clinic-app
-npm init -y
-npm install @nublestation/sdk typescript tsx
+npm install -g @nublestation/cli
 ```
 
-Create `schema.ts`:
-
-```typescript
-import { defineSchema, t } from '@nublestation/sdk/schema';
-
-export default defineSchema({
-  tasks: {
-    title: t.string().required(),
-    status: t.enum(['pending', 'in_progress', 'done']).default('pending'),
-    priority: t.enum(['low', 'medium', 'high']).default('medium'),
-    assignee: t.ref('users'),
-    createdAt: t.timestamp().default('now'),
-  },
-});
-```
-
-## 3. Push the schema
+Then initialize it for your app. The `nuble init` command writes your connection config to `~/.config/nuble/config.toml`:
 
 ```bash
-npx nuble db push --app tasks
+nuble init \
+  --url http://api.{org}.local \
+  --slug tasks \
+  --key nbl_<keyId>.<secret>
 ```
 
-NubleStation generates the migration SQL, injects `app_id` and the RLS policy automatically, and runs it against Postgres. You'll see:
+Replace `{org}` with your actual org name (e.g., `clinic`). After this, `nuble` commands will automatically use these settings.
+
+<Aside type="tip">
+  Run `nuble status` to verify the CLI can reach the API Gateway and that your key is valid.
+</Aside>
+
+## Step 3 — Deploy a frontend
+
+<Tabs>
+  <TabItem label="Existing project">
+    If you already have a Vite, React, or any SPA project, build it and deploy:
+
+    ```bash
+    npm run build       # produces dist/ (or build/, configure with --dist)
+    nuble deploy        # zips dist/, uploads to Gateway, Orbit extracts it
+    ```
+
+    If your build output is in a different directory:
+
+    ```bash
+    nuble deploy --dist ./build
+    ```
+  </TabItem>
+  <TabItem label="From scratch (plain HTML)">
+    No existing project? Create a minimal test page and deploy it:
+
+    ```bash
+    mkdir my-app && cd my-app
+    mkdir dist
+
+    # Create a simple index.html
+    cat > dist/index.html << 'EOF'
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="UTF-8" />
+      <title>Tasks — NubleStation</title>
+    </head>
+    <body>
+      <h1>Hello from NubleStation</h1>
+      <p>App: tasks · Deployed via Orbit</p>
+    </body>
+    </html>
+    EOF
+
+    nuble deploy --dist dist
+    ```
+  </TabItem>
+</Tabs>
+
+You will see output like:
 
 ```
-✔ Migration 001_create_tasks.sql applied
-✔ Types written to .nuble/types.ts
+✔ Zipping dist/ ...
+✔ Uploading to http://api.clinic.local ...
+✔ Deployed to tasks.clinic.local
 ```
 
-## 4. Query the database
-
-Create `index.ts`:
-
-```typescript
-import { createClient } from '@nublestation/sdk';
-
-const nuble = createClient({
-  url: 'http://api.clinic.local',
-  apiKey: process.env.NUBLE_API_KEY!,
-});
-
-// Create a task
-const task = await nuble.db.tasks.create({
-  title: 'Review patient chart — John Doe',
-  priority: 'high',
-});
-
-console.log('Created:', task.id);
-
-// List pending tasks
-const pending = await nuble.db.tasks.findMany({
-  where: { status: 'pending' },
-  orderBy: { createdAt: 'desc' },
-  limit: 10,
-});
-
-console.log('Pending tasks:', pending.length);
-```
-
-Run it:
-
-```bash
-NUBLE_API_KEY=nbl_abc123.supersecret npx tsx index.ts
-```
-
-## 5. Deploy a frontend
-
-Build your SPA (any framework — Vite, Next.js static export, etc.):
-
-```bash
-npm run build        # produces dist/
-npx nuble deploy --app tasks
-```
-
-The CLI uploads the `dist/` folder. Caddy immediately starts serving it at `http://tasks.{org}.local`. No restart required.
+Open `http://tasks.{org}.local` in a browser — your frontend is live immediately. No restart, no cache clearing needed.
 
 ## What just happened
 
 ```
 Your machine
-  └── nuble db push   → migration SQL → API Gateway → DB Service → Postgres
-  └── nuble deploy    → dist.zip       → API Gateway → Deploy Service → /var/nuble/tasks/
+  └── nuble deploy
+        → zips dist/
+        → POST /v1/orbit/deploy  (multipart, HMAC-signed by CLI)
+        → Gateway verifies API key, forwards to Orbit with HMAC headers
+        → Orbit verifies HMAC, extracts bundle to /var/nuble/tasks/current/
+        → returns 200 OK
 
 Any device on the LAN
-  └── DNS: tasks.clinic.local → 192.168.1.100 (CoreDNS)
-  └── HTTP: 192.168.1.100:80 → Caddy → /var/nuble/tasks/ (static files)
-  └── API: api.clinic.local/db/tasks → Caddy → Gateway → DB Service → Postgres (RLS scoped)
+  └── DNS query: tasks.clinic.local → 192.168.1.100 (CoreDNS)
+  └── HTTP: 192.168.1.100:80 → Caddy → /var/nuble/tasks/current/ (static files)
 ```
 
+## Rollback
+
+Orbit keeps the previous deployment under `previous/` alongside `current/`. If a deployment breaks something:
+
+```bash
+# Coming soon to CLI — rollback via Gateway endpoint
+# nuble rollback
+
+# Today, you can redeploy the previous build manually:
+nuble deploy --dist ./path/to/previous-dist
+```
+
+Full rollback CLI support (`nuble rollback`) is on the roadmap. Orbit's rollback endpoint (`POST /v1/orbit/rollback`) is already implemented — the CLI wrapper is coming.
+
 <Aside type="tip">
-  **Offline demo:** unplug the internet cable. Everything still works. CoreDNS, Caddy, and Postgres are all running locally. NubleStation has zero internet dependencies at runtime.
+  **Works offline.** Unplug the internet cable after installation. CoreDNS, Caddy, and Orbit all run locally — your deployed app keeps serving.
 </Aside>
 
 ## Next steps
 
-- [Understand the Architecture](/concepts/architecture/) — how the containers relate
-- [Database Service docs](/services/database/) — filters, relations, escape hatches
-- [SDK reference](/sdk/overview/) — full builder API
+- [Orbit service reference](/NubleStation/services/deploy/) — endpoints, storage layout, versioning
+- [CLI commands](/NubleStation/cli/commands/) — full reference for `nuble deploy`, `nuble status`, and more
+- [Architecture overview](/NubleStation/concepts/architecture/) — how the containers relate to each other

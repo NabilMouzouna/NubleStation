@@ -51,7 +51,7 @@ export default defineConfig({
             { label: 'Blaze — Database', slug: 'services/database' },
             { label: 'Identity — Auth', slug: 'services/auth', badge: { text: 'Soon', variant: 'caution' } },
             { label: 'Vault — Storage', slug: 'services/storage', badge: { text: 'Soon', variant: 'caution' } },
-            { label: 'Orbit — Deploy', slug: 'services/deploy', badge: { text: 'Soon', variant: 'caution' } },
+            { label: 'Orbit — Deploy', slug: 'services/deploy', badge: { text: 'Live', variant: 'success' } },
           ],
         },
         {
