@@ -1,6 +1,5 @@
-import { Button } from "@nublestation/ui/components/button";
-import { UserPlus } from "lucide-react";
 import { getPool } from "@/lib/db";
+import { InviteAdminDialog } from "./_invite-dialog";
 
 interface AdminRow {
   id: string;
@@ -35,10 +34,7 @@ export default async function AdminsPage() {
           <h1 className="text-2xl font-semibold tracking-tight text-foreground">Admins</h1>
           <p className="mt-1 text-sm text-muted-foreground">Platform administrators for this organization</p>
         </div>
-        <Button size="sm" disabled>
-          <UserPlus size={16} />
-          Invite admin
-        </Button>
+        <InviteAdminDialog />
       </div>
 
       <div className="mt-8 overflow-hidden rounded-3xl border border-border">
