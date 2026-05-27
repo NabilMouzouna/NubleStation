@@ -89,7 +89,7 @@ prompt_input() {
   case "$TUI" in
     whiptail) eval "$2"'=$(whiptail --inputbox "'"$1"'" 8 60 3>&1 1>&2 2>&3)' ;;
     dialog)   eval "$2"'=$(dialog   --inputbox "'"$1"'" 8 60 3>&1 1>&2 2>&3)' ;;
-    plain)    printf '%s: ' "$1"; read -r "$2" ;;
+    plain)    printf '%s: ' "$1"; read -r "$2" </dev/tty ;;
   esac
 }
 
@@ -101,7 +101,7 @@ prompt_password() {
     plain)
       printf '%s: ' "$1"
       stty -echo 2>/dev/null || true
-      read -r "$2"
+      read -r "$2" </dev/tty
       stty echo  2>/dev/null || true
       printf '\n'
       ;;
@@ -145,7 +145,7 @@ handle_existing_install() {
   printf '  [2] Reset super admin password\n'
   printf '  [3] Reinstall\n'
   printf '  [4] Exit\n\n'
-  printf 'Choice: '; read -r _choice
+  printf 'Choice: '; read -r _choice </dev/tty
   case "$_choice" in
     1)
       step "Upgrading to $VERSION"
@@ -171,10 +171,10 @@ handle_existing_install() {
       ;;
     3)
       printf '\nThis will erase all admin accounts and organization settings.\n'
-      printf 'Type RESET to confirm: '; read -r _confirm
+      printf 'Type RESET to confirm: '; read -r _confirm </dev/tty
       [ "$_confirm" = "RESET" ] || error "Reinstall cancelled"
       printf 'Also replace docker-compose.yml, .env, Caddyfile, Corefile? [y/N]: '
-      read -r _replace_infra
+      read -r _replace_infra </dev/tty
       [ "$_replace_infra" = "y" ] && rm -f "$INSTALL_DIR/.env"
       info "Reset — continuing with fresh install"
       ;;
