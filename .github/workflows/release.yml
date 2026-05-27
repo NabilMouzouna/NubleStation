@@ -96,15 +96,20 @@ jobs:
           VERSION: ${{ steps.version.outputs.version }}
         run: |
           sed "s/^VERSION=\"staging\"/VERSION=\"prod\"/" scripts/install.sh > /tmp/install.sh
-          tar -czf /tmp/bundle.tar.gz \
+          gh release create "v${VERSION}" \
+            /tmp/install.sh \
             infra/docker-compose.yml \
             infra/caddy/Caddyfile \
-            infra/coredns/Corefile.template
-          gh release create "v${VERSION}" /tmp/install.sh /tmp/bundle.tar.gz \
+            infra/coredns/Corefile.template \
             --title "v${VERSION}" \
             --latest \
             2>/dev/null || \
-          gh release upload "v${VERSION}" /tmp/install.sh /tmp/bundle.tar.gz --clobber
+          gh release upload "v${VERSION}" \
+            /tmp/install.sh \
+            infra/docker-compose.yml \
+            infra/caddy/Caddyfile \
+            infra/coredns/Corefile.template \
+            --clobber
 
   deploy-docs:
     name: Deploy docs to GitHub Pages
