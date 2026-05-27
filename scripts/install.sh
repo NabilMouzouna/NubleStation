@@ -5,7 +5,8 @@ VERSION="staging"
 INSTALL_DIR="/var/nuble"
 CHECKPOINT_FILE="$INSTALL_DIR/.install-checkpoint"
 VERSION_FILE="$INSTALL_DIR/.nuble-version"
-BASE_URL="https://github.com/NabilMouzouna/NubleStation/releases/download/${VERSION}"
+REPO="https://github.com/NabilMouzouna/NubleStation"
+BASE_URL="${REPO}/releases/latest/download"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
@@ -114,17 +115,11 @@ download_bundle() {
     info "Dev mode — using local repo files"
     return 0
   fi
-  step "Downloading release bundle ($VERSION)"
-  sudo mkdir -p "$INSTALL_DIR/install/scripts" "$INSTALL_DIR/install/infra"
-  for _f in docker-compose.yml infra/Caddyfile infra/coredns/Corefile.template; do
-    _attempts=0
-    while [ "$_attempts" -lt 3 ]; do
-      _attempts=$(( _attempts + 1 ))
-      if curl -sSL "${BASE_URL}/${_f}" | sudo tee "$INSTALL_DIR/install/${_f}" >/dev/null 2>&1; then break; fi
-      [ "$_attempts" -lt 3 ] && sleep $(( _attempts * 2 ))
-    done
-    [ -s "$INSTALL_DIR/install/${_f}" ] || error "Failed to download ${_f} after 3 attempts"
-  done
+  step "Downloading release bundle"
+  sudo mkdir -p "$INSTALL_DIR/install"
+  if ! curl -sSL "${BASE_URL}/bundle.tar.gz" | sudo tar -xz -C "$INSTALL_DIR/install/"; then
+    error "Failed to download release bundle from ${BASE_URL}/bundle.tar.gz"
+  fi
   info "Bundle downloaded"
 }
 
