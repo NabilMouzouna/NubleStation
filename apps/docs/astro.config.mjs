@@ -4,7 +4,7 @@ import tailwind from '@astrojs/tailwind';
 
 export default defineConfig({
   site: 'https://nabilmouzouna.github.io',
-  base: '/NubleStation',
+  base: '/NubleStation/',
   integrations: [
     tailwind({ applyBaseStyles: false }),
     mdx(),

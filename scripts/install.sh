@@ -115,12 +115,12 @@ download_bundle() {
     return 0
   fi
   step "Downloading release bundle ($VERSION)"
-  mkdir -p "$INSTALL_DIR/install/scripts" "$INSTALL_DIR/install/infra"
+  sudo mkdir -p "$INSTALL_DIR/install/scripts" "$INSTALL_DIR/install/infra"
   for _f in docker-compose.yml infra/Caddyfile infra/coredns/Corefile.template; do
     _attempts=0
     while [ "$_attempts" -lt 3 ]; do
       _attempts=$(( _attempts + 1 ))
-      if curl -sSL "${BASE_URL}/${_f}" -o "$INSTALL_DIR/install/${_f}" 2>/dev/null; then break; fi
+      if curl -sSL "${BASE_URL}/${_f}" | sudo tee "$INSTALL_DIR/install/${_f}" >/dev/null 2>&1; then break; fi
       [ "$_attempts" -lt 3 ] && sleep $(( _attempts * 2 ))
     done
     [ -s "$INSTALL_DIR/install/${_f}" ] || error "Failed to download ${_f} after 3 attempts"
@@ -239,14 +239,14 @@ wait_healthy() {
 main() {
   print_logo "$VERSION"
 
-  [ -f "$VERSION_FILE" ] && handle_existing_install
-
   if [ "$(id -u)" -ne 0 ] && ! sudo -n true 2>/dev/null; then
     error "This script requires sudo. Run as root or with a sudo-capable user."
   fi
 
   detect_pkg_manager
   detect_tui
+
+  [ -f "$VERSION_FILE" ] && handle_existing_install
 
   # ── 1. Dependencies ─────────────────────────────────────────────────────────
   checkpoint "checking-deps"

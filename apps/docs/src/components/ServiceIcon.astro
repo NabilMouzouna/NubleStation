@@ -1,0 +1,116 @@
+---
+type Service = 'orbit' | 'blaze' | 'identity' | 'vault';
+interface Props {
+  name: Service;
+  class?: string;
+}
+const { name, class: className = '' } = Astro.props;
+---
+
+{name === 'orbit' && (
+  <svg class={className} viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg" fill="none" aria-hidden="true">
+    <defs>
+      <linearGradient id="orbit-bg" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0%" stop-color="#F0FDF4"/>
+        <stop offset="100%" stop-color="#DCFCE7"/>
+      </linearGradient>
+      <linearGradient id="orbit-deploy" x1="32" y1="24" x2="96" y2="104" gradientUnits="userSpaceOnUse">
+        <stop offset="0%" stop-color="#10B981"/>
+        <stop offset="100%" stop-color="#059669"/>
+      </linearGradient>
+      <linearGradient id="orbit-arrow" x1="64" y1="36" x2="64" y2="96" gradientUnits="userSpaceOnUse">
+        <stop offset="0%" stop-color="#34D399"/>
+        <stop offset="100%" stop-color="#047857"/>
+      </linearGradient>
+      <filter id="orbit-shadow" x="-50%" y="-50%" width="200%" height="200%">
+        <feDropShadow dx="0" dy="6" stdDeviation="8" flood-opacity="0.12"/>
+      </filter>
+    </defs>
+    <rect width="128" height="128" rx="32" fill="url(#orbit-bg)"/>
+    <g filter="url(#orbit-shadow)">
+      <rect x="26" y="72" width="76" height="18" rx="9" fill="url(#orbit-deploy)" opacity="0.92"/>
+      <rect x="34" y="52" width="60" height="16" rx="8" fill="url(#orbit-deploy)" opacity="0.78"/>
+      <rect x="42" y="34" width="44" height="14" rx="7" fill="url(#orbit-deploy)" opacity="0.62"/>
+    </g>
+    <path d="M64 26L86 52H72V86H56V52H42L64 26Z" fill="url(#orbit-arrow)" stroke="#FFFFFF" stroke-width="2" stroke-linejoin="round"/>
+    <g fill="#ECFDF5" opacity="0.9">
+      <circle cx="42" cy="80" r="3"/>
+      <circle cx="64" cy="80" r="3"/>
+      <circle cx="86" cy="80" r="3"/>
+    </g>
+  </svg>
+)}
+
+{name === 'blaze' && (
+  <svg class={className} viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" fill="none" aria-hidden="true">
+    <defs>
+      <linearGradient id="blaze-g" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stop-color="#1F4FE0"/>
+        <stop offset="100%" stop-color="#9B5BFF"/>
+      </linearGradient>
+    </defs>
+    <path d="M32 6 C32 6, 44 16, 44 28 C44 22, 38 20, 38 20 C42 30, 36 38, 32 42 C28 38, 22 30, 26 20 C26 20, 20 22, 20 28 C20 16, 32 6, 32 6 Z" fill="url(#blaze-g)"/>
+    <path d="M32 26 C32 26, 37 32, 36 38 C34 35, 32 34, 32 34 C32 34, 30 35, 28 38 C27 32, 32 26, 32 26 Z" fill="white" opacity="0.35"/>
+    <line x1="16" y1="56" x2="48" y2="56" stroke="url(#blaze-g)" stroke-width="3.5" stroke-linecap="round"/>
+    <line x1="22" y1="42" x2="22" y2="56" stroke="url(#blaze-g)" stroke-width="2.5" stroke-linecap="round"/>
+    <line x1="42" y1="42" x2="42" y2="56" stroke="url(#blaze-g)" stroke-width="2.5" stroke-linecap="round"/>
+  </svg>
+)}
+
+{name === 'identity' && (
+  <svg class={className} viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg" fill="none" aria-hidden="true">
+    <defs>
+      <linearGradient id="identity-bg" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0%" stop-color="#F5F3FF"/>
+        <stop offset="100%" stop-color="#E9E7FF"/>
+      </linearGradient>
+      <linearGradient id="identity-accent" x1="32" y1="20" x2="96" y2="108" gradientUnits="userSpaceOnUse">
+        <stop offset="0%" stop-color="#8B5CF6"/>
+        <stop offset="100%" stop-color="#4F46E5"/>
+      </linearGradient>
+      <filter id="identity-glow" x="-50%" y="-50%" width="200%" height="200%">
+        <feGaussianBlur stdDeviation="4" result="blur"/>
+        <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+      </filter>
+    </defs>
+    <rect width="128" height="128" rx="32" fill="url(#identity-bg)"/>
+    <path d="M64 18L96 30V56C96 80 82 99 64 110C46 99 32 80 32 56V30L64 18Z" fill="#FFFFFF" opacity="0.7"/>
+    <g stroke="url(#identity-accent)" fill="none" stroke-linecap="round" filter="url(#identity-glow)">
+      <path d="M48 82C48 71 55 64 64 64C73 64 80 71 80 82" stroke-width="5"/>
+      <path d="M40 82C40 66 50 54 64 54C78 54 88 66 88 82" stroke-width="4.5" opacity="0.95"/>
+      <path d="M32 82C32 61 46 44 64 44C82 44 96 61 96 82" stroke-width="4" opacity="0.85"/>
+      <path d="M56 84C56 90 59 96 64 100C69 96 72 90 72 84" stroke-width="4.5"/>
+    </g>
+    <circle cx="64" cy="70" r="6" fill="#8B5CF6"/>
+    <g stroke="#8B5CF6" stroke-width="2" opacity="0.45">
+      <path d="M64 28V38"/>
+      <path d="M100 64H90"/>
+      <path d="M38 64H28"/>
+    </g>
+  </svg>
+)}
+
+{name === 'vault' && (
+  <svg class={className} viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg" fill="none" aria-hidden="true">
+    <defs>
+      <linearGradient id="vault-bg" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0%" stop-color="#F4F8FF"/>
+        <stop offset="100%" stop-color="#E6EEFF"/>
+      </linearGradient>
+      <linearGradient id="vault-block" x1="30" y1="24" x2="98" y2="102" gradientUnits="userSpaceOnUse">
+        <stop offset="0%" stop-color="#60A5FA"/>
+        <stop offset="100%" stop-color="#2563EB"/>
+      </linearGradient>
+    </defs>
+    <rect width="128" height="128" rx="32" fill="url(#vault-bg)"/>
+    <path d="M64 24L96 42L64 60L32 42L64 24Z" fill="#93C5FD"/>
+    <path d="M32 42V84L64 104V60L32 42Z" fill="#3B82F6"/>
+    <path d="M96 42V84L64 104V60L96 42Z" fill="url(#vault-block)"/>
+    <g fill="#FFFFFF" opacity="0.92">
+      <rect x="54" y="46" width="8" height="8" rx="2"/>
+      <rect x="66" y="52" width="8" height="8" rx="2"/>
+      <rect x="54" y="64" width="8" height="8" rx="2"/>
+      <rect x="66" y="70" width="8" height="8" rx="2"/>
+    </g>
+  </svg>
+)}
