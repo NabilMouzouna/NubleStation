@@ -191,7 +191,7 @@ export default async function DashboardPage() {
                       alt={svc.brand}
                       width={40}
                       height={40}
-                      className="rounded-xl flex-shrink-0"
+                      className="rounded-xl flex-shrink-0 dark:ring-1 dark:ring-white/10"
                     />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-semibold text-foreground">{svc.brand}</p>
