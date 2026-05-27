@@ -1,0 +1,32 @@
+---
+import Base from '../layouts/Base.astro';
+import NubleIcon from '../components/NubleIcon.astro';
+const base = import.meta.env.BASE_URL;
+---
+<Base title="404 — Page not found">
+  <div class="flex min-h-screen flex-col items-center justify-center gap-6 px-6 text-center" style="background:var(--bg)">
+
+    <NubleIcon class="h-14 w-auto opacity-90" />
+
+    <div class="space-y-2">
+      <p class="text-8xl font-bold tracking-tight" style="background:linear-gradient(135deg,#6d28d9,#a78bfa);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">
+        404
+      </p>
+      <h1 class="text-xl font-semibold tracking-tight" style="color:var(--text)">
+        Page not found
+      </h1>
+      <p class="mx-auto max-w-sm text-sm leading-relaxed" style="color:var(--text-muted)">
+        The page you're looking for doesn't exist or may have been moved.
+      </p>
+    </div>
+
+    <a href={base}
+       class="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg font-semibold text-sm text-white transition-all"
+       style="background:var(--accent)"
+       onmouseover="this.style.background='var(--accent-hover)'"
+       onmouseout="this.style.background='var(--accent)'">
+      Back to home
+    </a>
+
+  </div>
+</Base>
