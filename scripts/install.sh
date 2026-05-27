@@ -116,10 +116,13 @@ download_bundle() {
     return 0
   fi
   step "Downloading release bundle"
-  sudo mkdir -p "$INSTALL_DIR/install"
-  if ! curl -sSL "${BASE_URL}/bundle.tar.gz" | sudo tar -xz -C "$INSTALL_DIR/install/"; then
-    error "Failed to download release bundle from ${BASE_URL}/bundle.tar.gz"
-  fi
+  sudo mkdir -p \
+    "$INSTALL_DIR/install/infra/caddy" \
+    "$INSTALL_DIR/install/infra/coredns"
+  _dl() { curl -sSL "${BASE_URL}/$1" | sudo tee "$2" >/dev/null || error "Failed to download $1"; }
+  _dl "docker-compose.yml"  "$INSTALL_DIR/install/infra/docker-compose.yml"
+  _dl "Caddyfile"           "$INSTALL_DIR/install/infra/caddy/Caddyfile"
+  _dl "Corefile.template"   "$INSTALL_DIR/install/infra/coredns/Corefile.template"
   info "Bundle downloaded"
 }
 
