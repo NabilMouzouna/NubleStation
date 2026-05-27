@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 set -eu
 
-VERSION="dev"
+VERSION="staging"
 INSTALL_DIR="/var/nuble"
 CHECKPOINT_FILE="$INSTALL_DIR/.install-checkpoint"
 VERSION_FILE="$INSTALL_DIR/.nuble-version"
@@ -110,7 +110,7 @@ prompt_password() {
 
 # ── Download bundle ───────────────────────────────────────────────────────────
 download_bundle() {
-  if [ "$VERSION" = "dev" ]; then
+  if [ "$VERSION" = "staging" ]; then
     info "Dev mode — using local repo files"
     return 0
   fi
@@ -129,7 +129,7 @@ download_bundle() {
 }
 
 bundle_file() {
-  if [ "$VERSION" = "dev" ]; then printf '%s/%s' "$REPO_ROOT" "$1"
+  if [ "$VERSION" = "staging" ]; then printf '%s/%s' "$REPO_ROOT" "$1"
   else printf '%s/install/%s' "$INSTALL_DIR" "$1"
   fi
 }

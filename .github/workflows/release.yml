@@ -95,11 +95,12 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VERSION: ${{ steps.version.outputs.version }}
         run: |
-          gh release create "v${VERSION}" scripts/install.sh \
+          sed "s/^VERSION=\"staging\"/VERSION=\"prod\"/" scripts/install.sh > /tmp/install.sh
+          gh release create "v${VERSION}" /tmp/install.sh \
             --title "v${VERSION}" \
             --latest \
             2>/dev/null || \
-          gh release upload "v${VERSION}" scripts/install.sh --clobber
+          gh release upload "v${VERSION}" /tmp/install.sh --clobber
 
   publish-cli:
     name: Publish CLI to npm
