@@ -1,0 +1,49 @@
+---
+title: "Identity — Auth Service"
+description: Sessions, API keys, and single sign-on across all apps. Coming soon.
+---
+
+
+
+<Aside type="caution">
+  The Auth Service is under active development. This page documents the planned design. Current builds use API-key-only authentication via the gateway.
+</Aside>
+
+## Planned capabilities
+
+- **Email/password login** — standard credentials with Argon2id hashing
+- **Session management** — via [Lucia v3](https://lucia-auth.com/), TypeScript-native, no vendor lock-in
+- **Single Sign-On** — one login works across all `*.{org}.local` subdomains (shared `Domain=.{org}.local` cookie)
+- **OIDC provider** — issues OIDC tokens for programmatic / token-based access via [`oidc-provider`](https://github.com/panva/node-oidc-provider)
+- **API key management** — create, list, revoke keys for apps
+- **Role-based access** — roles from `user_app_access` flow into session context
+
+## SSO mechanism
+
+All apps live under `*.{org}.local` — a shared eTLD+1. This allows a single cookie:
+
+1. User logs in at `console.{org}.local`
+2. Auth service sets `Set-Cookie: session=...; Domain=.{org}.local; HttpOnly; Secure; SameSite=Lax`
+3. Browser sends this cookie automatically to `tasks.{org}.local`, `records.{org}.local`, every subdomain
+4. The API Gateway validates the session cookie on every request and resolves it to `user_id`
+
+Revoking the session at the Auth service logs the user out of every app at once.
+
+## Technology choices
+
+| Component | Choice | Rationale |
+|---|---|---|
+| Session library | Lucia v3 | TypeScript-native, lightweight, no vendor lock-in |
+| OIDC server | `oidc-provider` | Battle-tested, ~100 lines of integration |
+| Password hashing | `@node-rs/argon2` | Argon2id — the modern recommendation |
+
+## Planned endpoints
+
+```
+POST /v1/auth/login              → create session, set cookie
+POST /v1/auth/logout             → revoke session
+GET  /v1/auth/me                 → current user info
+POST /v1/auth/register           → create user (admin only in Phase 1)
+POST /v1/auth/keys               → create API key
+DELETE /v1/auth/keys/:id         → revoke API key
+```

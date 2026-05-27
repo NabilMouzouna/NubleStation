@@ -1,0 +1,10 @@
+---
+import Callout from './Callout.astro';
+type Variant = 'note' | 'tip' | 'caution' | 'danger';
+interface Props {
+  type?: Variant;
+  title?: string;
+}
+const { type = 'note', title } = Astro.props;
+---
+<Callout type={type} title={title}><slot /></Callout>

@@ -1,0 +1,100 @@
+---
+title: "Orbit — Deploy Service"
+description: Upload and serve static frontend bundles on your LAN.
+---
+
+
+
+Orbit is the NubleStation deployment service. It receives zipped frontend bundles from `nuble deploy`, extracts them to a well-known directory on disk, and Caddy serves them instantly at `{app}.{org}.local`. No restart, no pipeline — a deploy completes in seconds.
+
+## What it does
+
+The CLI zips your `dist/` folder and uploads it to the Gateway as a multipart request. The Gateway authenticates the API key and forwards the request to Orbit with an HMAC-signed header. Orbit verifies the signature, checks that the caller has permission to deploy to the requested app, extracts the bundle atomically, and returns `200 OK`. Caddy's wildcard rule is already watching the directory — the new files are served immediately.
+
+## Deploy flow
+
+<Steps>
+1. **CLI zips** the local `dist/` folder (or the path given via `--dist`) into a temporary archive.
+2. **CLI uploads** `POST /v1/orbit/deploy` to the Gateway as `multipart/form-data`. The request is signed with the app's API key.
+3. **Gateway** validates the API key, resolves the `app_id`, and forwards the request to Orbit over the internal Docker network with an HMAC `X-Internal-Signature` header.
+4. **Orbit** verifies the HMAC signature and checks the caller has deploy permission for the app.
+5. **Orbit extracts** the bundle to a temporary path, then atomically moves it into place:
+   - `previous/` ← old `current/`
+   - `current/`  ← new bundle
+6. **Orbit responds** `200 OK` with the deployment timestamp.
+7. **Caddy serves** `{app}.{org}.local` from `current/` — no reload required.
+</Steps>
+
+## Endpoints
+
+All endpoints are reached through the Gateway at `api.{org}.local`. Direct calls to Orbit skip authentication.
+
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/v1/orbit/deploy` | Upload a zipped frontend bundle. Requires a valid API key with deploy permission. |
+| `POST` | `/v1/orbit/rollback` | Swap `current/` and `previous/`, reverting to the prior deployment. |
+| `GET` | `/healthz` | Liveness probe — returns `200 OK` if the service is up. |
+| `GET` | `/readyz` | Readiness probe — returns `200 OK` when Orbit is ready to accept deploys. |
+
+<Aside type="note">
+  All `/v1/orbit/*` endpoints require Gateway HMAC signing on the internal network. The CLI handles signing automatically — you never need to construct these requests by hand.
+</Aside>
+
+## Storage layout
+
+Orbit stores each app's files under `/var/nuble/` on the host:
+
+```
+/var/nuble/
+└── {appname}/
+    ├── current/        ← active deployment, served by Caddy
+    │   ├── index.html
+    │   ├── assets/
+    │   └── ...
+    └── previous/       ← previous deployment, used for rollback
+        ├── index.html
+        └── ...
+```
+
+The directory is mounted as a Docker volume shared between the Orbit container and the Caddy container. Caddy reads from `current/` via a wildcard virtual host rule — it requires no reload when files change.
+
+## CLI commands
+
+```bash
+# Deploy the default output directory (dist/)
+nuble deploy
+
+# Deploy a custom build output directory
+nuble deploy --dist ./build
+
+# Check that the Gateway and your API key are reachable
+nuble status
+```
+
+## Versioning and rollback
+
+Orbit keeps exactly **two versions** on disk at any time: `current/` and `previous/`. When a new deploy arrives:
+
+1. `current/` is moved to `previous/` (overwriting the old previous)
+2. The new bundle is extracted into `current/`
+
+To roll back, Orbit swaps the two directories. This is a filesystem rename — it completes in milliseconds.
+
+```bash
+# Roll back via the Gateway endpoint (CLI wrapper coming soon)
+# nuble rollback
+
+# Current workaround: redeploy the previous build artifact
+nuble deploy --dist ./path/to/previous-dist
+```
+
+## Limitations
+
+- **Single previous version only.** Orbit does not keep a full deployment history. Only one prior version is retained for rollback.
+- **No streaming deploys.** The entire bundle must be uploaded before extraction begins.
+- **Static files only.** Orbit serves pre-built SPAs. Server-side rendering is not supported.
+- **No deploy hooks.** Post-deploy webhooks or notifications are not yet implemented.
+
+<Aside type="tip">
+  For large bundles, ensure your build process strips source maps (`--no-sourcemap` in Vite) before deploying. Smaller zips upload faster, especially on slow LAN links.
+</Aside>

@@ -1,0 +1,21 @@
+---
+type Variant = 'note' | 'tip' | 'caution' | 'danger';
+interface Props {
+  type?: Variant;
+  title?: string;
+}
+const { type = 'note', title } = Astro.props;
+const config = {
+  note:    { color: '#6d28d9', bg: 'rgba(109,40,217,0.06)', icon: 'ℹ', label: 'Note' },
+  tip:     { color: '#059669', bg: 'rgba(5,150,105,0.06)',  icon: '✦', label: 'Tip' },
+  caution: { color: '#d97706', bg: 'rgba(217,119,6,0.06)',  icon: '⚠', label: 'Caution' },
+  danger:  { color: '#dc2626', bg: 'rgba(220,38,38,0.06)',  icon: '✕', label: 'Danger' },
+}[type];
+---
+<div class="callout my-5 rounded-lg px-4 py-3.5 text-sm" style={`background:${config.bg};border-left:3px solid ${config.color};`}>
+  <p class="font-semibold mb-1 flex items-center gap-1.5" style={`color:${config.color}`}>
+    <span>{config.icon}</span>
+    <span>{title ?? config.label}</span>
+  </p>
+  <div class="prose-callout" style="color:var(--text)"><slot /></div>
+</div>

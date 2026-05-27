@@ -1,0 +1,104 @@
+---
+title: Apps & API Keys
+description: How apps are created, how API keys work, and how access is controlled.
+---
+
+
+
+## What an "app" is
+
+An app in NubleStation is a **row in `platform.apps`**, not a running container. Creating an app:
+
+1. Inserts a row with a UUID, a name (`tasks`), and a slug used as the subdomain
+2. Reserves `tasks.{org}.local` for static file serving (Caddy picks it up)
+3. Issues an API key so developers can authenticate SDK calls
+
+No process is spawned. No container is started. The subdomain becomes active immediately on DNS and Caddy — uploading the frontend bundle makes it live.
+
+## API key format
+
+Every app gets credentials in this format:
+
+```
+nbl_<key_id>.<secret>
+```
+
+- `nbl_` — fixed prefix for easy identification in logs and code review
+- `key_id` — short alphanumeric identifier, stored **as plaintext** in `platform.api_keys.key_id` with a `UNIQUE INDEX`
+- `secret` — a long random string, **never stored** — only the Argon2id hash (`secret_hash`) lives in the database
+
+### Why split into two parts?
+
+Argon2 hashes have per-record salts, which means they cannot be looked up by value — you can't `SELECT * FROM api_keys WHERE secret_hash = $1`. To resolve a key efficiently the gateway needs a lookupable identifier (`key_id`), then verifies the `secret` against the stored hash.
+
+```
+Resolution flow:
+  nbl_abc123.supersecret
+        │          │
+        │          └── presented to argon2.verify(row.secret_hash, 'supersecret')
+        └── SELECT * FROM platform.api_keys WHERE key_id = 'abc123'   ← O(1) indexed
+```
+
+This gives O(1) database lookup plus constant-time secret verification — no timing side-channels.
+
+### What to do with an API key
+
+```typescript
+import { createClient } from '@nublestation/sdk';
+
+const nuble = createClient({
+  url: 'http://api.clinic.local',
+  apiKey: process.env.NUBLE_API_KEY,   // nbl_abc123.supersecret
+});
+```
+
+Store it in an environment variable. Never commit it to source control.
+
+<Aside type="caution">
+  The secret is shown **once** when the key is created. If you lose it, revoke the key in the Console and generate a new one. The platform cannot recover the plaintext.
+</Aside>
+
+## Key lifecycle
+
+| State | Meaning |
+|---|---|
+| Active | Valid, can authenticate requests |
+| Expired | `expires_at` is in the past — rejected with `401` |
+| Revoked | `revoked_at` is set — rejected with `401` |
+
+The gateway returns a **generic `401`** for all three failure states — whether the `key_id` doesn't exist, is revoked, is expired, or the secret is wrong. This prevents enumeration attacks.
+
+## User access control (`user_app_access`)
+
+Having an API key gives a developer programmatic access to an app's data. But end-user access is controlled separately via the `user_app_access` table:
+
+```
+platform.user_app_access
+├── user_id   → which human
+├── app_id    → which app
+└── role      → their role within this app (e.g., 'doctor', 'admin', 'viewer')
+```
+
+A user who is not in `user_app_access` for an app cannot see that app's data through the SDK — the `tenant_data.users` view filters by this table.
+
+### Creating a user and granting access
+
+When the SDK's `nuble.users.create()` is called from an app, NubleStation atomically:
+
+1. Inserts the row into `platform.users`
+2. Inserts a row into `platform.user_app_access(user_id, app_id = calling_app, role = default)`
+
+Without step 2, the calling app couldn't see the user it just created (the view filters by `user_app_access`). Granting the new user access to **other** apps is always an explicit, admin-authorized action — never implicit.
+
+## Multiple apps, one user identity
+
+Users are global — one row in `platform.users`, many rows in `user_app_access`. A doctor can have accounts on both `tasks.clinic.local` and `records.clinic.local` with different roles in each. They log in once (SSO) and both apps recognize them.
+
+## Revoking access
+
+| Action | Effect |
+|---|---|
+| Delete `user_app_access` row | User can no longer access that app's data — takes effect immediately |
+| Set `users.active = false` | User cannot log in at all — blocked at the session layer |
+| Revoke an API key | All SDK calls using that key fail immediately |
+| Delete an app | All associated API keys, `user_app_access` rows, `app_tables` entries, and deployments are cascade-deleted |

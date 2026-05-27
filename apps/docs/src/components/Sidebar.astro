@@ -1,0 +1,46 @@
+---
+import { sidebar } from '../data/sidebar';
+const base = import.meta.env.BASE_URL;
+const currentPath = Astro.url.pathname;
+---
+
+<nav class="sidebar py-6 px-3" aria-label="Docs navigation">
+  {sidebar.map((group) => (
+    <div class="mb-6">
+      <p class="px-3 mb-2 text-xs font-semibold uppercase tracking-widest" style="color:var(--text-muted)">
+        {group.title}
+      </p>
+      <ul>
+        {group.items.map((item) => {
+          const href = `${base}docs/${item.slug}`;
+          const isActive = currentPath === href || currentPath === `${href}/`;
+          return (
+            <li>
+              <a
+                href={href}
+                class={`flex items-center justify-between px-3 py-1.5 rounded-md text-sm transition-all ${
+                  isActive ? 'font-medium' : ''
+                }`}
+                style={isActive
+                  ? 'background:var(--surface-raised);color:var(--accent);border-left:2px solid var(--accent);padding-left:10px;'
+                  : 'color:var(--text-muted)'}
+                onmouseover={!isActive ? "this.style.background='var(--surface-raised)';this.style.color='var(--text)';" : ''}
+                onmouseout={!isActive ? "this.style.background='';this.style.color='var(--text-muted)';" : ''}
+              >
+                <span>{item.title}</span>
+                {item.badge && (
+                  <span
+                    class="text-xs px-1.5 py-0.5 rounded font-medium"
+                    style={`background:${item.badge.color}18;color:${item.badge.color};`}
+                  >
+                    {item.badge.text}
+                  </span>
+                )}
+              </a>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  ))}
+</nav>

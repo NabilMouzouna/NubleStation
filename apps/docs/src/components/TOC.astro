@@ -1,0 +1,34 @@
+---
+interface Heading {
+  depth: number;
+  slug: string;
+  text: string;
+}
+interface Props {
+  headings: Heading[];
+}
+const { headings } = Astro.props;
+const filtered = headings.filter(h => h.depth === 2 || h.depth === 3);
+---
+
+{filtered.length > 1 && (
+  <aside class="toc hidden xl:block" aria-label="Table of contents">
+    <div class="sticky top-20 py-4">
+      <p class="text-xs font-semibold uppercase tracking-widest mb-3 px-1" style="color:var(--text-muted)">On this page</p>
+      <ul class="space-y-0.5">
+        {filtered.map((h) => (
+          <li>
+            <a
+              href={`#${h.slug}`}
+              class="block text-sm py-1 px-1 rounded transition-colors truncate"
+              style={`color:var(--text-muted);padding-left:${h.depth === 3 ? '1rem' : '0.25rem'}`}
+              onmouseover="this.style.color='var(--text)'"
+              onmouseout="this.style.color='var(--text-muted)'">
+              {h.text}
+            </a>
+          </li>
+        ))}
+      </ul>
+    </div>
+  </aside>
+)}
