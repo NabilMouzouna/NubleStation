@@ -1,5 +1,7 @@
 ---
 import Base from '../layouts/Base.astro';
+import NubleIcon from '../components/NubleIcon.astro';
+import ServiceIcon from '../components/ServiceIcon.astro';
 const base = import.meta.env.BASE_URL;
 ---
 <Base title="NubleStation" description="Self-hosted backend infrastructure for small organizations. One command turns any Linux machine into a private cloud.">
@@ -8,7 +10,7 @@ const base = import.meta.env.BASE_URL;
   <header class="fixed top-0 left-0 right-0 z-50 h-14 border-b" style="background:var(--bg);border-color:var(--border);backdrop-filter:blur(12px);">
     <div class="flex items-center justify-between h-full px-5 max-w-6xl mx-auto">
       <a href={base} class="flex items-center gap-2.5">
-        <img src={`${base}icon.svg`} alt="NubleStation" class="h-7 w-auto" />
+        <NubleIcon class="h-7 w-auto" />
         <span class="font-semibold text-sm tracking-tight" style="color:var(--text)">NubleStation</span>
       </a>
       <div class="flex items-center gap-1">
@@ -144,7 +146,7 @@ const base = import.meta.env.BASE_URL;
           <a href={`${base}docs/services/gateway`} class="service-card group p-5 rounded-xl border transition-all duration-200"
              style="border-color:var(--border);background:var(--surface)">
             <div class="w-10 h-10 rounded-lg mb-4 flex items-center justify-center" style="background:var(--surface-raised)">
-              <img src={`${base}icon.svg`} class="w-6 h-auto" alt="Gateway" />
+              <NubleIcon class="w-6 h-auto" />
             </div>
             <h3 class="font-semibold text-sm mb-1.5 flex items-center gap-2" style="color:var(--text)">
               Gateway
@@ -158,7 +160,7 @@ const base = import.meta.env.BASE_URL;
           <a href={`${base}docs/services/deploy`} class="service-card group p-5 rounded-xl border transition-all duration-200"
              style="border-color:var(--border);background:var(--surface)">
             <div class="w-10 h-10 rounded-lg mb-4 flex items-center justify-center" style="background:var(--surface-raised)">
-              <img src={`${base}services/orbit.svg`} class="w-6 h-auto" alt="Orbit" />
+              <ServiceIcon name="orbit" class="w-6 h-auto" />
             </div>
             <h3 class="font-semibold text-sm mb-1.5 flex items-center gap-2" style="color:var(--text)">
               Orbit
@@ -173,7 +175,7 @@ const base = import.meta.env.BASE_URL;
           <a href={`${base}docs/services/database`} class="service-card group p-5 rounded-xl border transition-all duration-200"
              style="border-color:var(--border);background:var(--surface)">
             <div class="w-10 h-10 rounded-lg mb-4 flex items-center justify-center" style="background:var(--surface-raised)">
-              <img src={`${base}services/blaze.svg`} class="w-6 h-auto" alt="Blaze" />
+              <ServiceIcon name="blaze" class="w-6 h-auto" />
             </div>
             <h3 class="font-semibold text-sm mb-1.5 flex items-center gap-2" style="color:var(--text)">
               Blaze
@@ -187,7 +189,7 @@ const base = import.meta.env.BASE_URL;
           <a href={`${base}docs/services/auth`} class="service-card group p-5 rounded-xl border transition-all duration-200"
              style="border-color:var(--border);background:var(--surface)">
             <div class="w-10 h-10 rounded-lg mb-4 flex items-center justify-center" style="background:var(--surface-raised)">
-              <img src={`${base}services/identity.svg`} class="w-6 h-auto" alt="Identity" />
+              <ServiceIcon name="identity" class="w-6 h-auto" />
             </div>
             <h3 class="font-semibold text-sm mb-1.5 flex items-center gap-2" style="color:var(--text)">
               Identity
@@ -202,7 +204,7 @@ const base = import.meta.env.BASE_URL;
           <a href={`${base}docs/services/storage`} class="service-card group p-5 rounded-xl border transition-all duration-200"
              style="border-color:var(--border);background:var(--surface)">
             <div class="w-10 h-10 rounded-lg mb-4 flex items-center justify-center" style="background:var(--surface-raised)">
-              <img src={`${base}services/vault.svg`} class="w-6 h-auto" alt="Vault" />
+              <ServiceIcon name="vault" class="w-6 h-auto" />
             </div>
             <h3 class="font-semibold text-sm mb-1.5 flex items-center gap-2" style="color:var(--text)">
               Vault
@@ -406,7 +408,7 @@ const base = import.meta.env.BASE_URL;
     <footer class="border-t py-8 px-5" style="border-color:var(--border)">
       <div class="max-w-5xl mx-auto flex flex-wrap items-center justify-between gap-4">
         <div class="flex items-center gap-2">
-          <img src={`${base}icon.svg`} alt="NubleStation" class="h-5 w-auto" />
+          <NubleIcon class="h-5 w-auto" />
           <span class="text-sm font-semibold" style="color:var(--text)">NubleStation</span>
           <span class="text-sm" style="color:var(--text-muted)">— Self-hosted backend for small organizations</span>
         </div>

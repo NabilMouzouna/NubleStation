@@ -1,11 +1,12 @@
 ---
+import NubleIcon from './NubleIcon.astro';
 const base = import.meta.env.BASE_URL;
 ---
 <header class="fixed top-0 left-0 right-0 z-50 h-14 border-b" style="background:var(--bg);border-color:var(--border);">
   <div class="flex items-center justify-between h-full px-4 max-w-screen-2xl mx-auto">
     <!-- Logo -->
     <a href={base} class="flex items-center gap-2.5 group">
-      <img src={`${base}icon.svg`} alt="NubleStation" class="h-7 w-auto" />
+      <NubleIcon class="h-7 w-auto" />
       <span class="font-semibold text-sm tracking-tight" style="color:var(--text)">NubleStation</span>
     </a>
 
