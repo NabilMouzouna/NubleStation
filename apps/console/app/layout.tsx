@@ -19,7 +19,7 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <head>
         {/* Inline script runs before paint to apply saved theme and avoid FOUC */}
-        <script dangerouslySetInnerHTML={{ __html: `(function(){try{var t=localStorage.getItem('nuble-theme');if(t==='dark'||(!t&&matchMedia('(prefers-color-scheme: dark)').matches))document.documentElement.classList.add('dark');}catch(e){}})();` }} />
+        <script dangerouslySetInnerHTML={{ __html: `(function(){try{if(localStorage.getItem('nuble-theme')!=='light')document.documentElement.classList.add('dark');}catch(e){}})();` }} />
       </head>
       <body className={`${inter.className} antialiased`}>{children}</body>
     </html>
