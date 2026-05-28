@@ -151,6 +151,7 @@ jobs:
   publish-cli:
     name: Publish CLI to npm
     runs-on: ubuntu-latest
+    if: github.ref_name == 'main'
     steps:
       - uses: actions/checkout@v4
 
