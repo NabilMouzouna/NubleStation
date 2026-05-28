@@ -23,7 +23,7 @@ description: How to install NubleStation on a Linux machine in under ten minutes
 ## One-command install
 
 ```bash
-sudo curl -sSL https://github.com/NabilMouzouna/NubleStation/releases/latest/download/install.sh | sudo bash
+curl -sSL https://github.com/NabilMouzouna/NubleStation/releases/latest/download/install.sh | sudo bash
 ```
 
 The installer will ask you for:
@@ -108,7 +108,7 @@ All services should show `healthy` or `running`. Open `http://console.clinic.loc
   To reinstall cleanly and wipe all data:
   ```bash
   cd /var/nuble && docker compose down -v   # removes volumes!
-  sudo curl -sSL https://github.com/NabilMouzouna/NubleStation/releases/latest/download/install.sh | sudo bash
+  curl -sSL https://github.com/NabilMouzouna/NubleStation/releases/latest/download/install.sh | sudo bash
   ```
 </Aside>
 
