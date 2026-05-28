@@ -11,13 +11,11 @@ export function validateSlug(slug: string): void {
   }
 }
 
-export function resolveAppDir(storageRoot: string, orgDomain: string, slug: string): string {
-  validateSlug(orgDomain);
+export function resolveAppDir(storageRoot: string, slug: string): string {
   validateSlug(slug);
-  const orgDir  = resolve(storageRoot, orgDomain);
-  const safe    = resolve(orgDir, slug);
+  const safe = resolve(storageRoot, slug);
   // Guard against path traversal even after slug validation.
-  if (!safe.startsWith(orgDir + "/") && safe !== orgDir) {
+  if (!safe.startsWith(resolve(storageRoot) + "/") && safe !== resolve(storageRoot)) {
     throw Object.assign(new Error("invalid_slug"), { code: "invalid_slug" });
   }
   return safe;
@@ -54,11 +52,10 @@ async function extractZip(zipPath: string, destDir: string): Promise<void> {
  */
 export async function atomicDeploy(
   storageRoot: string,
-  orgDomain: string,
   slug: string,
   zipBuffer: Uint8Array,
 ): Promise<string> {
-  const appDir = resolveAppDir(storageRoot, orgDomain, slug);
+  const appDir = resolveAppDir(storageRoot, slug);
   await mkdir(appDir, { recursive: true });
 
   const ts = Date.now().toString();
@@ -104,8 +101,8 @@ export async function atomicDeploy(
  * Swaps current ↔ .previous for `slug`.
  * Throws with code "no_previous_version" if .previous does not exist.
  */
-export async function rollback(storageRoot: string, orgDomain: string, slug: string): Promise<void> {
-  const appDir = resolveAppDir(storageRoot, orgDomain, slug);
+export async function rollback(storageRoot: string, slug: string): Promise<void> {
+  const appDir = resolveAppDir(storageRoot, slug);
   const currentDir = join(appDir, "current");
   const previousDir = join(appDir, ".previous");
 

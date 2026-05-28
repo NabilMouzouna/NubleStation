@@ -55,7 +55,6 @@ proxy.all("/v1/*", async (c) => {
       hmacSecret: cfg.INTERNAL_HMAC_SECRET,
       contentType,
       appSlug: upstream.needsSlug ? resolved.appSlug : undefined,
-      orgDomain: upstream.needsSlug ? cfg.ORG_DOMAIN : undefined,
     });
 
     const respBody = result.body.buffer.slice(

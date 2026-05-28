@@ -111,7 +111,6 @@ services:
       INTERNAL_HMAC_SECRET: ${INTERNAL_HMAC_SECRET}
       DB_INTERNAL_URL: http://blaze:3001
       ORBIT_INTERNAL_URL: http://orbit:3002
-      ORG_DOMAIN: ${ORG_DOMAIN}
       PORT: 3000
     expose:
       - "3000"
@@ -157,7 +156,6 @@ services:
       DATABASE_URL: ${DATABASE_URL}
       INTERNAL_HMAC_SECRET: ${INTERNAL_HMAC_SECRET}
       STORAGE_ROOT: /var/nuble/apps
-      ORG_DOMAIN: ${ORG_DOMAIN}
       PORT: 3002
     volumes:
       - nuble-apps:/var/nuble/apps

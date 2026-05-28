@@ -111,3 +111,7 @@ Tables in the `platform` schema (organizations, users, apps, api_keys, etc.) hav
 - App developers never get a connection string to Postgres directly — they talk HTTP to the gateway
 
 See [HMAC Request Signing](/security/hmac-signing/) for how the internal trust boundary works.
+
+## Org domain
+
+`ORG_DOMAIN` is set once at install time and is shared by all services. Changing it after install (e.g. renaming the organisation) is a planned CLI and console feature — it is not available in the current version.

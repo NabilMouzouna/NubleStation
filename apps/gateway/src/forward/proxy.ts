@@ -2,7 +2,6 @@ import { request, type Dispatcher } from "undici";
 import {
   X_NUBLE_APP_ID,
   X_NUBLE_APP_SLUG,
-  X_NUBLE_ORG_DOMAIN,
   X_NUBLE_SIG,
   X_NUBLE_TIMESTAMP,
   X_NUBLE_USER_ID,
@@ -30,7 +29,6 @@ export interface ForwardArgs {
   hmacSecret: string;
   contentType?: string | null;
   appSlug?: string;
-  orgDomain?: string;
 }
 
 export interface ForwardResult {
@@ -51,8 +49,7 @@ export async function forwardSigned(args: ForwardArgs): Promise<ForwardResult> {
     [X_NUBLE_APP_ID]:  args.appId,
     [X_NUBLE_USER_ID]: args.userId,
   };
-  if (args.appSlug)   context[X_NUBLE_APP_SLUG]   = args.appSlug;
-  if (args.orgDomain) context[X_NUBLE_ORG_DOMAIN] = args.orgDomain;
+  if (args.appSlug) context[X_NUBLE_APP_SLUG] = args.appSlug;
 
   const signed = signRequest(args.method, args.path, args.body, args.hmacSecret, context);
 
@@ -63,8 +60,7 @@ export async function forwardSigned(args: ForwardArgs): Promise<ForwardResult> {
     [X_NUBLE_TIMESTAMP]: signed.timestamp,
     [X_NUBLE_SIG]: signed.signature,
   };
-  if (args.appSlug)   headers[X_NUBLE_APP_SLUG]   = args.appSlug;
-  if (args.orgDomain) headers[X_NUBLE_ORG_DOMAIN] = args.orgDomain;
+  if (args.appSlug) headers[X_NUBLE_APP_SLUG] = args.appSlug;
   if (args.contentType) headers["content-type"] = args.contentType;
 
   const upstream = await request(targetUrl, {

@@ -84,12 +84,11 @@ async function extractBundleFromMultipart(req: Request): Promise<Uint8Array> {
 }
 
 deploy.post("/v1/orbit/deploy", async (c) => {
-  const cfg       = loadConfig();
-  const log       = c.var.log;
-  const appId     = c.var.appId;
-  const userId    = c.var.userId;
-  const slug      = c.var.appSlug;
-  const orgDomain = c.var.orgDomain;
+  const cfg  = loadConfig();
+  const log  = c.var.log;
+  const appId  = c.var.appId;
+  const userId = c.var.userId;
+  const slug   = c.var.appSlug;
 
   let zipBytes: Uint8Array;
   try {
@@ -102,7 +101,7 @@ deploy.post("/v1/orbit/deploy", async (c) => {
 
   let version: string;
   try {
-    version = await atomicDeploy(cfg.STORAGE_ROOT, orgDomain, slug, zipBytes);
+    version = await atomicDeploy(cfg.STORAGE_ROOT, slug, zipBytes);
   } catch (err) {
     const e = err as { code?: string };
     if (e.code === "missing_index_html") {
@@ -116,26 +115,25 @@ deploy.post("/v1/orbit/deploy", async (c) => {
   try {
     await getPool().query(
       `INSERT INTO platform.deployments (app_id, version, file_path) VALUES ($1, $2, $3)`,
-      [appId, version, `${cfg.STORAGE_ROOT}/${orgDomain}/${slug}/current`],
+      [appId, version, `${cfg.STORAGE_ROOT}/${slug}/current`],
     );
   } catch (err) {
     log.warn({ err, appId, slug, version }, "failed to record deployment in db");
   }
 
-  log.info({ appId, userId, slug, orgDomain, version }, "deploy complete");
+  log.info({ appId, userId, slug, version }, "deploy complete");
   return c.json({ ok: true, version, appSlug: slug });
 });
 
 deploy.post("/v1/orbit/rollback", async (c) => {
-  const cfg       = loadConfig();
-  const log       = c.var.log;
-  const appId     = c.var.appId;
-  const userId    = c.var.userId;
-  const slug      = c.var.appSlug;
-  const orgDomain = c.var.orgDomain;
+  const cfg  = loadConfig();
+  const log  = c.var.log;
+  const appId  = c.var.appId;
+  const userId = c.var.userId;
+  const slug   = c.var.appSlug;
 
   try {
-    await rollback(cfg.STORAGE_ROOT, orgDomain, slug);
+    await rollback(cfg.STORAGE_ROOT, slug);
   } catch (err) {
     const e = err as { code?: string };
     if (e.code === "no_previous_version") {
