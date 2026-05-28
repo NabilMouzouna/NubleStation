@@ -55,9 +55,8 @@ warn()    { printf '  %s⚠%s  %s\n'   "$Y"   "$NC" "$1"; }
 error()   { printf '  %s✗%s  %s\n'   "$R"   "$NC" "$1" >&2; exit 1; }
 step()    { printf '  %s→%s  %s\n'   "$P"   "$NC" "$1"; }
 section() {
-  printf '\n%s  ┌──────────────────────────────────────────────────┐%s\n' "$P" "$NC"
-  printf '%s  │  %s%-48s%s│%s\n' "$P" "$B" "$1" "$P" "$NC"
-  printf '%s  └──────────────────────────────────────────────────┘%s\n\n' "$P" "$NC"
+  printf '\n%s%s  %s%s\n' "$P" "$B" "$1" "$NC"
+  printf '%s  ──────────────────────────────────────────────────%s\n\n' "$DIM" "$NC"
 }
 
 checkpoint()      { sudo mkdir -p "$INSTALL_DIR"; printf '%s' "$1" | sudo tee "$CHECKPOINT_FILE" >/dev/null; }
@@ -81,6 +80,56 @@ install_dep() {
     pacman) sudo pacman -S --noconfirm "$1" >/dev/null ;;
     brew)   brew install "$1" >/dev/null ;;
   esac
+}
+
+# ── Node.js ───────────────────────────────────────────────────────────────────
+install_nodejs() {
+  if command -v node >/dev/null 2>&1; then
+    _node_major=$(node --version 2>/dev/null | cut -d'.' -f1 | tr -d 'v')
+    if [ "${_node_major:-0}" -ge 22 ] 2>/dev/null; then
+      info "Node.js $(node --version) ready"
+      return 0
+    fi
+    warn "Node.js $(node --version) is below v22 — upgrading"
+  else
+    step "Installing Node.js 22"
+  fi
+  case "$PKG" in
+    apt)
+      curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash - >/dev/null 2>&1
+      sudo apt-get install -y nodejs >/dev/null
+      ;;
+    dnf)
+      curl -fsSL https://rpm.nodesource.com/setup_22.x | sudo -E bash - >/dev/null 2>&1
+      install_dep nodejs
+      ;;
+    pacman) install_dep nodejs ;;
+    brew)   brew install node@22 >/dev/null 2>&1 ;;
+  esac
+  info "Node.js $(node --version) ready"
+}
+
+# ── Port conflict detection ────────────────────────────────────────────────────
+check_port_conflicts() {
+  _had_conflict=0
+  for _port in 53 80 443; do
+    if ss -tlnpu 2>/dev/null | grep -q ":${_port}[[:space:]]" || \
+       ss -ulnpu 2>/dev/null | grep -q ":${_port}[[:space:]]"; then
+      _proc=$(ss -tlnpu 2>/dev/null | awk -v p=":${_port} " '$0~p {match($NF,/pid=([0-9]+)/,a); if(a[1]) {f=a[1]; exit}} END {print f}')
+      _name=$(cat "/proc/${_proc}/comm" 2>/dev/null || printf 'unknown')
+      warn "Port ${_port} already in use by ${_name} (PID ${_proc})"
+      _had_conflict=1
+    fi
+  done
+  if [ "$_had_conflict" = "1" ]; then
+    warn "Port conflicts will prevent some services from starting."
+    printf '%s  On Ubuntu, port 53 is typically systemd-resolved:%s\n' "$DIM" "$NC"
+    printf '    sudo systemctl disable --now systemd-resolved\n'
+    printf '    sudo rm -f /etc/resolv.conf\n'
+    printf '    echo "nameserver 1.1.1.1" | sudo tee /etc/resolv.conf\n\n'
+    printf '%s  Continue anyway? [y/N]: %s' "$DIM" "$NC"; read -r _cont </dev/tty
+    [ "$_cont" = "y" ] || error "Aborted — resolve port conflicts then re-run"
+  fi
 }
 
 # ── TUI ───────────────────────────────────────────────────────────────────────
@@ -256,6 +305,7 @@ main() {
 
   # ── 1. Dependencies ─────────────────────────────────────────────────────────
   section "1 · Setup"
+  check_port_conflicts
   checkpoint "checking-deps"
 
   command -v docker >/dev/null 2>&1 || {
@@ -264,6 +314,8 @@ main() {
   }
   docker compose version >/dev/null 2>&1 || error "Docker Compose v2 is required"
   info "Docker ready"
+
+  install_nodejs
 
   command -v argon2 >/dev/null 2>&1 || { step "Installing argon2"; install_dep argon2; }
   info "argon2 ready"
@@ -391,7 +443,18 @@ EOF
   wait_healthy "api"
   checkpoint "health-verified"
 
-  # ── 10. Finish ───────────────────────────────────────────────────────────────
+  # ── 10. Install CLI ──────────────────────────────────────────────────────────
+  section "6 · Installing CLI"
+  _npm_tag="latest"
+  [ "$VERSION" = "staging" ] && _npm_tag="staging"
+  step "Installing @nublestation/cli@${_npm_tag}"
+  if npm install -g "@nublestation/cli@${_npm_tag}" >/dev/null 2>&1; then
+    info "nuble CLI installed  →  $(nuble --version 2>/dev/null || printf 'ok')"
+  else
+    warn "CLI install failed — run manually: npm i -g @nublestation/cli"
+  fi
+
+  # ── 11. Finish ───────────────────────────────────────────────────────────────
   printf '%s' "$VERSION" | sudo tee "$VERSION_FILE" >/dev/null
   sudo rm -f "$CHECKPOINT_FILE"
 
@@ -409,8 +472,13 @@ EOF
   printf '  Or add to each device hosts file:\n'
   printf '    %s%s%s\n' "$DIM" "$HOSTS_LINE" "$NC"
   printf '\n'
+  printf '%s  ── CLI ─────────────────────────────────────────────%s\n\n' "$DIM" "$NC"
+  printf '  %snuble --help%s               show all commands\n' "$B" "$NC"
+  printf '  %snuble server stop%s          stop the stack\n' "$B" "$NC"
+  printf '  %snuble server start%s         start the stack\n' "$B" "$NC"
+  printf '  %snuble server logs <svc>%s    tail service logs\n\n' "$B" "$NC"
   printf '%s  ── Developer quick-start ───────────────────────────%s\n\n' "$DIM" "$NC"
-  printf '  Run on any LAN machine:\n'
+  printf '  On any developer machine: npm i -g @nublestation/cli\n\n'
   printf '    %snuble init --url http://api.%s.local --slug <app> --key <key>%s\n' "$DIM" "$ORG_DOMAIN" "$NC"
   printf '    %snuble deploy%s\n\n' "$DIM" "$NC"
 }
