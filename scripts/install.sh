@@ -53,7 +53,7 @@ warn()  { printf '%s[⚠]%s %s\n' "$Y" "$NC" "$1"; }
 error() { printf '%s[✗]%s %s\n' "$R" "$NC" "$1" >&2; exit 1; }
 step()  { printf '%s[→]%s %s\n' "$Y" "$NC" "$1"; }
 
-checkpoint()      { mkdir -p "$INSTALL_DIR"; printf '%s' "$1" > "$CHECKPOINT_FILE"; }
+checkpoint()      { sudo mkdir -p "$INSTALL_DIR"; printf '%s' "$1" | sudo tee "$CHECKPOINT_FILE" >/dev/null; }
 last_checkpoint() { if [ -f "$CHECKPOINT_FILE" ]; then cat "$CHECKPOINT_FILE"; else printf 'none'; fi; }
 
 # ── Package manager ───────────────────────────────────────────────────────────
@@ -152,7 +152,7 @@ handle_existing_install() {
         -f "$(bundle_file infra/docker-compose.yml)" pull
       docker compose --env-file "$INSTALL_DIR/.env" \
         -f "$(bundle_file infra/docker-compose.yml)" up -d
-      printf '%s' "$VERSION" > "$VERSION_FILE"
+      printf '%s' "$VERSION" | sudo tee "$VERSION_FILE" >/dev/null
       info "Upgraded to $VERSION"
       exit 0
       ;;
@@ -313,7 +313,7 @@ main() {
   ADMIN_PASSWORD_HASH="$(hash_password "$ADMIN_PASSWORD")"
   [ -z "$ADMIN_PASSWORD_HASH" ] && error "Password hashing failed"
 
-  cat > "$INSTALL_DIR/.env" <<EOF
+  sudo tee "$INSTALL_DIR/.env" >/dev/null <<EOF
 ORG_NAME=${ORG_NAME}
 ORG_DOMAIN=${ORG_DOMAIN}
 HOST_IP=${HOST_IP}
@@ -330,9 +330,9 @@ EOF
   checkpoint "env-generated"
 
   # ── 6. Generate CoreDNS Corefile ─────────────────────────────────────────────
-  mkdir -p "$INSTALL_DIR/coredns"
+  sudo mkdir -p "$INSTALL_DIR/coredns"
   sed "s/\${ORG_DOMAIN}/${ORG_DOMAIN}/g; s/\${HOST_IP}/${HOST_IP}/g" \
-    "$(bundle_file infra/coredns/Corefile.template)" > "$INSTALL_DIR/coredns/Corefile"
+    "$(bundle_file infra/coredns/Corefile.template)" | sudo tee "$INSTALL_DIR/coredns/Corefile" >/dev/null
   info "CoreDNS Corefile generated"
 
   # ── 7. /etc/hosts entries ─────────────────────────────────────────────────────
@@ -361,7 +361,7 @@ EOF
   checkpoint "health-verified"
 
   # ── 10. Finish ───────────────────────────────────────────────────────────────
-  printf '%s' "$VERSION" > "$VERSION_FILE"
+  printf '%s' "$VERSION" | sudo tee "$VERSION_FILE" >/dev/null
   sudo rm -f "$CHECKPOINT_FILE"
 
   printf '\n%s╔══════════════════════════════════════════╗%s\n' "$G" "$NC"
