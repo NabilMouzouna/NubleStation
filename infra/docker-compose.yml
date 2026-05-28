@@ -84,7 +84,7 @@ services:
       SECURE_COOKIES: "false"
     volumes:
       - nuble-apps:/var/nuble/apps:rw
-      - ./.env:/app/.env.platform:rw
+      - /var/nuble/.env:/app/.env.platform:rw
     expose:
       - "3000"
     networks:

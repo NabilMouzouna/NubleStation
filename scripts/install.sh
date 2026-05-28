@@ -15,6 +15,8 @@ G="$(printf '\033[0;32m')"
 Y="$(printf '\033[1;33m')"
 R="$(printf '\033[0;31m')"
 B="$(printf '\033[1m')"
+P="$(printf '\033[38;5;99m')"
+DIM="$(printf '\033[2m')"
 NC="$(printf '\033[0m')"
 
 # ── Logo ──────────────────────────────────────────────────────────────────────
@@ -48,10 +50,15 @@ print_logo() {
 }
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
-info()  { printf '%s[✓]%s %s\n' "$G" "$NC" "$1"; }
-warn()  { printf '%s[⚠]%s %s\n' "$Y" "$NC" "$1"; }
-error() { printf '%s[✗]%s %s\n' "$R" "$NC" "$1" >&2; exit 1; }
-step()  { printf '%s[→]%s %s\n' "$Y" "$NC" "$1"; }
+info()    { printf '  %s✓%s  %s\n'   "$G"   "$NC" "$1"; }
+warn()    { printf '  %s⚠%s  %s\n'   "$Y"   "$NC" "$1"; }
+error()   { printf '  %s✗%s  %s\n'   "$R"   "$NC" "$1" >&2; exit 1; }
+step()    { printf '  %s→%s  %s\n'   "$P"   "$NC" "$1"; }
+section() {
+  printf '\n%s  ┌──────────────────────────────────────────────────┐%s\n' "$P" "$NC"
+  printf '%s  │  %s%-48s%s│%s\n' "$P" "$B" "$1" "$P" "$NC"
+  printf '%s  └──────────────────────────────────────────────────┘%s\n\n' "$P" "$NC"
+}
 
 checkpoint()      { sudo mkdir -p "$INSTALL_DIR"; printf '%s' "$1" | sudo tee "$CHECKPOINT_FILE" >/dev/null; }
 last_checkpoint() { if [ -f "$CHECKPOINT_FILE" ]; then cat "$CHECKPOINT_FILE"; else printf 'none'; fi; }
@@ -135,18 +142,19 @@ bundle_file() {
 # ── Re-run handling ───────────────────────────────────────────────────────────
 handle_existing_install() {
   _installed_ver="$(cat "$VERSION_FILE")"
-  printf '\n%s╔══════════════════════════════════════╗%s\n' "$B" "$NC"
-  printf '%s║  NubleStation is already installed   ║%s\n' "$B" "$NC"
-  printf '%s║  Installed: %-25s║%s\n' "$B" "$_installed_ver" "$NC"
-  printf '%s╚══════════════════════════════════════╝%s\n\n' "$B" "$NC"
-  printf '  [1] Upgrade to %s\n' "$VERSION"
-  printf '  [2] Reset super admin password\n'
-  printf '  [3] Reinstall\n'
-  printf '  [4] Exit\n\n'
-  printf 'Choice: '; read -r _choice </dev/tty
+  printf '\n%s  ╔══════════════════════════════════════════════╗%s\n' "$P" "$NC"
+  printf '%s  ║%s  NubleStation is already installed          %s║%s\n' "$P" "$B" "$P" "$NC"
+  printf '%s  ║%s  Version: %-36s%s║%s\n' "$P" "$DIM" "$_installed_ver" "$P" "$NC"
+  printf '%s  ╚══════════════════════════════════════════════╝%s\n\n' "$P" "$NC"
+  printf '%s  What would you like to do?%s\n\n' "$B" "$NC"
+  printf '    %s1%s  Upgrade to %s\n' "$P" "$NC" "$VERSION"
+  printf '    %s2%s  Reset super admin password\n' "$P" "$NC"
+  printf '    %s3%s  Reinstall\n' "$P" "$NC"
+  printf '    %s4%s  Exit\n\n' "$P" "$NC"
+  printf '%s  Choice: %s' "$DIM" "$NC"; read -r _choice </dev/tty
   case "$_choice" in
     1)
-      step "Upgrading to $VERSION"
+      section "Upgrading to $VERSION"
       download_bundle
       docker compose --env-file "$INSTALL_DIR/.env" \
         -f "$(bundle_file infra/docker-compose.yml)" pull
@@ -247,6 +255,7 @@ main() {
   [ -f "$VERSION_FILE" ] && handle_existing_install
 
   # ── 1. Dependencies ─────────────────────────────────────────────────────────
+  section "1 · Setup"
   checkpoint "checking-deps"
 
   command -v docker >/dev/null 2>&1 || {
@@ -277,6 +286,7 @@ main() {
   checkpoint "files-downloaded"
 
   # ── 3. Collect inputs ────────────────────────────────────────────────────────
+  section "2 · Configuration"
   collect_inputs
 
   # ── 4. Detect host IP ────────────────────────────────────────────────────────
@@ -300,6 +310,7 @@ main() {
   info "Host IP: $HOST_IP"
 
   # ── 5. Generate .env ─────────────────────────────────────────────────────────
+  section "3 · Generating files"
   mkdir -p "$INSTALL_DIR"
   # Reuse existing secrets so re-runs don't break an already-initialized Postgres volume.
   if [ -f "$INSTALL_DIR/.env" ]; then
@@ -345,9 +356,28 @@ EOF
   fi
 
   # ── 8. Start services ─────────────────────────────────────────────────────────
+  section "4 · Starting services"
   step "Pulling latest images"
   docker compose --env-file "$INSTALL_DIR/.env" \
     -f "$(bundle_file infra/docker-compose.yml)" pull
+
+  step "Starting database"
+  docker compose --env-file "$INSTALL_DIR/.env" \
+    -f "$(bundle_file infra/docker-compose.yml)" up -d postgres
+  _pg_wait=0
+  while [ "$_pg_wait" -lt 60 ]; do
+    _pg_state=$(docker inspect --format='{{.State.Health.Status}}' "nublestation-postgres-1" 2>/dev/null || printf 'unknown')
+    [ "$_pg_state" = "healthy" ] && break
+    _pg_wait=$(( _pg_wait + 2 )); sleep 2
+  done
+
+  # Sync postgres user password in case the volume was initialized with a different one
+  _pg_pass=$(grep '^POSTGRES_PASSWORD=' "$INSTALL_DIR/.env" | cut -d= -f2-)
+  docker compose --env-file "$INSTALL_DIR/.env" \
+    -f "$(bundle_file infra/docker-compose.yml)" \
+    exec -T postgres psql -U nuble -c \
+    "ALTER USER nuble WITH PASSWORD '${_pg_pass}';" >/dev/null 2>&1 || true
+  info "Database ready"
 
   step "Starting NubleStation stack"
   docker compose --env-file "$INSTALL_DIR/.env" \
@@ -355,6 +385,7 @@ EOF
   checkpoint "compose-started"
 
   # ── 9. Health checks ────────────────────────────────────────────────────────
+  section "5 · Health checks"
   sleep 5
   wait_healthy "console"
   wait_healthy "api"
@@ -364,21 +395,24 @@ EOF
   printf '%s' "$VERSION" | sudo tee "$VERSION_FILE" >/dev/null
   sudo rm -f "$CHECKPOINT_FILE"
 
-  printf '\n%s╔══════════════════════════════════════════╗%s\n' "$G" "$NC"
-  printf '%s║       NubleStation is ready!             ║%s\n' "$G" "$NC"
-  printf '%s╚══════════════════════════════════════════╝%s\n' "$G" "$NC"
+  printf '\n%s  ╔══════════════════════════════════════════════════╗%s\n' "$G" "$NC"
+  printf '%s  ║%s          NubleStation is ready!               %s  ║%s\n' "$G" "$B" "$G" "$NC"
+  printf '%s  ╚══════════════════════════════════════════════════╝%s\n' "$G" "$NC"
   printf '\n'
-  printf '  Console  →  http://console.%s.local\n' "$ORG_DOMAIN"
-  printf '  API      →  http://api.%s.local\n' "$ORG_DOMAIN"
-  printf '  Admin    →  %s\n' "$ADMIN_EMAIL"
+  printf '%s  ── Access ──────────────────────────────────────────%s\n\n' "$DIM" "$NC"
+  printf '  %sConsole%s   →  %shttp://console.%s.local%s\n' "$B" "$NC" "$G" "$ORG_DOMAIN" "$NC"
+  printf '  %sAPI%s       →  %shttp://api.%s.local%s\n'     "$B" "$NC" "$G" "$ORG_DOMAIN" "$NC"
+  printf '  %sAdmin%s     →  %s\n'                           "$B" "$NC" "$ADMIN_EMAIL"
   printf '\n'
-  printf '%s  Router DNS → point to %s%s\n' "$Y" "$HOST_IP" "$NC"
+  printf '%s  ── Networking ──────────────────────────────────────%s\n\n' "$DIM" "$NC"
+  printf '  %sRouter DNS%s  →  point to %s%s%s\n' "$B" "$NC" "$Y" "$HOST_IP" "$NC"
   printf '  Or add to each device hosts file:\n'
-  printf '    %s\n' "$HOSTS_LINE"
+  printf '    %s%s%s\n' "$DIM" "$HOSTS_LINE" "$NC"
   printf '\n'
-  printf '%s  Developer quick-start (run on any LAN machine):%s\n' "$B" "$NC"
-  printf '    nuble init --url http://api.%s.local --slug <app-slug> --key <api-key>\n' "$ORG_DOMAIN"
-  printf '    nuble deploy\n\n'
+  printf '%s  ── Developer quick-start ───────────────────────────%s\n\n' "$DIM" "$NC"
+  printf '  Run on any LAN machine:\n'
+  printf '    %snuble init --url http://api.%s.local --slug <app> --key <key>%s\n' "$DIM" "$ORG_DOMAIN" "$NC"
+  printf '    %snuble deploy%s\n\n' "$DIM" "$NC"
 }
 
 main "$@"
