@@ -173,7 +173,7 @@ handle_existing_install() {
       [ "$_confirm" = "RESET" ] || error "Reinstall cancelled"
       printf 'Also replace docker-compose.yml, .env, Caddyfile, Corefile? [y/N]: '
       read -r _replace_infra </dev/tty
-      [ "$_replace_infra" = "y" ] && rm -f "$INSTALL_DIR/.env"
+      [ "$_replace_infra" = "y" ] && sudo rm -f "$INSTALL_DIR/.env"
       info "Reset — continuing with fresh install"
       ;;
     4) exit 0 ;;
@@ -362,7 +362,7 @@ EOF
 
   # ── 10. Finish ───────────────────────────────────────────────────────────────
   printf '%s' "$VERSION" > "$VERSION_FILE"
-  rm -f "$CHECKPOINT_FILE"
+  sudo rm -f "$CHECKPOINT_FILE"
 
   printf '\n%s╔══════════════════════════════════════════╗%s\n' "$G" "$NC"
   printf '%s║       NubleStation is ready!             ║%s\n' "$G" "$NC"
