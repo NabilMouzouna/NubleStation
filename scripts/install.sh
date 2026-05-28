@@ -115,7 +115,7 @@ check_port_conflicts() {
   for _port in 53 80 443; do
     if ss -tlnpu 2>/dev/null | grep -q ":${_port}[[:space:]]" || \
        ss -ulnpu 2>/dev/null | grep -q ":${_port}[[:space:]]"; then
-      _proc=$(ss -tlnpu 2>/dev/null | awk -v p=":${_port} " '$0~p {match($NF,/pid=([0-9]+)/,a); if(a[1]) {f=a[1]; exit}} END {print f}')
+      _proc=$(ss -tlnpu 2>/dev/null | grep ":${_port} " | grep -o 'pid=[0-9]*' | head -1 | cut -d= -f2)
       _name=$(cat "/proc/${_proc}/comm" 2>/dev/null || printf 'unknown')
       warn "Port ${_port} already in use by ${_name} (PID ${_proc})"
       _had_conflict=1
@@ -192,8 +192,8 @@ bundle_file() {
 handle_existing_install() {
   _installed_ver="$(cat "$VERSION_FILE")"
   printf '\n%s  ╔══════════════════════════════════════════════╗%s\n' "$P" "$NC"
-  printf '%s  ║%s  NubleStation is already installed          %s║%s\n' "$P" "$B" "$P" "$NC"
-  printf '%s  ║%s  Version: %-36s%s║%s\n' "$P" "$DIM" "$_installed_ver" "$P" "$NC"
+  printf '%s  ║  %-44s║%s\n' "$P" "NubleStation is already installed" "$NC"
+  printf '%s  ║  %-44s║%s\n' "$P" "Version: $_installed_ver" "$NC"
   printf '%s  ╚══════════════════════════════════════════════╝%s\n\n' "$P" "$NC"
   printf '%s  What would you like to do?%s\n\n' "$B" "$NC"
   printf '    %s1%s  Upgrade to %s\n' "$P" "$NC" "$VERSION"

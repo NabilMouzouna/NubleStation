@@ -115,7 +115,7 @@ const base = import.meta.env.BASE_URL;
             <div class="px-5 py-4 font-mono text-sm leading-relaxed">
               <div class="flex items-start gap-2 mb-3">
                 <span style="color:#a78bfa">$</span>
-                <span style="color:var(--text)">curl -sSL https://github.com/NabilMouzouna/NubleStation/releases/latest/download/install.sh | bash</span>
+                <span style="color:var(--text)">sudo curl -sSL https://github.com/NabilMouzouna/NubleStation/releases/latest/download/install.sh | sudo bash</span>
               </div>
               <div class="mt-1 space-y-1 text-xs" style="color:var(--text-muted)">
                 <div><span style="color:#4ade80">✓</span> Docker detected</div>
@@ -250,7 +250,7 @@ const base = import.meta.env.BASE_URL;
               <h3 class="font-semibold text-sm" style="color:var(--text)">Install on any Linux machine</h3>
             </div>
             <div class="font-mono text-xs p-3.5 rounded-lg" style="background:var(--code-bg);color:var(--text-muted)">
-              <span style="color:#a78bfa">$</span> curl -sSL .../install.sh | bash<br/>
+              <span style="color:#a78bfa">$</span> sudo curl -sSL .../install.sh | sudo bash<br/>
               <br/>
               <span style="color:#6b7280"># Prompts you for:</span><br/>
               <span style="color:#4ade80">?</span> Org name: <span style="color:var(--text)">clinic</span><br/>
