@@ -22,6 +22,14 @@ export async function ensureSuperAdmin(): Promise<void> {
       [orgDomain, orgDomain, email],
     );
     console.log("[seed] organization seeded:", orgDomain);
+  } else if (orgs[0]) {
+    await pool.query(
+      `UPDATE platform.organizations
+       SET name=$1, subdomain_root=$2, admin_email=$3
+       WHERE id=$4`,
+      [orgDomain, orgDomain, email, orgs[0].id],
+    );
+    console.log("[seed] organization updated:", orgDomain);
   }
 
   await pool.query(

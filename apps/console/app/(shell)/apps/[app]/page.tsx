@@ -14,12 +14,15 @@ export default async function AppDetailPage({ params }: { params: Promise<{ app:
     getAppTables(app.id),
   ]);
 
+  const orgDomain = process.env.ORG_DOMAIN ?? "nuble";
+
   return (
     <AppDetailClient
       app={app}
       deployments={deployments}
       apiKeys={apiKeys}
       tables={tables}
+      orgDomain={orgDomain}
     />
   );
 }
