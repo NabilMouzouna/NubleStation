@@ -75,12 +75,14 @@ export default async function DashboardPage() {
   const statusOf = (key: string): Status =>
     (services.find((s) => s.name === key)?.status ?? "running") as Status;
 
+  const DOCS = "https://nabilmouzouna.github.io/NubleStation/docs/services";
+
   // blaze and orbit are real services; vault/identity are future placeholders shown as static
   const nubleServices = [
-    { brand: "BlazingDB", slug: "blazingdb", role: "Database",  container: "blaze",    status: statusOf("blaze")  },
-    { brand: "Orbit",     slug: "orbit",     role: "Deploy",    container: "orbit",    status: statusOf("orbit")  },
-    { brand: "Vault",     slug: "vault",     role: "Storage",   container: "vault",    status: "running" as Status },
-    { brand: "Identity",  slug: "identity",  role: "Auth",      container: "identity", status: "running" as Status },
+    { brand: "BlazingDB", slug: "blazingdb", role: "Database",  container: "blaze",    status: statusOf("blaze"),  docsSlug: "database" },
+    { brand: "Orbit",     slug: "orbit",     role: "Deploy",    container: "orbit",    status: statusOf("orbit"),  docsSlug: "deploy"   },
+    { brand: "Vault",     slug: "vault",     role: "Storage",   container: "vault",    status: "running" as Status, docsSlug: "storage"  },
+    { brand: "Identity",  slug: "identity",  role: "Auth",      container: "identity", status: "running" as Status, docsSlug: "auth"     },
   ];
 
   const infraServices: { name: string; icon: React.ElementType; container: string; status: Status }[] = [
@@ -205,7 +207,15 @@ export default async function DashboardPage() {
                         {statusLabel[svc.status]}
                       </span>
                     </div>
-                    <span className="text-xs text-muted-foreground hidden md:block w-12 text-right">—</span>
+                    <Link
+                      href={`${DOCS}/${svc.docsSlug}/`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="hidden md:flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-primary"
+                    >
+                      Docs
+                      <ArrowUpRight className="size-3" />
+                    </Link>
                   </div>
                 ))}
               </div>
