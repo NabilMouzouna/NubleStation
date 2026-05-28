@@ -1,5 +1,8 @@
 import { Card, CardContent } from "@nublestation/ui/components/card";
 import Link from "next/link";
+import { ArrowUpRight } from "lucide-react";
+
+const DOCS = "https://nabilmouzouna.github.io/NubleStation/docs";
 
 const mockApps = [
   { slug: "tasks",      usedMb: 12,  files: 8  },
@@ -14,8 +17,16 @@ const usedPct = Math.round((totalMb / diskMb) * 100);
 export default function StoragePage() {
   return (
     <div className="p-8">
-      <h1 className="text-2xl font-semibold tracking-tight text-foreground">Storage</h1>
-      <p className="mt-1 text-sm text-muted-foreground">Organization-wide disk usage across all apps</p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground">Storage</h1>
+          <p className="mt-1 text-sm text-muted-foreground">Organization-wide disk usage across all apps</p>
+        </div>
+        <Link href={`${DOCS}/services/storage/`} target="_blank" rel="noopener noreferrer"
+          className="flex items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-primary shrink-0 mt-1">
+          Vault docs <ArrowUpRight className="size-3" />
+        </Link>
+      </div>
 
       <Card className="mt-8">
         <CardContent className="p-6">

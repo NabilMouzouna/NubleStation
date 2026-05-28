@@ -1,0 +1,233 @@
+---
+title: "Blaze — Database Service"
+description: Multi-tenant REST database with auto-generated CRUD, schema-as-code, and RLS-enforced isolation.
+---
+
+
+
+## What it does
+
+The DB Service exposes a **REST API** over a multi-tenant PostgreSQL database. It handles:
+
+- Auto-generated CRUD endpoints for every table you define in `schema.ts`
+- Schema migrations — receiving `schema.ts` output and running SQL against Postgres
+- Row-Level Security enforcement — every query runs inside a tenant-scoped transaction
+- Built-in resources (`users`, `files`, `notifications`) exposed through views
+- Real-time subscriptions via Server-Sent Events (coming in Phase 5)
+
+App developers never write SQL, never get a database connection string, and never touch Postgres directly. They define a schema, push it, and query via the SDK.
+
+## Auto-generated REST endpoints
+
+For every table in `tenant_data`, the DB service exposes:
+
+| Method | Path | Action |
+|---|---|---|
+| `GET` | `/v1/db/{table}` | List rows (with filter, sort, paginate) |
+| `GET` | `/v1/db/{table}/:id` | Read one row |
+| `POST` | `/v1/db/{table}` | Insert a row |
+| `PATCH` | `/v1/db/{table}/:id` | Update a row |
+| `DELETE` | `/v1/db/{table}/:id` | Delete a row |
+
+The router reads `platform.app_tables` (scoped to the caller's `app_id`) to know which tables to expose — never `information_schema`. One app can never discover or route to another app's table names.
+
+## Filter syntax
+
+Inspired by PostgREST:
+
+```
+?status=eq.pending             status equals 'pending'
+?priority=in.high,medium       priority is high or medium
+?title=ilike.*urgent*          title contains 'urgent' (case-insensitive)
+?created_at=gt.2026-01-01      created after Jan 1
+?order=created_at.desc         sort descending
+?limit=20&offset=40            pagination
+?select=id,title,status        partial response (projection)
+```
+
+### JSONB filters
+
+For `t.json()` columns:
+
+```
+?metadata->>status=eq.urgent       text at key 'status' equals 'urgent'
+?metadata->priority=eq.1           numeric at key 'priority'
+?metadata=cs.{"tag":"vip"}         metadata contains this JSON object
+?metadata?key=has.assignee         key 'assignee' exists
+```
+
+All filters compile to parameterized Postgres operators — never string-built SQL.
+
+## Request processing layers
+
+Every request flows through four layers inside the DB service:
+
+### Layer 1 — REST Router
+
+Parses the URL, extracts table name and operation. Rejects unknown tables (not in `app_tables` for this `app_id`).
+
+### Layer 2 — Query Validator
+
+- Whitelists allowed filter operators (`eq`, `in`, `ilike`, `gt`, `lt`, `cs`, `has`)
+- Rejects anything that doesn't match the whitelist
+- Enforces per-request quotas: max 1000 rows, max 100 KB body, max 30 s execution
+
+### Layer 3 — Query Builder
+
+Converts the validated REST query to a parameterized SQL query using Drizzle internally. No string interpolation — every value becomes a `$1`, `$2` parameter.
+
+### Layer 4 — Connection Manager (tenant glue)
+
+```sql
+BEGIN;
+SET LOCAL app.current_tenant = '<app-uuid>';
+-- Validated, parameterized query runs here
+-- Postgres RLS auto-adds: AND app_id = '<app-uuid>'
+COMMIT;
+-- SET LOCAL variable cleared automatically
+```
+
+This is the most safety-critical layer. Tenant context is set and cleared inside every transaction.
+
+## Schema-as-code
+
+App developers define their schema in TypeScript:
+
+```typescript
+// schema.ts
+import { defineSchema, t } from '@nublestation/sdk/schema';
+
+export default defineSchema({
+  tasks: {
+    title: t.string().required(),
+    status: t.enum(['pending', 'in_progress', 'done']).default('pending'),
+    priority: t.enum(['low', 'medium', 'high']).default('medium'),
+    assignee: t.ref('users'),       // FK to built-in users
+    metadata: t.json(),             // JSONB for flexible fields
+    createdAt: t.timestamp().default('now'),
+  },
+  comments: {
+    task: t.ref('tasks', { onDelete: 'cascade' }),
+    author: t.ref('users'),
+    body: t.string().required(),
+  },
+});
+```
+
+Running `nuble db push --app tasks` generates:
+
+1. A SQL migration with `app_id UUID NOT NULL` injected automatically
+2. An index on `app_id`
+3. `ENABLE ROW LEVEL SECURITY` on the table
+4. An RLS policy binding `app_id` to `current_setting('app.current_tenant')`
+5. TypeScript types saved to `.nuble/types.ts` for SDK autocompletion
+
+### How `t.ref('users')` works
+
+`tenant_data.users` is a view — Postgres forbids foreign keys to views. So `t.ref('users')` compiles to:
+
+1. A real FK on the **platform table**: `assignee UUID REFERENCES platform.users(id)`
+2. A trigger that enforces the referenced user actually has `user_app_access` for the current app
+
+The developer writes `t.ref('users')` — the plumbing is invisible.
+
+## Built-in resources
+
+Every app gets these for free via views in `tenant_data`:
+
+| Resource | SDK access | Backed by |
+|---|---|---|
+| `users` | `nuble.users.*` | `platform.users` + `user_app_access` filter |
+| `files` | `nuble.files.*` | `platform.files` (metadata only, not bytes) |
+| `notifications` | `nuble.notifications.*` | `platform.notifications` |
+| `audit_log` | read-only via admin API | `platform.audit_log` |
+
+These names are **reserved** — a `schema.ts` that defines a custom resource named `users` is rejected at push time.
+
+## Escape hatches for complex queries
+
+The auto-generated REST covers most use cases. For the rest, three escape levels exist:
+
+### Level 1 — Computed fields (safe, declarative)
+
+```typescript
+defineSchema({
+  invoices: {
+    amount: t.decimal().required(),
+    taxRate: t.decimal().default(0.2),
+    total: t.computed.decimal({
+      from: ['amount', 'taxRate'],
+      expression: 'amount * (1 + taxRate)',
+    }),
+  },
+});
+```
+
+Compiles to a Postgres `GENERATED COLUMN`. The DSL validates that the expression only references declared columns.
+
+### Level 2 — Named queries (reviewed, logged)
+
+For aggregations, CTEs, window functions:
+
+```typescript
+export const topAssignees = defineQuery({
+  name: 'topAssignees',
+  params: { limit: t.number().default(10) },
+  returns: t.array({ userId: t.string(), taskCount: t.number() }),
+  sql: `
+    SELECT assignee_id AS "userId", COUNT(*) AS "taskCount"
+    FROM tasks
+    WHERE app_id = current_setting('app.current_tenant')::uuid
+    GROUP BY assignee_id
+    ORDER BY "taskCount" DESC
+    LIMIT :limit
+  `,
+});
+```
+
+The platform validates the SQL at push time:
+- Must include the tenant filter
+- No `pg_*` system functions, no DDL, no cross-schema reads
+
+Every execution is logged to `platform.audit_log`.
+
+### Level 3 — Raw SQL (admin-approved, logged)
+
+For exceptional cases. Requires an `unsafe: true` flag and explicit admin approval in the Console before execution is permitted. Every execution is captured in `audit_log` with the full SQL and parameters. (Deferred to v2.)
+
+## Migrations
+
+Schema changes are SQL files tracked in `platform.migrations`:
+
+```
+my-app/
+└── migrations/
+    ├── 001_create_tasks.sql
+    ├── 002_add_priority_column.sql
+    └── 003_create_comments.sql
+```
+
+The migration runner:
+- Validates allowed SQL (`CREATE TABLE`, `ALTER TABLE`, `CREATE INDEX`, `CREATE VIEW` only)
+- Rejects `DROP DATABASE`, `DROP SCHEMA`, `GRANT`, `REVOKE`, raw `CREATE POLICY`
+- Auto-injects `app_id UUID NOT NULL` on every `CREATE TABLE`
+- Auto-generates the RLS policy
+- Stores a SHA-256 checksum — editing an applied migration is refused
+- Uses a Postgres advisory lock per app to serialize concurrent pushes
+
+<Aside type="tip">
+  The migration runner is a callable **library**, not a CLI-only script. The CLI, the Console dashboard, and any future deploy service all call the same function — never reimplemented.
+</Aside>
+
+## Shared table names (org-wide reservation)
+
+A resource name like `tasks` maps to **one physical table** `tenant_data.tasks`. Every app's rows coexist there, separated by `app_id` and RLS. The first app to push a `tasks` schema defines its columns. A second app pushing a compatible `tasks` schema reuses the table. An incompatible definition is rejected at push time.
+
+This is recorded in `platform.app_tables`. It avoids table-count explosion on a clinic mini-PC while preserving isolation through RLS.
+
+## Environment variables
+
+| Variable | Description |
+|---|---|
+| `DATABASE_URL` | Postgres connection string (via PgBouncer) |
+| `INTERNAL_HMAC_SECRET` | Shared HMAC secret — must match the gateway |

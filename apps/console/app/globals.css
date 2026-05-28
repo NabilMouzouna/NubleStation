@@ -2,6 +2,9 @@
 @source "../../../packages";
 @import "@nublestation/ui/styles/tokens.css";
 
+/* Enable class-based dark mode — <html class="dark"> activates dark: utilities */
+@variant dark (&:where(.dark, .dark *));
+
 html,
 body {
   height: 100%;

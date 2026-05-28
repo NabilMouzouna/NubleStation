@@ -1,7 +1,58 @@
-# NubleStation
+<div align="center">
+  <img src="packages/assets/icon.svg" height="72" alt="NubleStation" />
+  <h1>NubleStation</h1>
+  <p><strong>Self-hosted backend infrastructure for small organizations.</strong><br/>
+  One command turns any Linux machine into a private cloud — no internet dependency, no cloud bills.</p>
 
-**Self-hosted backend infrastructure for small organizations.**  
-One command turns any Linux machine into a private cloud — shared database, file storage, frontend hosting, and an admin console, all on your LAN.
+  <p>
+    <a href="https://www.npmjs.com/package/@nublestation/cli">
+      <img src="https://img.shields.io/npm/v/%40nublestation%2Fcli?style=flat-square&label=CLI&color=6d28d9" alt="npm" />
+    </a>
+    <a href="https://github.com/NabilMouzouna/NubleStation/pkgs/container/nublestation-console">
+      <img src="https://img.shields.io/badge/container-ghcr.io-0ea5e9?style=flat-square&logo=docker&logoColor=white" alt="Docker" />
+    </a>
+    <a href="https://github.com/NabilMouzouna/NubleStation/releases/latest">
+      <img src="https://img.shields.io/github/v/release/NabilMouzouna/NubleStation?style=flat-square&color=22c55e&label=release" alt="Release" />
+    </a>
+    <a href="https://nabilmouzouna.github.io/NubleStation">
+      <img src="https://img.shields.io/badge/docs-live-6d28d9?style=flat-square" alt="Docs" />
+    </a>
+  </p>
+</div>
+
+---
+
+## Services
+
+<table>
+  <tr>
+    <td align="center" width="20%">
+      <img src="packages/assets/services/orbit.svg" height="52" alt="Orbit" /><br/>
+      <b>Orbit</b><br/>
+      <sub>Frontend deploy</sub>
+    </td>
+    <td align="center" width="20%">
+      <img src="packages/assets/services/blaze.svg" height="52" alt="Blaze" /><br/>
+      <b>Blaze</b><br/>
+      <sub>Database</sub>
+    </td>
+    <td align="center" width="20%">
+      <img src="packages/assets/services/identity.svg" height="52" alt="Identity" /><br/>
+      <b>Identity</b><br/>
+      <sub>Auth &amp; SSO</sub>
+    </td>
+    <td align="center" width="20%">
+      <img src="packages/assets/services/vault.svg" height="52" alt="Vault" /><br/>
+      <b>Vault</b><br/>
+      <sub>File storage</sub>
+    </td>
+    <td align="center" width="20%">
+      <img src="packages/assets/icon.svg" height="52" alt="Gateway" /><br/>
+      <b>Gateway</b><br/>
+      <sub>API routing</sub>
+    </td>
+  </tr>
+</table>
 
 ---
 
@@ -9,9 +60,11 @@ One command turns any Linux machine into a private cloud — shared database, fi
 
 ### Requirements
 
-- Linux machine on your LAN (Ubuntu 22.04+ recommended)
-- `sudo` access
-- Ports `80`, `443`, and `53` free on the host
+| | |
+|---|---|
+| **OS** | Linux — Ubuntu 22.04+ recommended |
+| **Ports** | `80`, `443`, `53` free on the host |
+| **Access** | `sudo` |
 
 ### Install
 
@@ -19,14 +72,7 @@ One command turns any Linux machine into a private cloud — shared database, fi
 curl -sSL https://github.com/NabilMouzouna/NubleStation/releases/latest/download/install.sh | bash
 ```
 
-The installer will:
-
-1. Install Docker if not already present
-2. Ask for your **organization name** (e.g. `clinic`) — this becomes your domain root (`clinic.local`)
-3. Ask for your **super admin email and password**
-4. Generate secrets, start all services, and wait for them to be healthy
-
-When it finishes:
+The installer asks four questions — org name, description, admin email, admin password — then starts every service and prints your console URL.
 
 ```
 ╔══════════════════════════════════════════╗
@@ -36,35 +82,32 @@ When it finishes:
   Console  →  http://console.clinic.local
   API      →  http://api.clinic.local
   Admin    →  admin@clinic.com
+
+  Router DNS → point to 192.168.1.100
 ```
 
 ### Network setup
 
-Every device on the LAN needs to resolve `*.clinic.local` to the host IP. Point your router's DNS server to the host — the installer prints the IP. For a single machine during testing, `/etc/hosts` is updated automatically.
+Every device on the LAN must use the host as its DNS server. Set the primary DNS in your router to the host IP — all `*.clinic.local` subdomains resolve automatically. For a single machine, `/etc/hosts` is updated by the installer.
 
 ### Deploy your first app
 
-Install the CLI:
-
 ```bash
+# 1. Install the CLI
 npm install -g @nublestation/cli
-```
 
-In the Console, create an app and copy its API key. Then from your project directory:
-
-```bash
+# 2. Create an app in the Console, copy its API key, then:
 nuble init --url http://api.clinic.local --slug my-app --key nbl_<keyId>.<secret>
+
+# 3. Build and deploy
 npm run build
 nuble deploy
+# → live at http://my-app.clinic.local
 ```
-
-Your app is live at `http://my-app.clinic.local`.
 
 ---
 
 ## Re-running the installer
-
-Running the script again on an already-installed machine shows a menu:
 
 ```
 [1] Upgrade to <version>
@@ -73,59 +116,53 @@ Running the script again on an already-installed machine shows a menu:
 [4] Exit
 ```
 
----
-
-## Services
-
-### Orbit — Frontend deployment
-
-Orbit stores and serves static frontend bundles. When you run `nuble deploy`, the CLI zips your `dist/` folder and uploads it to Orbit via the Gateway. Orbit extracts it to `/var/nuble/apps/<slug>/current/` and Caddy serves it immediately — no container restart needed.
-
-**Endpoints (internal, accessed via Gateway):**
-
-| Method | Path | Description |
-|--------|------|-------------|
-| `POST` | `/v1/orbit/deploy` | Upload a zip bundle for an app |
-| `POST` | `/v1/orbit/rollback` | Swap current ↔ previous version |
-| `GET` | `/healthz` | Liveness probe |
-| `GET` | `/readyz` | Readiness probe (checks storage is writable) |
-
-Both deploy and rollback require a Gateway-signed HMAC header — the CLI handles this automatically.
-
-**Storage layout on the host:**
-
-```
-/var/nuble/apps/
-  my-app/
-    current/       ← live version (served by Caddy at my-app.clinic.local)
-    previous/      ← last version (restored on rollback)
-```
+Existing secrets are reused on upgrade — your data is safe.
 
 ---
 
-### Gateway — _coming soon_
+## How it works
 
-### Blaze (Database) — _coming soon_
-
-### Identity (Auth) — _coming soon_
-
-### Vault (Storage) — _coming soon_
+```
+Install                          Deploy
+─────────────────────            ──────────────────────────────────────
+curl install.sh | bash           nuble deploy
+ → Docker + CoreDNS + Caddy       → zips dist/
+ → PostgreSQL (platform schema)   → POST /v1/orbit/deploy (HMAC-signed)
+ → Console seeds org + admin      → Gateway → Orbit extracts bundle
+ → *.clinic.local resolves        → Caddy serves my-app.clinic.local
+```
 
 ---
 
 ## Repository structure
 
 ```
-apps/        services that run as Docker containers
-packages/    npm-publishable libraries (CLI, SDK, shared types)
-infra/       Docker Compose, Caddy, CoreDNS config
-scripts/     install.sh
-docs/        architecture decision records and documentation
+apps/
+  gateway/     API entry point — the only LAN-exposed service
+  console/     Next.js admin dashboard
+  orbit/       Frontend deploy service
+  blaze/       Database service (Postgres + RLS)
+  identity/    Auth service — coming soon
+  vault/       File storage — coming soon
+packages/
+  cli/         @nublestation/cli — nuble init · deploy · status
+  ui/          Shared component library
+infra/
+  docker-compose.yml
+  caddy/Caddyfile
+  coredns/Corefile.template
+scripts/
+  install.sh
+docs/          Architecture decision records + documentation site
 ```
 
 ## Development
 
 ```bash
+git clone https://github.com/NabilMouzouna/NubleStation
+cd NubleStation
 pnpm install
 pnpm dev
 ```
+
+Full documentation → **[nabilmouzouna.github.io/NubleStation](https://nabilmouzouna.github.io/NubleStation)**

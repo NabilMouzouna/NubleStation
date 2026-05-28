@@ -15,6 +15,7 @@ import {
 import { NubleSidebarHeader } from "@/components/brand";
 import { NavItem } from "@/components/nav-item";
 import { BottomNav } from "@/components/bottom-nav";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 const navItems = [
   { label: "Dashboard", href: "/dashboard", icon: <LayoutDashboard size={16} /> },
@@ -55,15 +56,18 @@ export default async function ShellLayout({ children }: { children: ReactNode })
 
         <div className="border-t border-border px-5 py-4">
           <p className="text-xs font-medium text-foreground">{orgLabel}</p>
-          <form action="/auth/logout" method="POST" className="mt-3">
-            <button
-              type="submit"
-              className="flex items-center gap-2 text-xs text-muted-foreground transition-colors hover:text-destructive"
-            >
-              <LogOut size={13} />
-              Sign out
-            </button>
-          </form>
+          <div className="mt-3 flex items-center justify-between">
+            <form action="/auth/logout" method="POST">
+              <button
+                type="submit"
+                className="flex items-center gap-2 text-xs text-muted-foreground transition-colors hover:text-destructive"
+              >
+                <LogOut size={13} />
+                Sign out
+              </button>
+            </form>
+            <ThemeToggle />
+          </div>
         </div>
       </aside>
 

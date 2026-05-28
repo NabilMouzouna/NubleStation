@@ -1,0 +1,13 @@
+---
+interface Props {
+  title?: string;
+  href?: string;
+  description?: string;
+}
+const { title, href = '#', description } = Astro.props;
+---
+<a href={href} class="block rounded-xl p-5 border transition-all no-underline" style="border-color:var(--border);background:var(--surface)" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
+  {title && <h3 class="font-semibold text-sm mb-1" style="color:var(--accent)">{title}</h3>}
+  {description && <p class="text-sm" style="color:var(--text-muted)">{description}</p>}
+  <slot />
+</a>

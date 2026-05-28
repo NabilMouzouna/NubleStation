@@ -14,13 +14,8 @@ export default async function AuthPage() {
         <Card>
           <div className="p-8">
             <div className="flex justify-center">
-              <Image
-                src="/logo-light.png"
-                alt="NubleStation"
-                width={200}
-                height={40}
-                priority
-              />
+              <Image src="/logo-light.png" alt="NubleStation" width={200} height={40} priority className="dark:hidden" />
+              <Image src="/logo.png"       alt="NubleStation" width={200} height={40} priority className="hidden dark:block" />
             </div>
 
             <div className="mb-5 mt-8 text-center">

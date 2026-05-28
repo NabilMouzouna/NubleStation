@@ -1,0 +1,26 @@
+---
+import { getCollection, render } from 'astro:content';
+import DocsLayout from '../../layouts/Docs.astro';
+import Callout from '../../components/mdx/Callout.astro';
+import Aside from '../../components/mdx/Aside.astro';
+import Steps from '../../components/mdx/Steps.astro';
+import Tabs from '../../components/mdx/Tabs.astro';
+import TabItem from '../../components/mdx/TabItem.astro';
+import Card from '../../components/mdx/Card.astro';
+import CardGrid from '../../components/mdx/CardGrid.astro';
+import LinkCard from '../../components/mdx/LinkCard.astro';
+
+export async function getStaticPaths() {
+  const docs = await getCollection('docs');
+  return docs.map(doc => ({
+    params: { slug: doc.id },
+    props: { doc },
+  }));
+}
+
+const { doc } = Astro.props;
+const { Content, headings } = await render(doc);
+---
+<DocsLayout title={doc.data.title} description={doc.data.description} headings={headings}>
+  <Content components={{ Callout, Aside, Steps, Tabs, TabItem, Card, CardGrid, LinkCard }} />
+</DocsLayout>

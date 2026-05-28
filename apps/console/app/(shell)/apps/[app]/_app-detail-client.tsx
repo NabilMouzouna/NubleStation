@@ -169,7 +169,7 @@ function SettingsTab({
           {[
             { label: "Display name", value: app.display_name },
             { label: "Slug",         value: app.name },
-            { label: "App URL",      value: `${app.name}.clinic.local` },
+            { label: "App URL",      value: `${app.name}.${orgDomain}.local` },
             { label: "App ID",       value: app.id },
             { label: "Created",      value: new Date(app.created_at).toLocaleString() },
           ].map(({ label, value }, i, arr) => (
@@ -353,11 +353,13 @@ export function AppDetailClient({
   deployments,
   apiKeys,
   tables,
+  orgDomain,
 }: {
   app: AppDetail;
   deployments: DeploymentRow[];
   apiKeys: ApiKeyRow[];
   tables: AppTableRow[];
+  orgDomain: string;
 }) {
   const [activeTab, setActiveTab] = useState<Tab>("deployments");
 
@@ -375,9 +377,9 @@ export function AppDetailClient({
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-foreground">{app.display_name}</h1>
           <div className="mt-1 flex items-center gap-3 text-sm text-muted-foreground">
-            <span className="font-mono">{app.name}.clinic.local</span>
+            <span className="font-mono">{app.name}.{orgDomain}.local</span>
             <a
-              href={`http://${app.name}.clinic.local`}
+              href={`http://${app.name}.${orgDomain}.local`}
               target="_blank"
               rel="noreferrer"
               className="flex items-center gap-1 text-xs hover:text-primary"

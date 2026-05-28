@@ -1,0 +1,8 @@
+---
+interface Props { label?: string }
+const { label } = Astro.props;
+---
+<div class="tab-item">
+  {label && <p class="text-xs font-semibold uppercase tracking-wider mb-2" style="color:var(--text-muted)">{label}</p>}
+  <slot />
+</div>

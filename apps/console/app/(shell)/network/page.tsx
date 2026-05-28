@@ -1,6 +1,10 @@
+import Link from "next/link";
+import { ArrowUpRight } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@nublestation/ui/components/card";
 import { checkServices, type ServiceHealth } from "@/lib/platform/health";
 import { listApps } from "@/lib/platform/apps";
+
+const DOCS = "https://nabilmouzouna.github.io/NubleStation/docs";
 
 export default async function NetworkPage() {
   const domain  = process.env.ORG_DOMAIN ?? "nuble";
@@ -42,8 +46,12 @@ export default async function NetworkPage() {
 
       <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-2">
         <Card>
-          <CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle>DNS</CardTitle>
+            <Link href={`${DOCS}/infrastructure/coredns/`} target="_blank" rel="noopener noreferrer"
+              className="flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-primary">
+              Docs <ArrowUpRight className="size-3" />
+            </Link>
           </CardHeader>
           <CardContent>
             <div className="flex flex-col gap-3 text-sm">
@@ -71,8 +79,12 @@ export default async function NetworkPage() {
         </Card>
 
         <Card>
-          <CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle>Caddy upstreams</CardTitle>
+            <Link href={`${DOCS}/infrastructure/caddy/`} target="_blank" rel="noopener noreferrer"
+              className="flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-primary">
+              Docs <ArrowUpRight className="size-3" />
+            </Link>
           </CardHeader>
           <CardContent>
             <div className="flex flex-col gap-2">

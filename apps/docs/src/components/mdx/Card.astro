@@ -1,0 +1,11 @@
+---
+interface Props {
+  title?: string;
+  icon?: string;
+}
+const { title } = Astro.props;
+---
+<div class="card rounded-xl p-5 border transition-all" style="border-color:var(--border);background:var(--surface)">
+  {title && <h3 class="font-semibold text-sm mb-2" style="color:var(--text)">{title}</h3>}
+  <div class="text-sm leading-relaxed" style="color:var(--text-muted)"><slot /></div>
+</div>

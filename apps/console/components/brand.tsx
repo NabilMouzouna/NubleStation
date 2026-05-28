@@ -33,11 +33,11 @@ export function NubleLogo({ tagline = false }: { tagline?: boolean }) {
       <NubleIcon size={64} />
       <div className="flex flex-col items-center gap-1">
         <span className="text-2xl font-semibold tracking-tight">
-          <span className="text-[#091216]">Nuble</span>
-          <span className="text-[#5C6B7A]">Station</span>
+          <span className="text-foreground">Nuble</span>
+          <span className="text-muted-foreground">Station</span>
         </span>
         {tagline && (
-          <span className="text-xs font-medium tracking-[0.2em] text-[#5C6B7A]">
+          <span className="text-xs font-medium tracking-[0.2em] text-muted-foreground">
             PRIVATE · LOCAL · YOURS
           </span>
         )}
@@ -51,8 +51,8 @@ export function NubleSidebarHeader() {
     <div className="flex items-center gap-2.5">
       <NubleIcon size={28} />
       <span className="text-sm font-semibold tracking-tight">
-        <span className="text-[#091216]">Nuble</span>
-        <span className="text-[#5C6B7A]">Station</span>
+        <span className="text-foreground">Nuble</span>
+        <span className="text-muted-foreground">Station</span>
       </span>
     </div>
   );

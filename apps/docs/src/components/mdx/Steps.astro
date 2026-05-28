@@ -1,0 +1,39 @@
+---
+---
+<div class="steps my-5 relative pl-8 border-l-2" style="border-color:var(--border)">
+  <slot />
+</div>
+
+<style>
+.steps :global(h3),
+.steps :global(h4) {
+  position: relative;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+  margin-top: 1.5rem;
+  color: var(--text);
+}
+.steps :global(h3)::before,
+.steps :global(h4)::before {
+  content: counter(step);
+  counter-increment: step;
+  position: absolute;
+  left: -2.375rem;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 1.5rem;
+  height: 1.5rem;
+  background: var(--accent);
+  color: white;
+  font-size: 0.7rem;
+  font-weight: 700;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.steps {
+  counter-reset: step;
+}
+</style>

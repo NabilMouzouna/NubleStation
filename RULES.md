@@ -27,6 +27,7 @@ Claude must follow these rules at all times. If a rule conflicts with a user req
 - After every logically complete (small) edit:
   1. `git add` only the relevant files (never `git add .` blindly).
   2. `git commit` with a clear, human-style `-m` message.
+  *important :* never ever push to main directly unless I ask for, it is always dev > staging > main.or staging > main. no direct main
 
 - **Commit message rules:**
   - Written as if a human wrote it. No AI signatures, no "Generated with Claude" footers, no emoji prefixes unless I use them.

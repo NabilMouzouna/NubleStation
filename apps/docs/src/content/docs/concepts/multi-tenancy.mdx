@@ -1,0 +1,117 @@
+---
+title: Multi-tenancy & Isolation
+description: How NubleStation ensures one application can never read another's data.
+---
+
+
+
+## What "tenant" means in NubleStation
+
+Each **app** the admin creates is a tenant. Apps share one Postgres instance and one connection pool, but the database enforces that they can never see each other's rows.
+
+In a clinic:
+- `tasks` app — manages clinical tasks
+- `records` app — stores patient records
+- `billing` app — handles invoices
+
+All three live in the same database, but the `tasks` app **cannot access** `records` data, even if a developer makes a coding mistake. The database itself prevents it.
+
+## How isolation works: Row-Level Security
+
+Postgres has a built-in feature called Row-Level Security (RLS). When enabled on a table, Postgres evaluates a **policy** before returning any row — regardless of what SQL was sent.
+
+NubleStation uses RLS with a session variable pattern:
+
+```sql
+-- Policy on tenant_data.tasks:
+CREATE POLICY tenant_isolation ON tenant_data.tasks
+  USING (app_id = current_setting('app.current_tenant')::uuid)
+  WITH CHECK (app_id = current_setting('app.current_tenant')::uuid);
+```
+
+- `USING` — which rows may be **read, updated, or deleted**
+- `WITH CHECK` — what `app_id` new **inserts** must carry
+
+Together, these two clauses mean an app can only ever touch its own rows — for all four operations.
+
+## The transaction pattern
+
+Every request runs inside an explicit transaction:
+
+```sql
+BEGIN;
+SET LOCAL app.current_tenant = '<app-uuid>';
+SELECT * FROM tenant_data.tasks;   -- Postgres auto-adds: AND app_id = '<app-uuid>'
+COMMIT;                             -- SET LOCAL variable is cleared automatically
+```
+
+`SET LOCAL` is critical. A plain `SET` persists on the connection — if the connection is reused from the pool, the previous tenant's `app_id` would leak into the next request. `SET LOCAL` is transaction-scoped: when the transaction commits or rolls back, the variable disappears. The next request on the same connection always starts clean.
+
+<Aside type="caution">
+  **Fail-closed on missing tenant context.** If a query reaches a `tenant_data` table without `app.current_tenant` being set, Postgres raises an error — it does **not** silently return zero rows. A missing tenant context is a bug, not an empty result, and the loud failure surfaces it immediately.
+</Aside>
+
+## Why row-level (not database-per-tenant or schema-per-tenant)
+
+| Pattern | Analogy | Isolation | Resource cost |
+|---|---|---|---|
+| Database-per-tenant | Separate filing cabinets | Highest | Can't run 10+ Postgres instances on a mini-PC |
+| Schema-per-tenant | One cabinet, one drawer per tenant | Medium | Schema count explodes, backup complexity rises |
+| **Row-level (chosen)** | One cabinet, every file tagged | Acceptable with RLS | Single instance, single pool, single backup |
+
+Tenants in NubleStation are *apps inside one clinic* — not separate organizations. A clinic mini-PC cannot realistically run dozens of Postgres instances. Row-level isolation with RLS gives defense-grade separation at the cost of one extra `WHERE` clause per query (and Postgres optimizes indexed `WHERE` clauses well).
+
+This is the same pattern Supabase uses to serve millions of queries.
+
+## The `app_id` column
+
+Every table in `tenant_data` has an `app_id UUID NOT NULL` column. This is injected automatically when the developer pushes a schema — they never write it themselves. An index is created on it automatically too:
+
+```sql
+ALTER TABLE tenant_data.tasks ADD COLUMN app_id UUID NOT NULL;
+CREATE INDEX tasks_app_id_idx ON tenant_data.tasks (app_id);
+ALTER TABLE tenant_data.tasks ENABLE ROW LEVEL SECURITY;
+```
+
+The index is important: without it, RLS evaluation would scan the full table for every query.
+
+## Cross-tenant isolation test
+
+The critical milestone for Phase 1 of NubleStation development is passing this test:
+
+```typescript
+// Seed app A and app B with one row each
+await seedTasks(appA.id, [{ title: 'Task for A' }]);
+await seedTasks(appB.id, [{ title: 'Task for B' }]);
+
+// App A can only see its own rows
+const rowsAsA = await queryWithTenant(appA.id, 'SELECT * FROM tenant_data.tasks');
+assert(rowsAsA.every(r => r.app_id === appA.id));
+
+// App A cannot read app B's row by its known ID
+const leak = await queryWithTenant(appA.id,
+  `SELECT * FROM tenant_data.tasks WHERE id = $1`, [appBTaskId]);
+assert(leak.length === 0);
+
+// A query with no tenant context errors — it does not silently return nothing
+await assert.rejects(
+  () => query('SELECT * FROM tenant_data.tasks'),
+  /missing tenant context/i
+);
+```
+
+If this test passes, the product's core promise is real and the architecture is sound. Every subsequent phase runs this as a regression gate.
+
+## What platform tables don't use RLS
+
+Tables in the `platform` schema (organizations, users, apps, api_keys, etc.) have RLS **off**. They are protected at the application layer:
+
+- Only the API Gateway and its downstream services can reach these tables
+- Requests are HMAC-signed — a compromised app container cannot forge a platform-level request
+- App developers never get a connection string to Postgres directly — they talk HTTP to the gateway
+
+See [HMAC Request Signing](/security/hmac-signing/) for how the internal trust boundary works.
+
+## Org domain
+
+`ORG_DOMAIN` is set once at install time and is shared by all services. Changing it after install (e.g. renaming the organisation) is a planned CLI and console feature — it is not available in the current version.

@@ -44,3 +44,15 @@
   --radius-2xl: 24px;
   --radius-3xl: 32px;
 }
+
+/* Dark mode surface overrides — applied when <html class="dark"> */
+.dark {
+  --color-background: #0c0f14;
+  --color-foreground: #edf2f7;
+  --color-card: #13171e;
+  --color-card-foreground: #e2e8f0;
+  --color-muted: #1a1f2a;
+  --color-muted-foreground: #7f8ea0;
+  --color-border: #252d3a;
+  --color-input: #252d3a;
+}

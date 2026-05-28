@@ -1,11 +1,12 @@
 #!/usr/bin/env sh
 set -eu
 
-VERSION="dev"
+VERSION="staging"
 INSTALL_DIR="/var/nuble"
 CHECKPOINT_FILE="$INSTALL_DIR/.install-checkpoint"
 VERSION_FILE="$INSTALL_DIR/.nuble-version"
-BASE_URL="https://github.com/NabilMouzouna/NubleStation/releases/download/${VERSION}"
+REPO="https://github.com/NabilMouzouna/NubleStation"
+BASE_URL="${REPO}/releases/latest/download"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
@@ -14,6 +15,8 @@ G="$(printf '\033[0;32m')"
 Y="$(printf '\033[1;33m')"
 R="$(printf '\033[0;31m')"
 B="$(printf '\033[1m')"
+P="$(printf '\033[38;5;99m')"
+DIM="$(printf '\033[2m')"
 NC="$(printf '\033[0m')"
 
 # ── Logo ──────────────────────────────────────────────────────────────────────
@@ -47,12 +50,16 @@ print_logo() {
 }
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
-info()  { printf '%s[✓]%s %s\n' "$G" "$NC" "$1"; }
-warn()  { printf '%s[⚠]%s %s\n' "$Y" "$NC" "$1"; }
-error() { printf '%s[✗]%s %s\n' "$R" "$NC" "$1" >&2; exit 1; }
-step()  { printf '%s[→]%s %s\n' "$Y" "$NC" "$1"; }
+info()    { printf '  %s✓%s  %s\n'   "$G"   "$NC" "$1"; }
+warn()    { printf '  %s⚠%s  %s\n'   "$Y"   "$NC" "$1"; }
+error()   { printf '  %s✗%s  %s\n'   "$R"   "$NC" "$1" >&2; exit 1; }
+step()    { printf '  %s→%s  %s\n'   "$P"   "$NC" "$1"; }
+section() {
+  printf '\n%s%s  %s%s\n' "$P" "$B" "$1" "$NC"
+  printf '%s  ──────────────────────────────────────────────────%s\n\n' "$DIM" "$NC"
+}
 
-checkpoint()      { mkdir -p "$INSTALL_DIR"; printf '%s' "$1" > "$CHECKPOINT_FILE"; }
+checkpoint()      { sudo mkdir -p "$INSTALL_DIR"; printf '%s' "$1" | sudo tee "$CHECKPOINT_FILE" >/dev/null; }
 last_checkpoint() { if [ -f "$CHECKPOINT_FILE" ]; then cat "$CHECKPOINT_FILE"; else printf 'none'; fi; }
 
 # ── Package manager ───────────────────────────────────────────────────────────
@@ -75,6 +82,56 @@ install_dep() {
   esac
 }
 
+# ── Node.js ───────────────────────────────────────────────────────────────────
+install_nodejs() {
+  if command -v node >/dev/null 2>&1; then
+    _node_major=$(node --version 2>/dev/null | cut -d'.' -f1 | tr -d 'v')
+    if [ "${_node_major:-0}" -ge 22 ] 2>/dev/null; then
+      info "Node.js $(node --version) ready"
+      return 0
+    fi
+    warn "Node.js $(node --version) is below v22 — upgrading"
+  else
+    step "Installing Node.js 22"
+  fi
+  case "$PKG" in
+    apt)
+      curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash - >/dev/null 2>&1
+      sudo apt-get install -y nodejs >/dev/null
+      ;;
+    dnf)
+      curl -fsSL https://rpm.nodesource.com/setup_22.x | sudo -E bash - >/dev/null 2>&1
+      install_dep nodejs
+      ;;
+    pacman) install_dep nodejs ;;
+    brew)   brew install node@22 >/dev/null 2>&1 ;;
+  esac
+  info "Node.js $(node --version) ready"
+}
+
+# ── Port conflict detection ────────────────────────────────────────────────────
+check_port_conflicts() {
+  _had_conflict=0
+  for _port in 53 80 443; do
+    if ss -tlnpu 2>/dev/null | grep -q ":${_port}[[:space:]]" || \
+       ss -ulnpu 2>/dev/null | grep -q ":${_port}[[:space:]]"; then
+      _proc=$(ss -tlnpu 2>/dev/null | grep ":${_port} " | grep -o 'pid=[0-9]*' | head -1 | cut -d= -f2)
+      _name=$(cat "/proc/${_proc}/comm" 2>/dev/null || printf 'unknown')
+      warn "Port ${_port} already in use by ${_name} (PID ${_proc})"
+      _had_conflict=1
+    fi
+  done
+  if [ "$_had_conflict" = "1" ]; then
+    warn "Port conflicts will prevent some services from starting."
+    printf '%s  On Ubuntu, port 53 is typically systemd-resolved:%s\n' "$DIM" "$NC"
+    printf '    sudo systemctl disable --now systemd-resolved\n'
+    printf '    sudo rm -f /etc/resolv.conf\n'
+    printf '    echo "nameserver 1.1.1.1" | sudo tee /etc/resolv.conf\n\n'
+    printf '%s  Continue anyway? [y/N]: %s' "$DIM" "$NC"; read -r _cont </dev/tty
+    [ "$_cont" = "y" ] || error "Aborted — resolve port conflicts then re-run"
+  fi
+}
+
 # ── TUI ───────────────────────────────────────────────────────────────────────
 TUI="plain"
 detect_tui() {
@@ -89,7 +146,7 @@ prompt_input() {
   case "$TUI" in
     whiptail) eval "$2"'=$(whiptail --inputbox "'"$1"'" 8 60 3>&1 1>&2 2>&3)' ;;
     dialog)   eval "$2"'=$(dialog   --inputbox "'"$1"'" 8 60 3>&1 1>&2 2>&3)' ;;
-    plain)    printf '%s: ' "$1"; read -r "$2" ;;
+    plain)    printf '%s: ' "$1"; read -r "$2" </dev/tty ;;
   esac
 }
 
@@ -101,7 +158,7 @@ prompt_password() {
     plain)
       printf '%s: ' "$1"
       stty -echo 2>/dev/null || true
-      read -r "$2"
+      read -r "$2" </dev/tty
       stty echo  2>/dev/null || true
       printf '\n'
       ;;
@@ -110,26 +167,23 @@ prompt_password() {
 
 # ── Download bundle ───────────────────────────────────────────────────────────
 download_bundle() {
-  if [ "$VERSION" = "dev" ]; then
+  if [ "$VERSION" = "staging" ]; then
     info "Dev mode — using local repo files"
     return 0
   fi
-  step "Downloading release bundle ($VERSION)"
-  mkdir -p "$INSTALL_DIR/install/scripts" "$INSTALL_DIR/install/infra"
-  for _f in docker-compose.yml infra/Caddyfile infra/coredns/Corefile.template; do
-    _attempts=0
-    while [ "$_attempts" -lt 3 ]; do
-      _attempts=$(( _attempts + 1 ))
-      if curl -sSL "${BASE_URL}/${_f}" -o "$INSTALL_DIR/install/${_f}" 2>/dev/null; then break; fi
-      [ "$_attempts" -lt 3 ] && sleep $(( _attempts * 2 ))
-    done
-    [ -s "$INSTALL_DIR/install/${_f}" ] || error "Failed to download ${_f} after 3 attempts"
-  done
+  step "Downloading release bundle"
+  sudo mkdir -p \
+    "$INSTALL_DIR/install/infra/caddy" \
+    "$INSTALL_DIR/install/infra/coredns"
+  _dl() { curl -sSL "${BASE_URL}/$1" | sudo tee "$2" >/dev/null || error "Failed to download $1"; }
+  _dl "docker-compose.yml"  "$INSTALL_DIR/install/infra/docker-compose.yml"
+  _dl "Caddyfile"           "$INSTALL_DIR/install/infra/caddy/Caddyfile"
+  _dl "Corefile.template"   "$INSTALL_DIR/install/infra/coredns/Corefile.template"
   info "Bundle downloaded"
 }
 
 bundle_file() {
-  if [ "$VERSION" = "dev" ]; then printf '%s/%s' "$REPO_ROOT" "$1"
+  if [ "$VERSION" = "staging" ]; then printf '%s/%s' "$REPO_ROOT" "$1"
   else printf '%s/install/%s' "$INSTALL_DIR" "$1"
   fi
 }
@@ -137,24 +191,25 @@ bundle_file() {
 # ── Re-run handling ───────────────────────────────────────────────────────────
 handle_existing_install() {
   _installed_ver="$(cat "$VERSION_FILE")"
-  printf '\n%s╔══════════════════════════════════════╗%s\n' "$B" "$NC"
-  printf '%s║  NubleStation is already installed   ║%s\n' "$B" "$NC"
-  printf '%s║  Installed: %-25s║%s\n' "$B" "$_installed_ver" "$NC"
-  printf '%s╚══════════════════════════════════════╝%s\n\n' "$B" "$NC"
-  printf '  [1] Upgrade to %s\n' "$VERSION"
-  printf '  [2] Reset super admin password\n'
-  printf '  [3] Reinstall\n'
-  printf '  [4] Exit\n\n'
-  printf 'Choice: '; read -r _choice
+  printf '\n%s  ╔══════════════════════════════════════════════╗%s\n' "$P" "$NC"
+  printf '%s  ║  %-44s║%s\n' "$P" "NubleStation is already installed" "$NC"
+  printf '%s  ║  %-44s║%s\n' "$P" "Version: $_installed_ver" "$NC"
+  printf '%s  ╚══════════════════════════════════════════════╝%s\n\n' "$P" "$NC"
+  printf '%s  What would you like to do?%s\n\n' "$B" "$NC"
+  printf '    %s1%s  Upgrade to %s\n' "$P" "$NC" "$VERSION"
+  printf '    %s2%s  Reset super admin password\n' "$P" "$NC"
+  printf '    %s3%s  Reinstall\n' "$P" "$NC"
+  printf '    %s4%s  Exit\n\n' "$P" "$NC"
+  printf '%s  Choice: %s' "$DIM" "$NC"; read -r _choice </dev/tty
   case "$_choice" in
     1)
-      step "Upgrading to $VERSION"
+      section "Upgrading to $VERSION"
       download_bundle
       docker compose --env-file "$INSTALL_DIR/.env" \
         -f "$(bundle_file infra/docker-compose.yml)" pull
       docker compose --env-file "$INSTALL_DIR/.env" \
         -f "$(bundle_file infra/docker-compose.yml)" up -d
-      printf '%s' "$VERSION" > "$VERSION_FILE"
+      printf '%s' "$VERSION" | sudo tee "$VERSION_FILE" >/dev/null
       info "Upgraded to $VERSION"
       exit 0
       ;;
@@ -171,11 +226,11 @@ handle_existing_install() {
       ;;
     3)
       printf '\nThis will erase all admin accounts and organization settings.\n'
-      printf 'Type RESET to confirm: '; read -r _confirm
+      printf 'Type RESET to confirm: '; read -r _confirm </dev/tty
       [ "$_confirm" = "RESET" ] || error "Reinstall cancelled"
       printf 'Also replace docker-compose.yml, .env, Caddyfile, Corefile? [y/N]: '
-      read -r _replace_infra
-      [ "$_replace_infra" = "y" ] && rm -f "$INSTALL_DIR/.env"
+      read -r _replace_infra </dev/tty
+      [ "$_replace_infra" = "y" ] && sudo rm -f "$INSTALL_DIR/.env"
       info "Reset — continuing with fresh install"
       ;;
     4) exit 0 ;;
@@ -239,8 +294,6 @@ wait_healthy() {
 main() {
   print_logo "$VERSION"
 
-  [ -f "$VERSION_FILE" ] && handle_existing_install
-
   if [ "$(id -u)" -ne 0 ] && ! sudo -n true 2>/dev/null; then
     error "This script requires sudo. Run as root or with a sudo-capable user."
   fi
@@ -248,7 +301,11 @@ main() {
   detect_pkg_manager
   detect_tui
 
+  [ -f "$VERSION_FILE" ] && handle_existing_install
+
   # ── 1. Dependencies ─────────────────────────────────────────────────────────
+  section "1 · Setup"
+  check_port_conflicts
   checkpoint "checking-deps"
 
   command -v docker >/dev/null 2>&1 || {
@@ -257,6 +314,8 @@ main() {
   }
   docker compose version >/dev/null 2>&1 || error "Docker Compose v2 is required"
   info "Docker ready"
+
+  install_nodejs
 
   command -v argon2 >/dev/null 2>&1 || { step "Installing argon2"; install_dep argon2; }
   info "argon2 ready"
@@ -279,6 +338,7 @@ main() {
   checkpoint "files-downloaded"
 
   # ── 3. Collect inputs ────────────────────────────────────────────────────────
+  section "2 · Configuration"
   collect_inputs
 
   # ── 4. Detect host IP ────────────────────────────────────────────────────────
@@ -302,6 +362,7 @@ main() {
   info "Host IP: $HOST_IP"
 
   # ── 5. Generate .env ─────────────────────────────────────────────────────────
+  section "3 · Generating files"
   mkdir -p "$INSTALL_DIR"
   # Reuse existing secrets so re-runs don't break an already-initialized Postgres volume.
   if [ -f "$INSTALL_DIR/.env" ]; then
@@ -315,7 +376,7 @@ main() {
   ADMIN_PASSWORD_HASH="$(hash_password "$ADMIN_PASSWORD")"
   [ -z "$ADMIN_PASSWORD_HASH" ] && error "Password hashing failed"
 
-  cat > "$INSTALL_DIR/.env" <<EOF
+  sudo tee "$INSTALL_DIR/.env" >/dev/null <<EOF
 ORG_NAME=${ORG_NAME}
 ORG_DOMAIN=${ORG_DOMAIN}
 HOST_IP=${HOST_IP}
@@ -332,24 +393,57 @@ EOF
   checkpoint "env-generated"
 
   # ── 6. Generate CoreDNS Corefile ─────────────────────────────────────────────
-  mkdir -p "$INSTALL_DIR/coredns"
+  sudo mkdir -p "$INSTALL_DIR/coredns"
   sed "s/\${ORG_DOMAIN}/${ORG_DOMAIN}/g; s/\${HOST_IP}/${HOST_IP}/g" \
-    "$(bundle_file infra/coredns/Corefile.template)" > "$INSTALL_DIR/coredns/Corefile"
+    "$(bundle_file infra/coredns/Corefile.template)" | sudo tee "$INSTALL_DIR/coredns/Corefile" >/dev/null
   info "CoreDNS Corefile generated"
+  # Restart if already running so it picks up the new Corefile immediately.
+  # Docker bind mounts reflect file changes on disk but CoreDNS only reads config at startup.
+  if docker ps --format '{{.Names}}' 2>/dev/null | grep -q '^nublestation-coredns-1$'; then
+    docker restart nublestation-coredns-1 >/dev/null
+    info "CoreDNS restarted (config refreshed)"
+  fi
 
   # ── 7. /etc/hosts entries ─────────────────────────────────────────────────────
   HOSTS_LINE="$HOST_IP console.${ORG_DOMAIN}.local api.${ORG_DOMAIN}.local"
-  if ! grep -q "${ORG_DOMAIN}.local" /etc/hosts 2>/dev/null; then
-    printf '%s\n' "$HOSTS_LINE" | sudo tee -a /etc/hosts >/dev/null
-    info "/etc/hosts updated"
-  else
-    warn "/etc/hosts already has ${ORG_DOMAIN}.local — skipping"
+  # Always replace — stale entries from a previous install or IP change would
+  # override CoreDNS and silently return the wrong address.
+  sudo sed -i "/${ORG_DOMAIN}\.local/d" /etc/hosts 2>/dev/null || true
+  printf '%s\n' "$HOSTS_LINE" | sudo tee -a /etc/hosts >/dev/null
+  info "/etc/hosts updated"
+
+  # ── 7a. Fix mDNS trap on Ubuntu ──────────────────────────────────────────────
+  # Ubuntu's nsswitch.conf has `mdns4_minimal [NOTFOUND=return]` before the dns
+  # step. The [NOTFOUND=return] causes .local lookups to bail out before ever
+  # reaching CoreDNS. Remove it so DNS is consulted as fallback.
+  if grep -q 'mdns4_minimal \[NOTFOUND=return\]' /etc/nsswitch.conf 2>/dev/null; then
+    sudo sed -i 's/mdns4_minimal \[NOTFOUND=return\] //' /etc/nsswitch.conf
+    info "Fixed nsswitch.conf (.local → CoreDNS fallthrough enabled)"
   fi
 
   # ── 8. Start services ─────────────────────────────────────────────────────────
+  section "4 · Starting services"
   step "Pulling latest images"
   docker compose --env-file "$INSTALL_DIR/.env" \
     -f "$(bundle_file infra/docker-compose.yml)" pull
+
+  step "Starting database"
+  docker compose --env-file "$INSTALL_DIR/.env" \
+    -f "$(bundle_file infra/docker-compose.yml)" up -d postgres
+  _pg_wait=0
+  while [ "$_pg_wait" -lt 60 ]; do
+    _pg_state=$(docker inspect --format='{{.State.Health.Status}}' "nublestation-postgres-1" 2>/dev/null || printf 'unknown')
+    [ "$_pg_state" = "healthy" ] && break
+    _pg_wait=$(( _pg_wait + 2 )); sleep 2
+  done
+
+  # Sync postgres user password in case the volume was initialized with a different one
+  _pg_pass=$(grep '^POSTGRES_PASSWORD=' "$INSTALL_DIR/.env" | cut -d= -f2-)
+  docker compose --env-file "$INSTALL_DIR/.env" \
+    -f "$(bundle_file infra/docker-compose.yml)" \
+    exec -T postgres psql -U nuble -c \
+    "ALTER USER nuble WITH PASSWORD '${_pg_pass}';" >/dev/null 2>&1 || true
+  info "Database ready"
 
   step "Starting NubleStation stack"
   docker compose --env-file "$INSTALL_DIR/.env" \
@@ -357,30 +451,50 @@ EOF
   checkpoint "compose-started"
 
   # ── 9. Health checks ────────────────────────────────────────────────────────
+  section "5 · Health checks"
   sleep 5
   wait_healthy "console"
   wait_healthy "api"
   checkpoint "health-verified"
 
-  # ── 10. Finish ───────────────────────────────────────────────────────────────
-  printf '%s' "$VERSION" > "$VERSION_FILE"
-  rm -f "$CHECKPOINT_FILE"
+  # ── 10. Install CLI ──────────────────────────────────────────────────────────
+  section "6 · Installing CLI"
+  _npm_tag="latest"
+  [ "$VERSION" = "staging" ] && _npm_tag="staging"
+  step "Installing @nublestation/cli@${_npm_tag}"
+  if npm install -g "@nublestation/cli@${_npm_tag}" >/dev/null 2>&1; then
+    info "nuble CLI installed  →  $(nuble --version 2>/dev/null || printf 'ok')"
+  else
+    warn "CLI install failed — run manually: npm i -g @nublestation/cli"
+  fi
 
-  printf '\n%s╔══════════════════════════════════════════╗%s\n' "$G" "$NC"
-  printf '%s║       NubleStation is ready!             ║%s\n' "$G" "$NC"
-  printf '%s╚══════════════════════════════════════════╝%s\n' "$G" "$NC"
+  # ── 11. Finish ───────────────────────────────────────────────────────────────
+  printf '%s' "$VERSION" | sudo tee "$VERSION_FILE" >/dev/null
+  sudo rm -f "$CHECKPOINT_FILE"
+
+  printf '\n%s  ╔══════════════════════════════════════════════════╗%s\n' "$G" "$NC"
+  printf '%s  ║%s          NubleStation is ready!               %s  ║%s\n' "$G" "$B" "$G" "$NC"
+  printf '%s  ╚══════════════════════════════════════════════════╝%s\n' "$G" "$NC"
   printf '\n'
-  printf '  Console  →  http://console.%s.local\n' "$ORG_DOMAIN"
-  printf '  API      →  http://api.%s.local\n' "$ORG_DOMAIN"
-  printf '  Admin    →  %s\n' "$ADMIN_EMAIL"
+  printf '%s  ── Access ──────────────────────────────────────────%s\n\n' "$DIM" "$NC"
+  printf '  %sConsole%s   →  %shttp://console.%s.local%s\n' "$B" "$NC" "$G" "$ORG_DOMAIN" "$NC"
+  printf '  %sAPI%s       →  %shttp://api.%s.local%s\n'     "$B" "$NC" "$G" "$ORG_DOMAIN" "$NC"
+  printf '  %sAdmin%s     →  %s\n'                           "$B" "$NC" "$ADMIN_EMAIL"
   printf '\n'
-  printf '%s  Router DNS → point to %s%s\n' "$Y" "$HOST_IP" "$NC"
+  printf '%s  ── Networking ──────────────────────────────────────%s\n\n' "$DIM" "$NC"
+  printf '  %sRouter DNS%s  →  point to %s%s%s\n' "$B" "$NC" "$Y" "$HOST_IP" "$NC"
   printf '  Or add to each device hosts file:\n'
-  printf '    %s\n' "$HOSTS_LINE"
+  printf '    %s%s%s\n' "$DIM" "$HOSTS_LINE" "$NC"
   printf '\n'
-  printf '%s  Developer quick-start (run on any LAN machine):%s\n' "$B" "$NC"
-  printf '    nuble init --url http://api.%s.local --slug <app-slug> --key <api-key>\n' "$ORG_DOMAIN"
-  printf '    nuble deploy\n\n'
+  printf '%s  ── CLI ─────────────────────────────────────────────%s\n\n' "$DIM" "$NC"
+  printf '  %snuble --help%s               show all commands\n' "$B" "$NC"
+  printf '  %snuble server stop%s          stop the stack\n' "$B" "$NC"
+  printf '  %snuble server start%s         start the stack\n' "$B" "$NC"
+  printf '  %snuble server logs <svc>%s    tail service logs\n\n' "$B" "$NC"
+  printf '%s  ── Developer quick-start ───────────────────────────%s\n\n' "$DIM" "$NC"
+  printf '  On any developer machine: npm i -g @nublestation/cli\n\n'
+  printf '    %snuble init --url http://api.%s.local --slug <app> --key <key>%s\n' "$DIM" "$ORG_DOMAIN" "$NC"
+  printf '    %snuble deploy%s\n\n' "$DIM" "$NC"
 }
 
 main "$@"
