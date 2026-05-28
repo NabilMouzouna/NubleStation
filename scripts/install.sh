@@ -397,14 +397,28 @@ EOF
   sed "s/\${ORG_DOMAIN}/${ORG_DOMAIN}/g; s/\${HOST_IP}/${HOST_IP}/g" \
     "$(bundle_file infra/coredns/Corefile.template)" | sudo tee "$INSTALL_DIR/coredns/Corefile" >/dev/null
   info "CoreDNS Corefile generated"
+  # Restart if already running so it picks up the new Corefile immediately.
+  # Docker bind mounts reflect file changes on disk but CoreDNS only reads config at startup.
+  if docker ps --format '{{.Names}}' 2>/dev/null | grep -q '^nublestation-coredns-1$'; then
+    docker restart nublestation-coredns-1 >/dev/null
+    info "CoreDNS restarted (config refreshed)"
+  fi
 
   # ── 7. /etc/hosts entries ─────────────────────────────────────────────────────
   HOSTS_LINE="$HOST_IP console.${ORG_DOMAIN}.local api.${ORG_DOMAIN}.local"
-  if ! grep -q "${ORG_DOMAIN}.local" /etc/hosts 2>/dev/null; then
-    printf '%s\n' "$HOSTS_LINE" | sudo tee -a /etc/hosts >/dev/null
-    info "/etc/hosts updated"
-  else
-    warn "/etc/hosts already has ${ORG_DOMAIN}.local — skipping"
+  # Always replace — stale entries from a previous install or IP change would
+  # override CoreDNS and silently return the wrong address.
+  sudo sed -i "/${ORG_DOMAIN}\.local/d" /etc/hosts 2>/dev/null || true
+  printf '%s\n' "$HOSTS_LINE" | sudo tee -a /etc/hosts >/dev/null
+  info "/etc/hosts updated"
+
+  # ── 7a. Fix mDNS trap on Ubuntu ──────────────────────────────────────────────
+  # Ubuntu's nsswitch.conf has `mdns4_minimal [NOTFOUND=return]` before the dns
+  # step. The [NOTFOUND=return] causes .local lookups to bail out before ever
+  # reaching CoreDNS. Remove it so DNS is consulted as fallback.
+  if grep -q 'mdns4_minimal \[NOTFOUND=return\]' /etc/nsswitch.conf 2>/dev/null; then
+    sudo sed -i 's/mdns4_minimal \[NOTFOUND=return\] //' /etc/nsswitch.conf
+    info "Fixed nsswitch.conf (.local → CoreDNS fallthrough enabled)"
   fi
 
   # ── 8. Start services ─────────────────────────────────────────────────────────
