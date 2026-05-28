@@ -1,12 +1,14 @@
 {
   "name": "@nublestation/cli",
-  "version": "0.1.0",
-  "description": "nuble — NubleStation developer CLI",
+  "version": "0.2.0",
+  "description": "nuble \u2014 NubleStation developer CLI",
   "type": "module",
   "bin": {
     "nuble": "./dist/index.js"
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "dev": "tsx src/index.ts",
