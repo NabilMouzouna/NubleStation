@@ -1,0 +1,102 @@
+---
+title: Organisation Domain & Reinstall
+description: How the org domain shapes every URL, what changes when you reinstall with a new name, and how to redeploy an app after migration.
+---
+
+import { Aside, Steps } from '../../../components/mdx';
+
+Every NubleStation install is owned by exactly one organisation. The **org domain** (`ORG_DOMAIN`) you choose at install time is the root of every URL the platform generates:
+
+| Service | URL |
+|---|---|
+| Console | `console.{org}.local` |
+| API | `api.{org}.local` |
+| Any deployed app | `{app}.{org}.local` |
+
+The value is stored in three places: the `.env` file on disk, the `platform.organizations` row in Postgres, and the `ORG_DOMAIN` environment variable injected into every container that needs it (Gateway, Orbit, Caddy).
+
+---
+
+## One machine, one org
+
+NubleStation is explicitly **single-host, single-org**. You cannot run two installs with different org names on the same machine — CoreDNS owns port 53 and Caddy owns port 80, and only one process can bind each port per host.
+
+If you need two separate orgs, use two separate machines (or two VMs).
+
+---
+
+## Reinstalling with a different org name
+
+Running `install.sh` again with a new `ORG_DOMAIN` is safe. Here is what changes and what survives:
+
+| Component | What happens |
+|---|---|
+| `.env` | Overwritten — `ORG_DOMAIN` updated |
+| Containers | Restarted with the new env value |
+| DB org row | **Updated** — `name` and `subdomain_root` are rewritten to the new value |
+| DB apps, API keys | Untouched — all apps are still registered |
+| Orbit storage | Old bundles survive under `/var/nuble/apps/{old-org}/{app}/` — they are not deleted |
+| CoreDNS zone | Regenerated — the old `*.{old-org}.local` zone stops resolving |
+| Caddy routing | Switches to `*.{new-org}.local` — old subdomains stop serving |
+
+<Aside type="caution">
+Deployed frontends are **not automatically moved**. After a reinstall with a new org name, each app will 404 until it is redeployed. The redeploy writes the bundle to the new namespaced path and Caddy immediately serves it.
+</Aside>
+
+---
+
+## Redeploying after a name change
+
+<Steps>
+
+### Check your CLI profile
+
+```bash
+cat ~/.nuble/config
+```
+
+The `org_url` field should already point to `http://api.{new-org}.local`. If it still has the old org name, run `nuble init` to update it.
+
+### Redeploy each app
+
+From the app's project directory (the folder that contains your built `dist/`):
+
+```bash
+nuble deploy
+```
+
+This zips `dist/`, uploads it through the Gateway to Orbit, and writes the bundle to `/var/nuble/apps/{new-org}/{app}/current`. Caddy picks it up immediately — no container restart required.
+
+### Verify
+
+Open `http://{app}.{new-org}.local` in a browser. The app should load instantly.
+
+</Steps>
+
+---
+
+## What "org-namespaced storage" means
+
+Before NubleStation **0.2.0**, Orbit stored every app bundle at a flat path:
+
+```
+/var/nuble/apps/{app}/current
+```
+
+From **0.2.0** onward the org domain is part of the path:
+
+```
+/var/nuble/apps/{org}/{app}/current
+```
+
+This means if you reinstall and later switch back to the original org name, the old bundles are still on disk and a single redeploy restores them. Intentional data wipe is a planned feature for a future release.
+
+---
+
+## Environment variables reference
+
+| Variable | Used by | Purpose |
+|---|---|---|
+| `ORG_DOMAIN` | Gateway, Orbit, Caddy, Console, CoreDNS | Root label for all `*.{org}.local` URLs and the storage namespace |
+| `ORG_NAME` | Console | Human-readable display name shown in the dashboard |
+| `HOST_IP` | CoreDNS, install.sh | LAN IP that all `*.{org}.local` names resolve to |

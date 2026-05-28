@@ -41,6 +41,7 @@ export const sidebar: SidebarGroup[] = [
       { title: 'Networking', slug: 'concepts/networking' },
       { title: 'Multi-tenancy', slug: 'concepts/multi-tenancy' },
       { title: 'Apps & API Keys', slug: 'concepts/apps-and-api-keys' },
+      { title: 'Org Domain & Reinstall', slug: 'concepts/org-domain' },
     ],
   },
   {
