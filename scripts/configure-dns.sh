@@ -87,8 +87,8 @@ else
 fi
 
 step "Writing /etc/resolv.conf"
+sudo chattr -i /etc/resolv.conf 2>/dev/null || true
 printf 'nameserver 127.0.0.1\nnameserver 8.8.8.8\n' | sudo tee /etc/resolv.conf >/dev/null
-# Prevent further overwrites by making the file immutable
 sudo chattr +i /etc/resolv.conf 2>/dev/null || warn "chattr not available — resolv.conf may be overwritten on reboot"
 info "/etc/resolv.conf set to 127.0.0.1 (CoreDNS) with 8.8.8.8 fallback"
 
