@@ -3,7 +3,6 @@ import { z } from "zod";
 import {
   HMAC_MAX_SKEW_MS,
   X_NUBLE_APP_ID,
-  X_NUBLE_APP_SLUG,
   X_NUBLE_SIG,
   X_NUBLE_TIMESTAMP,
   X_NUBLE_USER_ID,
@@ -50,10 +49,6 @@ export const hmacAuth: MiddlewareHandler<{ Variables: HonoVariables }> = async (
     [X_NUBLE_APP_ID]:  appId,
     [X_NUBLE_USER_ID]: userId,
   };
-
-  // console-admin calls may include app-slug; include it in context if present
-  const appSlug = c.req.header(X_NUBLE_APP_SLUG);
-  if (appSlug) context[X_NUBLE_APP_SLUG] = appSlug;
 
   const expected = computeHmac(
     c.req.method,

@@ -6,6 +6,7 @@ export default defineConfig({
     poolOptions: {
       forks: { singleFork: true },
     },
+    setupFiles: ["./test/setup.ts"],
     testTimeout: 15_000,
     hookTimeout: 30_000,
     env: {

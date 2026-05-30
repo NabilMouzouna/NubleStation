@@ -5,6 +5,8 @@ import { logger as rootLogger } from "./logger.js";
 import { onError } from "./middleware/error.js";
 import { hmacAuth } from "./middleware/hmac.js";
 import { health } from "./routes/health.js";
+import { files } from "./routes/files.js";
+import { pub } from "./routes/public.js";
 import type { HonoVariables } from "./types.js";
 
 const HEALTH_PATHS = new Set(["/healthz", "/readyz"]);
@@ -47,12 +49,12 @@ export function buildServer() {
   // Health probes — no auth
   app.route("/", health);
 
+  // Public file serving — no HMAC, is_public check inside handler
+  app.route("/", pub);
+
   // Authenticated CRUD — HMAC required
   app.use("/v1/*", hmacAuth);
-  // routes registered here in task 3
-
-  // Public file serving — no HMAC, is_public check inside handler
-  // registered here in task 3
+  app.route("/", files);
 
   return app;
 }
