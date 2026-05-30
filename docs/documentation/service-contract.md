@@ -4,20 +4,22 @@
 
 Decision record: ADR 009. Cryptographic detail of the signing handshake: [`hmac-signing-flow.md`](./hmac-signing-flow.md).
 
-This document has two halves:
+This document has three parts:
 
 1. **The routing contract** — the single request shape (`/v1/{service}/{endpoint}`) and how the Gateway dispatches it. This is what makes the platform plug-and-play.
 2. **The security contract** — the three invariants every service must enforce so that routing can be trusted.
+3. **The admin trust path** — how Console calls services directly via HMAC, bypassing Gateway, for admin operations.
 
 ---
 
 ## Core principles
 
-1. **One door.** Every developer- and end-user-facing request enters through the **API Gateway** (`api.{org}.local`) — the only service published on the LAN. Internal services listen only on the Docker bridge network.
-2. **One path shape.** Every routed request uses `/v1/{service}/{endpoint}`, where `{service}` is the service **codename** (`orbit`, `blaze`, `vault`, `identity`).
-3. **Signed or rejected.** The Gateway signs each forwarded request with `INTERNAL_HMAC_SECRET`. Services never trust an unsigned request. The secret never leaves the Gateway.
-4. **Two client types, same contract.** REST services (Blaze, Vault, Identity) are consumed from the browser via `@nublestation/sdk`. Orbit is consumed from the terminal via the `nuble` CLI. Same `Bearer nbl_…` credential, same gateway, different payload.
+1. **One door for external traffic.** Every developer- and end-user-facing request enters through the **API Gateway** (`api.{org}.local`) — the only service published on the LAN. Internal services listen only on the Docker bridge network.
+2. **One path shape.** Every authenticated routed request uses `/v1/{service}/{endpoint}`, where `{service}` is the service **codename** (`orbit`, `blaze`, `vault`, `identity`).
+3. **Signed or rejected.** The Gateway signs each forwarded request with `INTERNAL_HMAC_SECRET`. Services never trust an unsigned request on authenticated routes. The secret never leaves the Gateway or Console.
+4. **Two client types, same external contract.** REST services (Blaze, Vault, Identity) are consumed from the browser via `@nublestation/sdk`. Orbit is consumed from the terminal via the `nuble` CLI. Same `Bearer nbl_…` credential, same gateway, different payload.
 5. **Plug-and-play.** The Gateway dispatches purely on `{service}`, looked up in a registry mapping codename → internal URL. A v2 service is added by registering one entry.
+6. **Two trust paths.** External clients (SDK, CLI) go through Gateway with an API key. Console goes directly to services via HMAC as a trusted peer — no API key involved. Services cannot and need not distinguish the two: both paths produce a valid HMAC signature.
 
 ---
 
@@ -27,7 +29,7 @@ This document has two halves:
 
 ```mermaid
 flowchart LR
-    subgraph dev["Developer machine (not restricted)"]
+    subgraph dev["Developer machine"]
       CLI["nuble CLI"]
     end
     subgraph user["End-user browser"]
@@ -38,8 +40,9 @@ flowchart LR
       GW["API Gateway<br/>api.{org}.local<br/>(only LAN-exposed service)"]
 
       subgraph internal["Internal Docker network — not LAN-exposed"]
+        CONSOLE["Console<br/>console.{org}.local"]
         BLAZE["Blaze<br/>/v1/blaze/*"]
-        VAULT["Vault<br/>/v1/vault/*"]
+        VAULT["Vault<br/>/v1/vault/*<br/>/vault/* (public)"]
         IDENTITY["Identity<br/>/v1/identity/*"]
         ORBIT["Orbit<br/>/v1/orbit/*"]
       end
@@ -47,13 +50,16 @@ flowchart LR
 
     SDK -->|"Bearer nbl_…"| GW
     CLI -->|"Bearer nbl_…"| GW
-    GW -->|"HMAC-signed"| BLAZE
-    GW -->|"HMAC-signed"| VAULT
-    GW -->|"HMAC-signed"| IDENTITY
-    GW -->|"HMAC-signed"| ORBIT
+    GW -->|"HMAC-signed /v1/*"| BLAZE
+    GW -->|"HMAC-signed /v1/*"| VAULT
+    GW -->|"HMAC-signed /v1/*"| IDENTITY
+    GW -->|"HMAC-signed /v1/*"| ORBIT
+    GW -->|"no auth /vault/*"| VAULT
+    CONSOLE -->|"HMAC-signed (direct)"| VAULT
+    CONSOLE -->|"HMAC-signed (direct)"| ORBIT
 ```
 
-The Gateway is the trust boundary: everything to its left presents an API key; everything to its right trusts only an HMAC signature.
+The Gateway is the external trust boundary. Console is an internal trusted peer — it signs requests with the same `INTERNAL_HMAC_SECRET` and calls services directly over the Docker bridge.
 
 ## The path contract
 
@@ -150,6 +156,50 @@ sequenceDiagram
     Orbit-->>G: 200 { ok, slug }
     G-->>CLI: 200 { ok, slug, url }
 ```
+
+## Public endpoints — unauthenticated read-only
+
+Some services expose a secondary, unauthenticated path prefix for content that has been explicitly marked public. This is an **exception** to the standard routing contract — use it only when content genuinely needs to be accessible without an API key (e.g. public files in Vault).
+
+**Rules:**
+
+- The public prefix is **never** under `/v1/` — it lives at the top level (e.g. `/vault/*`).
+- Only `GET` requests are allowed on the public prefix. Writes always require authentication.
+- The Gateway forwards these requests to the service **without** resolving an API key and **without** signing them. The service receives a plain, unsigned request.
+- The service must **not** apply `hmacAuth` on the public prefix. It enforces its own access check (e.g. `is_public = true` in the database) and returns `403` if the check fails.
+- The public prefix must be registered in the Gateway separately from the service registry — it is not part of the authenticated `/v1/*` dispatch.
+
+**Currently implemented:** Vault only.
+
+| Public URL | Forwarded to | Service-side check |
+|---|---|---|
+| `api.{org}.local/vault/{app_slug}/{collection}/{filename}` | `vault:3003/vault/...` | `storage_files.is_public = true` |
+
+**Server layout inside the service:**
+
+```typescript
+const app = new Hono();
+
+// Health — no auth
+app.get("/healthz", (c) => c.json({ ok: true }));
+
+// Public read — no HMAC, service-side is_public check
+app.get("/vault/:appSlug/:collection/:filename", servePublicFile);
+
+// Authenticated CRUD — HMAC required
+app.use("/v1/*", hmacAuth);
+app.route("/", vaultRoutes);
+```
+
+**Gateway dispatch for the public prefix:**
+
+```text
+1. match  /vault/:appSlug/:collection/:filename
+2. forward GET to (VAULT_INTERNAL_URL + path)  — no API key resolution, no signing
+3. pass response through unchanged
+```
+
+A service that wants a public prefix must add it to both the Gateway routing table and its own server before the `hmacAuth` middleware registration.
 
 ---
 
@@ -383,6 +433,8 @@ When scaffolding a new service:
 - [ ] `HonoVariables` declares the trusted context fields
 - [ ] **Registered in the Gateway service registry** (`{CODENAME}_INTERNAL_URL` + map entry)
 - [ ] Routes mounted under the canonical `/v1/{codename}/*` prefix
+- [ ] **If service has public endpoints:** public prefix registered in Gateway separately; `hmacAuth` is NOT applied to the public prefix; service enforces its own access check (e.g. `is_public` flag)
+- [ ] **If service is admin-managed from Console:** `{CODENAME}_INTERNAL_URL` added to Console's env in docker-compose
 
 ## Adding a service in v2 (the payoff)
 
@@ -433,6 +485,91 @@ This contract is the **target**. As of M5 (Orbit spine):
 
 ---
 
+# Part 3 — The admin trust path (Console → service)
+
+## Why Console bypasses Gateway
+
+Gateway is the external trust boundary for **app developers and end users**. It resolves `Bearer nbl_…` API keys that are issued per app and scoped to tenant data.
+
+Console is the **platform admin** — it manages the platform itself (create apps, browse files, view deployments, manage settings). Routing Console's admin operations through Gateway would require a special "internal admin API key", conflating two separate trust domains and making Gateway responsible for authorising both developer traffic and platform admin traffic.
+
+Instead, Console holds `INTERNAL_HMAC_SECRET` and signs requests directly — the same mechanism Gateway uses. Services cannot and do not need to distinguish a Gateway-signed request from a Console-signed request: both carry a valid HMAC. The distinction only matters at the application design level: Console always sends admin-scoped requests; Gateway always sends app-scoped requests.
+
+## How Console signs a request
+
+Console uses `computeHmac` and `forwardSigned` from `@nublestation/shared`, exactly as Gateway does. The env vars it needs are `INTERNAL_HMAC_SECRET` and the internal URL of each service it calls (`VAULT_INTERNAL_URL`, `ORBIT_INTERNAL_URL`).
+
+```typescript
+// apps/console/lib/internal/vault.ts  (example)
+import { forwardSigned } from "@nublestation/shared";
+
+export async function adminListFiles(appId: string, appSlug: string) {
+  return forwardSigned({
+    upstreamBaseUrl: process.env.VAULT_INTERNAL_URL!,
+    method: "GET",
+    path: `/v1/vault/files`,
+    body: new Uint8Array(),
+    appId,
+    userId: "console-admin",   // sentinel value — no real user UUID for admin calls
+    hmacSecret: process.env.INTERNAL_HMAC_SECRET!,
+    contentType: null,
+  });
+}
+```
+
+Console is a Next.js server-side app — these calls happen inside **server actions or route handlers**, never in client components. No HMAC secret touches the browser.
+
+## What services receive
+
+From a service's perspective, a Console request looks identical to a Gateway-forwarded request: same `x-nuble-*` headers, same HMAC. The only observable difference is that `x-nuble-user-id` carries the sentinel `"console-admin"` rather than a real user UUID, which the service can use for audit logging.
+
+```mermaid
+sequenceDiagram
+    participant Admin as Admin browser
+    participant C as Console (server action)
+    participant V as Vault
+
+    Admin->>C: click "Delete file"
+    C->>C: sign request with INTERNAL_HMAC_SECRET
+    C->>V: DELETE /v1/vault/files/... (HMAC-signed, direct)
+    V->>V: verify HMAC — passes
+    V->>V: delete file + DB row
+    V-->>C: 200 { ok: true }
+    C-->>Admin: updated UI
+```
+
+## Rules for Console → service calls
+
+- **Server-side only.** `INTERNAL_HMAC_SECRET` must never be referenced from a client component or passed to the browser.
+- **Use `forwardSigned` from `@nublestation/shared`.** Do not reimplement the signing logic in Console code.
+- **`userId` must be `"console-admin"`** for platform admin operations with no real user context. Services log it as-is for audit trails.
+- **Console only calls services it needs.** Console has `VAULT_INTERNAL_URL` and `ORBIT_INTERNAL_URL`. It does not get Blaze's URL — it talks to Postgres directly via `PLATFORM_DB_URL` for all data reads.
+- **No Console-specific routes in services.** Services expose one set of `/v1/*` routes. Console uses the same routes as Gateway would — it just arrives with a different `userId`.
+
+## Environment variables for Console
+
+| Variable | Purpose |
+|---|---|
+| `INTERNAL_HMAC_SECRET` | Signs outbound requests to internal services |
+| `VAULT_INTERNAL_URL` | Direct URL to Vault (e.g. `http://vault:3003`) |
+| `ORBIT_INTERNAL_URL` | Direct URL to Orbit (e.g. `http://orbit:3002`) |
+| `PLATFORM_DB_URL` | Direct Postgres connection for data reads |
+
+## New-service checklist addition
+
+When a service needs to be manageable from Console, add to the service's Compose definition:
+
+```yaml
+# infra/docker-compose.yml
+console:
+  environment:
+    VAULT_INTERNAL_URL: http://vault:3003   # add the new service URL here
+```
+
+No changes to the service itself are needed — it already accepts HMAC-signed requests from any caller holding the secret.
+
+---
+
 ## References
 
 - [`hmac-signing-flow.md`](./hmac-signing-flow.md) — the signing/verification handshake in detail
@@ -441,3 +578,4 @@ This contract is the **target**. As of M5 (Orbit spine):
 - ADR 007 — Orbit deployment service; §8 the `appSlug` signed field
 - ADR 008 — CLI and SDK architecture; the two client types
 - ADR 009 — this contract as a locked decision
+- ADR 012 — Vault storage service; public endpoint pattern and Console admin trust path
