@@ -1,34 +1,58 @@
 ---
 title: HMAC Request Signing
-description: How the API Gateway signs internal requests so services can't be spoofed.
+description: How requests are authenticated between Gateway, Console, and internal services.
 ---
 
 ## The problem
 
-Internal services (DB, Auth, Storage, Deploy) listen only on the Docker bridge network. Only the API Gateway can reach them. But Docker network isolation isn't a cryptographic guarantee — a compromised app container could potentially send arbitrary HTTP requests to an internal service.
+Internal services (Blaze, Vault, Orbit, Identity) listen only on the Docker bridge network. Only the Gateway and Console can reach them from the LAN. But Docker network isolation is not a cryptographic guarantee — a compromised app container on the same bridge could send arbitrary HTTP requests to an internal service.
 
-HMAC signing solves this: internal services only trust requests that carry a valid signature produced by `INTERNAL_HMAC_SECRET`, which is known only to the gateway and the target service. A compromised app container cannot forge a signature because it doesn't have the secret.
+HMAC signing solves this: services only trust requests that carry a valid signature produced by `INTERNAL_HMAC_SECRET`. A compromised container cannot forge that signature without the secret.
 
-## The canonical payload
+---
 
-The gateway signs this string:
+## The three request paths
+
+NubleStation has three distinct paths through which requests reach internal services:
+
+| Path | Who sends | Auth mechanism | When used |
+|---|---|---|---|
+| **Authenticated** | SDK / CLI → Gateway → service | API key → HMAC | Normal app developer traffic |
+| **Public** | Browser → Gateway → service | None (service checks `is_public`) | Public file serving (Vault only) |
+| **Admin** | Console → service (direct) | HMAC (no API key) | Platform admin operations |
+
+---
+
+## Path 1 — Authenticated (SDK / CLI via Gateway)
+
+The standard path. An app developer's request carries an API key; Gateway resolves it, then signs the forwarded request.
+
+### Canonical payload (SigV4-inspired)
 
 ```
-METHOD\nPATH\nBODY_SHA256_HEX\nTIMESTAMP_MS
+METHOD\n
+PATH\n
+BODY_SHA256_HEX\n
+TIMESTAMP_MS\n
+x-nuble-app-id:<uuid>\n
+x-nuble-user-id:<uuid>
 ```
 
-Example for `POST /v1/db/tasks` with a JSON body:
+Context headers are lower-cased and sorted lexicographically — modelled on AWS SigV4. Every identity claim is inside the signed payload, so a MITM on the Docker bridge cannot swap tenant identity without holding the secret.
+
+For Orbit, `x-nuble-app-slug` is also signed (sorted between `app-id` and `user-id`):
 
 ```
 POST
-/v1/db/tasks
-a591a6d40bf420404a011733cfb7b190d62c65bf0bcda32b57b277d9ad9f146e
+/v1/orbit/deploy
+<zip sha256 hex>
 1716134400000
+x-nuble-app-id:f47ac10b-58cc-4372-a567-0e02b2c3d479
+x-nuble-app-slug:tasks
+x-nuble-user-id:b32c1234-1111-2222-3333-444455556666
 ```
 
-The body hash ensures that tampering with the request body after signing breaks the signature.
-
-## Headers sent to internal services
+### Headers forwarded to the service
 
 | Header | Value |
 |---|---|
@@ -37,88 +61,118 @@ The body hash ensures that tampering with the request body after signing breaks 
 | `x-nuble-timestamp` | Unix timestamp in milliseconds |
 | `x-nuble-sig` | HMAC-SHA256 of the canonical payload, hex-encoded |
 
-## Signing (gateway side)
+### Signing — Gateway side
 
 ```typescript
-// packages/shared/src/hmac.ts — shared between gateway and services
-export function computeHmac(
-  method: string,
-  path: string,
-  bodyHashHex: string,
-  timestamp: string,
-  secret: string
-): string {
-  const payload = `${method.toUpperCase()}\n${path}\n${bodyHashHex}\n${timestamp}`;
-  return createHmac('sha256', secret).update(payload).digest('hex');
+import { computeHmac, sha256Hex } from "@nublestation/shared";
+
+const bodyHash  = sha256Hex(body);
+const timestamp = String(Date.now());
+const context   = { "x-nuble-app-id": appId, "x-nuble-user-id": userId };
+const sig       = computeHmac(method, path, bodyHash, timestamp, secret, context);
+```
+
+### Verification — service side
+
+Applied as middleware to all `/v1/*` routes (never on `/healthz` or `/readyz`):
+
+```typescript
+// Rebuild the same context the Gateway signed
+const context = {
+  "x-nuble-app-id":  c.req.header("x-nuble-app-id"),
+  "x-nuble-user-id": c.req.header("x-nuble-user-id"),
+};
+const expected = computeHmac(method, path, bodyHash, timestamp, secret, context);
+
+if (!verifyHmac(expected, sig)) {
+  return c.json({ ok: false, error: "bad_signature" }, 401);
 }
 
-// apps/gateway/src/forward/sign.ts
-export function signRequest(method, path, body: Uint8Array, secret, now = Date.now()) {
-  const bodyHash = sha256Hex(body);
-  const timestamp = String(now);
-  const signature = computeHmac(method, path, bodyHash, timestamp, secret);
-  return { bodyHash, timestamp, signature };
+// Safe to use — HMAC-verified
+c.set("appId", appId);
+c.set("userId", userId);
+```
+
+---
+
+## Path 2 — Public endpoints (no authentication)
+
+Some content needs to be accessible without an API key — for example, a public logo or document that an app has marked world-readable. Vault exposes a `/vault/*` prefix for this.
+
+**How it works:**
+
+1. Browser requests `api.{org}.local/vault/{app_slug}/{collection}/{filename}` — no `Authorization` header.
+2. Gateway matches the `/vault/*` prefix, skips API key resolution, and forwards directly to Vault — no signing.
+3. Vault receives an unsigned request, looks up the file's `is_public` flag in the database.
+   - `is_public = true` → serve the file.
+   - `is_public = false` → `403 Forbidden`.
+
+The public prefix is always at the top level (never under `/v1/`). The `hmacAuth` middleware is **not** applied to it. Only `GET` is allowed.
+
+```typescript
+const app = new Hono();
+
+// Public — no HMAC, service-side access check
+app.get("/vault/:appSlug/:collection/:filename", servePublicFile);
+
+// Authenticated — HMAC required
+app.use("/v1/*", hmacAuth);
+app.route("/", vaultRoutes);
+```
+
+**Currently implemented:** Vault only (`/vault/*`).
+
+---
+
+## Path 3 — Admin trust path (Console direct)
+
+Console is a trusted internal service, not an external client. Admin operations (browse files, delete deployments, manage settings) bypass Gateway entirely — Console signs requests with `INTERNAL_HMAC_SECRET` and calls services directly over the Docker bridge.
+
+**Why not through Gateway?** Gateway resolves `Bearer nbl_…` API keys that are scoped to app developer operations. Routing admin operations through Gateway would require an internal "admin API key", conflating two separate trust domains.
+
+**How it works:**
+
+1. Admin clicks an action in Console (server action or route handler — never a client component).
+2. Console calls `forwardSigned()` from `@nublestation/shared` with `INTERNAL_HMAC_SECRET`.
+3. The service receives the request, verifies the HMAC — same middleware, same rules as Path 1.
+4. The only observable difference: `x-nuble-user-id` carries `"console-admin"` (a sentinel, not a real UUID).
+
+```typescript
+// apps/console/lib/internal/vault.ts
+import { forwardSigned } from "@nublestation/shared";
+
+export async function adminDeleteFile(appId: string, fileId: string) {
+  return forwardSigned({
+    upstreamBaseUrl: process.env.VAULT_INTERNAL_URL!,
+    method: "DELETE",
+    path: `/v1/vault/files/${fileId}`,
+    body: new Uint8Array(),
+    appId,
+    userId: "console-admin",
+    hmacSecret: process.env.INTERNAL_HMAC_SECRET!,
+    contentType: null,
+  });
 }
 ```
 
-## Verification (service side)
+Console never exposes `INTERNAL_HMAC_SECRET` to the browser — all calls are server-side only.
 
-Applied as middleware to all routes except `/healthz` and `/readyz`:
-
-```typescript
-// apps/db/src/middleware/hmac.ts
-const appId     = c.req.header('x-nuble-app-id');
-const userId    = c.req.header('x-nuble-user-id');
-const timestamp = c.req.header('x-nuble-timestamp');
-const sig       = c.req.header('x-nuble-sig');
-
-// Step 1: all headers must be present
-if (!appId || !userId || !timestamp || !sig) {
-  return c.json({ error: 'missing_signature_headers' }, 401);
-}
-
-// Step 2: reject stale requests (±30 seconds)
-if (Math.abs(Date.now() - Number(timestamp)) > 30_000) {
-  return c.json({ error: 'stale_or_invalid_timestamp' }, 401);
-}
-
-// Step 3: validate appId is a UUID
-if (!z.string().uuid().safeParse(appId).success) {
-  return c.json({ error: 'invalid_app_id' }, 400);
-}
-
-// Step 4: re-hash the request body
-const bodyBytes = new Uint8Array(await c.req.raw.clone().arrayBuffer());
-const bodyHash  = sha256Hex(bodyBytes);
-
-// Step 5: recompute the expected HMAC
-const expected = computeHmac(c.req.method, c.req.path, bodyHash, timestamp, INTERNAL_HMAC_SECRET);
-
-// Step 6: constant-time comparison (prevents timing attacks)
-if (!timingSafeEqual(Buffer.from(expected), Buffer.from(sig))) {
-  return c.json({ error: 'bad_signature' }, 401);
-}
-
-// Step 7: expose verified values to downstream handlers
-c.set('appId', appId);
-c.set('userId', userId);
-```
+---
 
 ## Shared package
 
-`packages/shared/src/hmac.ts` is imported by both the gateway and all internal services. The canonical payload format, SHA-256 function, and HMAC function live in one place — they cannot drift between the signer and verifier. A format change is a single commit that affects both sides at once.
+All signing and verification logic lives in `packages/shared/src/hmac.ts`. Both Gateway and Console import from it to sign; all services import from it to verify. A change to the canonical payload format is a single commit that affects every participant simultaneously — signer and verifier cannot drift.
+
+---
 
 ## Security properties
 
-| Property | How it's achieved |
+| Property | Mechanism |
 |---|---|
-| **Authenticity** | HMAC-SHA256 with `INTERNAL_HMAC_SECRET` — only the gateway knows the secret |
-| **Integrity** | Body hash is part of the signed payload — body tampering breaks the signature |
-| **Replay prevention** | Timestamp must be within ±30 s of the service's clock |
-| **Timing safety** | `timingSafeEqual` on HMAC comparison; Argon2 on API key verification |
-| **Enumeration prevention** | Gateway returns a single generic 401 for all auth failures |
-| **Network isolation** | Services aren't exposed on the LAN — reachable only via Docker bridge |
-
-## Why `timingSafeEqual`
-
-A naive `===` string comparison leaks timing information. An attacker measuring response times can determine how many leading bytes of a forged signature match the real one, enabling brute-force attacks byte-by-byte. `timingSafeEqual` from Node's `crypto` module takes constant time regardless of where the bytes diverge.
+| Authenticity | HMAC-SHA256 with `INTERNAL_HMAC_SECRET` — only Gateway and Console hold the secret |
+| Integrity | Body hash is part of the signed payload — body tampering breaks the signature |
+| Identity binding | `app-id`, `user-id` (and `app-slug` for Orbit) are inside the signed payload — MITM cannot swap tenant identity |
+| Replay prevention | Timestamp must be within ±30 s of the service's clock |
+| Timing safety | `timingSafeEqual` for HMAC comparison; Argon2id for API key verification |
+| Enumeration prevention | Generic 401 for all auth failures — caller cannot distinguish wrong key from bad signature |
+| Network isolation | Services have no host-mapped ports — reachable only via Docker bridge |
