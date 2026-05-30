@@ -9,6 +9,7 @@ volumes:
   caddy-data:
   caddy-config:
   nuble-apps:
+  nuble-storage:
 
 services:
   caddy:
@@ -78,6 +79,7 @@ services:
       ADMIN_EMAIL: ${ADMIN_EMAIL}
       ADMIN_PASSWORD_HASH: ${ADMIN_PASSWORD_HASH}
       ORBIT_STORAGE_ROOT: /var/nuble/apps
+      VAULT_INTERNAL_URL: http://vault:3003
       ORG_NAME: ${ORG_NAME}
       ORG_DOMAIN: ${ORG_DOMAIN}
       HOST_IP: ${HOST_IP}
@@ -94,6 +96,8 @@ services:
         condition: service_healthy
       blaze:
         condition: service_healthy
+      vault:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:3000"]
       interval: 10s
@@ -109,8 +113,9 @@ services:
       NODE_ENV: production
       DATABASE_URL: ${DATABASE_URL}
       INTERNAL_HMAC_SECRET: ${INTERNAL_HMAC_SECRET}
-      DB_INTERNAL_URL: http://blaze:3001
+      DB_INTERNAL_URL:    http://blaze:3001
       ORBIT_INTERNAL_URL: http://orbit:3002
+      VAULT_INTERNAL_URL: http://vault:3003
       PORT: 3000
     expose:
       - "3000"
@@ -120,6 +125,8 @@ services:
       postgres:
         condition: service_healthy
       blaze:
+        condition: service_healthy
+      vault:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:3000/healthz"]
@@ -144,6 +151,30 @@ services:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:3001/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  vault:
+    image: ghcr.io/nabilmouzouna/nublestation-vault:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: ${DATABASE_URL}
+      INTERNAL_HMAC_SECRET: ${INTERNAL_HMAC_SECRET}
+      STORAGE_ROOT: /var/nuble/storage
+      PORT: 3003
+    volumes:
+      - nuble-storage:/var/nuble/storage
+    expose:
+      - "3003"
+    networks:
+      - nuble
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3003/healthz"]
       interval: 30s
       timeout: 5s
       retries: 3

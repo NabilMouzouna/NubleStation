@@ -63,6 +63,43 @@ export async function getApiKeys(appId: string): Promise<ApiKeyRow[]> {
   return rows;
 }
 
+export interface StorageFileRow {
+  id: string;
+  collection: string;
+  filename: string;
+  mime_type: string | null;
+  size_bytes: number | null;
+  is_public: boolean;
+  created_at: string;
+}
+
+export interface VaultSettingsRow {
+  allowed_extensions: string[];
+  max_file_bytes: number;
+}
+
+export async function getStorageFiles(appId: string): Promise<StorageFileRow[]> {
+  const pool = getPlatformPool();
+  const { rows } = await pool.query<StorageFileRow>(
+    `SELECT id, collection, filename, mime_type, size_bytes, is_public, created_at
+     FROM platform.storage_files
+     WHERE app_id = $1
+     ORDER BY collection, created_at DESC`,
+    [appId],
+  );
+  return rows;
+}
+
+export async function getVaultSettings(appId: string): Promise<VaultSettingsRow> {
+  const pool = getPlatformPool();
+  const { rows } = await pool.query<VaultSettingsRow>(
+    `SELECT allowed_extensions, max_file_bytes
+     FROM platform.vault_settings WHERE app_id = $1`,
+    [appId],
+  );
+  return rows[0] ?? { allowed_extensions: [], max_file_bytes: 52_428_800 };
+}
+
 export async function getAppTables(appId: string): Promise<AppTableRow[]> {
   const pool = getPlatformPool();
   const { rows } = await pool.query<AppTableRow>(
