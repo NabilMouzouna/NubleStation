@@ -1,5 +1,4 @@
 import { redirect } from "next/navigation";
-import Image from "next/image";
 import { Card } from "@nublestation/ui/components/card";
 import { validateSession } from "@/lib/auth/session";
 import { LoginForm } from "./_login-form";
@@ -14,8 +13,10 @@ export default async function AuthPage() {
         <Card>
           <div className="p-8">
             <div className="flex justify-center">
-              <Image src="/logo-light.png" alt="NubleStation" width={200} height={40} priority className="dark:hidden" />
-              <Image src="/logo.png"       alt="NubleStation" width={200} height={40} priority className="hidden dark:block" />
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/logo-light.svg" alt="NubleStation" width={200} height={40} className="dark:hidden" />
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/logo.svg" alt="NubleStation" width={200} height={40} className="hidden dark:block" />
             </div>
 
             <div className="mb-5 mt-8 text-center">
