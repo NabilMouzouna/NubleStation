@@ -19,6 +19,8 @@ function resolveUpstream(
   switch (segment) {
     case "orbit":
       return { baseUrl: cfg.ORBIT_INTERNAL_URL, needsSlug: true };
+    case "vault":
+      return { baseUrl: cfg.VAULT_INTERNAL_URL, needsSlug: false };
     case "blaze":
     case "db": // legacy prefix — kept for compatibility
       return { baseUrl: cfg.DB_INTERNAL_URL, needsSlug: false };
@@ -26,6 +28,26 @@ function resolveUpstream(
       return null;
   }
 }
+
+// Public file serving — no API key, no HMAC. Vault checks is_public internally.
+proxy.get("/vault/*", async (c) => {
+  const cfg = loadConfig();
+  try {
+    const resp = await fetch(`${cfg.VAULT_INTERNAL_URL}${c.req.path}`);
+    const body = await resp.arrayBuffer();
+    return new Response(body, {
+      status: resp.status,
+      headers: {
+        "content-type":   resp.headers.get("content-type") ?? "application/octet-stream",
+        "content-length": resp.headers.get("content-length") ?? String(body.byteLength),
+        "cache-control":  resp.headers.get("cache-control") ?? "no-store",
+      },
+    });
+  } catch (err) {
+    logger.error({ err, path: c.req.path }, "vault public forward failed");
+    return c.json({ ok: false, error: "upstream_unavailable" }, 502);
+  }
+});
 
 proxy.all("/v1/*", async (c) => {
   const cfg = loadConfig();

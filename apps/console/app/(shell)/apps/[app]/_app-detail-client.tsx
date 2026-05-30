@@ -6,11 +6,12 @@ import { useRouter } from "next/navigation";
 import {
   ChevronRight, Rocket, Database, HardDrive, Users, Settings,
   Copy, CheckCheck, ShieldOff, Trash2, ExternalLink, Clock,
+  Globe, Lock, Upload, X,
 } from "lucide-react";
 import { Button } from "@nublestation/ui/components/button";
 import { Badge } from "@nublestation/ui/components/badge";
-import type { AppDetail, DeploymentRow, ApiKeyRow, AppTableRow } from "@/lib/platform/app-detail";
-import { revokeApiKeyAction, deleteAppAction, generateApiKeyAction } from "./actions";
+import type { AppDetail, DeploymentRow, ApiKeyRow, AppTableRow, StorageFileRow, VaultSettingsRow } from "@/lib/platform/app-detail";
+import { revokeApiKeyAction, deleteAppAction, generateApiKeyAction, deleteFileAction, togglePublicAction, saveVaultSettingsAction } from "./actions";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -104,6 +105,174 @@ function DatabaseTab({ tables }: { tables: AppTableRow[] }) {
 
 function PlaceholderTab({ service }: { service: string }) {
   return <EmptyState message={`${service} data will appear here once the service is in use.`} />;
+}
+
+// ---------------------------------------------------------------------------
+// VaultTab
+// ---------------------------------------------------------------------------
+
+function formatBytes(n: number | null): string {
+  if (!n) return "—";
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function VaultTab({
+  app,
+  files,
+  settings,
+  orgDomain,
+}: {
+  app: AppDetail;
+  files: StorageFileRow[];
+  settings: VaultSettingsRow;
+  orgDomain: string;
+}) {
+  const router = useRouter();
+  const [, startTransition] = useTransition();
+  const [deletingId, setDeletingId]   = useState<string | null>(null);
+  const [togglingId, setTogglingId]   = useState<string | null>(null);
+  const [savingSettings, setSaving]   = useState(false);
+  const [extInput, setExtInput]       = useState(settings.allowed_extensions.join(", "));
+  const [maxMb, setMaxMb]             = useState(Math.round(settings.max_file_bytes / (1024 * 1024)));
+
+  async function handleDelete(file: StorageFileRow) {
+    setDeletingId(file.id);
+    await deleteFileAction(app.id, app.name, file.collection, file.filename);
+    setDeletingId(null);
+    startTransition(() => router.refresh());
+  }
+
+  async function handleToggle(file: StorageFileRow) {
+    setTogglingId(file.id);
+    await togglePublicAction(app.id, app.name, file.collection, file.filename, !file.is_public);
+    setTogglingId(null);
+    startTransition(() => router.refresh());
+  }
+
+  async function handleSaveSettings(e: React.FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    const exts = extInput.split(",").map(s => s.trim().replace(/^\./, "").toLowerCase()).filter(Boolean);
+    await saveVaultSettingsAction(app.id, exts, maxMb);
+    setSaving(false);
+    startTransition(() => router.refresh());
+  }
+
+  const publicUrl = (file: StorageFileRow) =>
+    `http://api.${orgDomain}.local/vault/${app.name}/${file.collection}/${file.filename}`;
+
+  return (
+    <div className="space-y-8 max-w-3xl">
+
+      {/* File list */}
+      <section className="space-y-3">
+        <h3 className="text-sm font-semibold text-foreground">Files</h3>
+        {files.length === 0 ? (
+          <EmptyState message="No files uploaded yet. Use the SDK or CLI to upload files." />
+        ) : (
+          <div className="overflow-hidden rounded-3xl border border-border">
+            <table className="w-full text-sm">
+              <TableHeader cols={["Path", "Size", "Type", "Access", ""]} />
+              <tbody className="divide-y divide-border">
+                {files.map((f) => (
+                  <tr key={f.id} className="hover:bg-muted/40 transition-colors">
+                    <td className="px-5 py-3 font-mono text-foreground">
+                      {f.collection}/{f.filename}
+                    </td>
+                    <td className="px-5 py-3 text-muted-foreground">{formatBytes(f.size_bytes)}</td>
+                    <td className="px-5 py-3 text-muted-foreground">{f.mime_type ?? "—"}</td>
+                    <td className="px-5 py-3">
+                      {f.is_public ? (
+                        <a
+                          href={publicUrl(f)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-1 text-xs text-brand-blue hover:underline"
+                        >
+                          <Globe className="h-3 w-3" /> Public
+                        </a>
+                      ) : (
+                        <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                          <Lock className="h-3 w-3" /> Private
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-5 py-3">
+                      <div className="flex items-center gap-2 justify-end">
+                        <button
+                          onClick={() => handleToggle(f)}
+                          disabled={togglingId === f.id}
+                          className="text-xs text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
+                        >
+                          {f.is_public ? "Make private" : "Make public"}
+                        </button>
+                        <button
+                          onClick={() => handleDelete(f)}
+                          disabled={deletingId === f.id}
+                          className="text-muted-foreground hover:text-destructive transition-colors disabled:opacity-50"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
+      {/* Settings */}
+      <section className="space-y-3">
+        <h3 className="text-sm font-semibold text-foreground">Vault Settings</h3>
+        <form onSubmit={handleSaveSettings} className="space-y-4 rounded-3xl border border-border p-5">
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium text-foreground">
+              Allowed extensions
+            </label>
+            <p className="text-xs text-muted-foreground">Comma-separated list (e.g. pdf, jpg, png). Leave blank to allow all.</p>
+            <input
+              type="text"
+              value={extInput}
+              onChange={e => setExtInput(e.target.value)}
+              placeholder="pdf, jpg, png"
+              className="flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium text-foreground">
+              Max file size (MB)
+            </label>
+            <input
+              type="number"
+              min={1}
+              max={500}
+              value={maxMb}
+              onChange={e => setMaxMb(Number(e.target.value))}
+              className="flex h-10 w-32 rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40"
+            />
+          </div>
+          <Button type="submit" disabled={savingSettings} className="h-9 px-5 text-sm rounded-full">
+            {savingSettings ? "Saving…" : "Save settings"}
+          </Button>
+        </form>
+      </section>
+
+      {/* Upload hint */}
+      <section className="rounded-3xl border border-dashed border-border p-5">
+        <div className="flex items-center gap-3 text-muted-foreground">
+          <Upload className="h-5 w-5 shrink-0" />
+          <p className="text-sm">
+            Upload files via the SDK: <span className="font-mono text-foreground">nuble.vault.upload(&quot;{app.name}&quot;, &quot;collection&quot;, file)</span>
+          </p>
+        </div>
+      </section>
+
+    </div>
+  );
 }
 
 function SettingsTab({
@@ -355,12 +524,16 @@ export function AppDetailClient({
   deployments,
   apiKeys,
   tables,
+  storageFiles,
+  vaultSettings,
   orgDomain,
 }: {
   app: AppDetail;
   deployments: DeploymentRow[];
   apiKeys: ApiKeyRow[];
   tables: AppTableRow[];
+  storageFiles: StorageFileRow[];
+  vaultSettings: VaultSettingsRow;
   orgDomain: string;
 }) {
   const [activeTab, setActiveTab] = useState<Tab>("deployments");
@@ -426,7 +599,7 @@ export function AppDetailClient({
       <div className="mt-6">
         {activeTab === "deployments" && <DeploymentsTab deployments={deployments} />}
         {activeTab === "database"    && <DatabaseTab tables={tables} />}
-        {activeTab === "storage"     && <PlaceholderTab service="Vault" />}
+        {activeTab === "storage"     && <VaultTab app={app} files={storageFiles} settings={vaultSettings} orgDomain={orgDomain} />}
         {activeTab === "users"       && <PlaceholderTab service="Identity" />}
         {activeTab === "settings"    && <SettingsTab app={app} apiKeys={apiKeys} orgDomain={orgDomain} />}
       </div>

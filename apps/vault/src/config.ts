@@ -10,13 +10,11 @@ if (existsSync(envPath)) {
 }
 
 const schema = z.object({
-  DATABASE_URL: z.string().url(),
-  INTERNAL_HMAC_SECRET: z.string().min(16),
-  DB_INTERNAL_URL:    z.string().url(),
-  ORBIT_INTERNAL_URL: z.string().url(),
-  VAULT_INTERNAL_URL: z.string().url(),
-  PORT: z.coerce.number().int().positive().default(3000),
-  LOG_LEVEL: z
+  DATABASE_URL:         z.string().url(),
+  INTERNAL_HMAC_SECRET: z.string().min(32),
+  STORAGE_ROOT:         z.string().default("/var/nuble/storage"),
+  PORT:                 z.coerce.number().int().positive().default(3003),
+  LOG_LEVEL:            z
     .enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"])
     .default("info"),
   NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
@@ -33,8 +31,12 @@ export function loadConfig(): Config {
     const issues = parsed.error.issues
       .map((i) => `  - ${i.path.join(".")}: ${i.message}`)
       .join("\n");
-    throw new Error(`Invalid environment for apps/gateway:\n${issues}`);
+    throw new Error(`Invalid environment for apps/vault:\n${issues}`);
   }
   cached = parsed.data;
   return cached;
+}
+
+export function resetConfigCache(): void {
+  cached = null;
 }

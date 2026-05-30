@@ -393,7 +393,7 @@ EOF
   checkpoint "env-generated"
 
   # ── 6. Generate CoreDNS Corefile ─────────────────────────────────────────────
-  sudo mkdir -p "$INSTALL_DIR/coredns"
+  sudo mkdir -p "$INSTALL_DIR/coredns" "$INSTALL_DIR/storage"
   sed "s/\${ORG_DOMAIN}/${ORG_DOMAIN}/g; s/\${HOST_IP}/${HOST_IP}/g" \
     "$(bundle_file infra/coredns/Corefile.template)" | sudo tee "$INSTALL_DIR/coredns/Corefile" >/dev/null
   info "CoreDNS Corefile generated"

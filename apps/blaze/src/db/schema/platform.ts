@@ -1,4 +1,5 @@
 import {
+  bigint,
   boolean,
   index,
   jsonb,
@@ -196,5 +197,44 @@ export const auditLog = platform.table(
   },
   (t) => ({
     createdAtIdx: index("audit_log_created_at_idx").on(t.createdAt),
+  }),
+);
+
+// ADR 012: per-app Vault configuration.
+export const vaultSettings = platform.table("vault_settings", {
+  appId: uuid("app_id")
+    .primaryKey()
+    .references(() => apps.id, { onDelete: "cascade" }),
+  allowedExtensions: text("allowed_extensions").array().notNull().default([]),
+  maxFileBytes: bigint("max_file_bytes", { mode: "number" })
+    .notNull()
+    .default(52428800), // 50 MB
+});
+
+// ADR 012: file metadata. Bytes live on disk at storage_path.
+export const storageFiles = platform.table(
+  "storage_files",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    appId: uuid("app_id")
+      .notNull()
+      .references(() => apps.id, { onDelete: "cascade" }),
+    collection: text("collection").notNull(),
+    filename: text("filename").notNull(),
+    storagePath: text("storage_path").notNull(),
+    mimeType: text("mime_type"),
+    sizeBytes: bigint("size_bytes", { mode: "number" }),
+    isPublic: boolean("is_public").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    appCollectionFilenameUq: uniqueIndex("storage_files_app_collection_filename_uq").on(
+      t.appId,
+      t.collection,
+      t.filename,
+    ),
+    appIdIdx: index("storage_files_app_id_idx").on(t.appId),
   }),
 );
