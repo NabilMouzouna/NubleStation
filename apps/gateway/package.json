@@ -1,5 +1,5 @@
 {
-  "name": "@nublestation/gateway",
+  "name": "@nublestation/gateway-service",
   "version": "0.2.0",
   "private": true,
   "type": "module",

@@ -183,3 +183,30 @@ jobs:
         run: pnpm --filter @nublestation/cli publish --no-git-checks --access public --tag ${{ steps.npm-tag.outputs.tag }}
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  publish-vault:
+    name: Publish @nublestation/vault to npm
+    runs-on: ubuntu-latest
+    if: github.ref_name == 'main'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.0.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Build vault SDK
+        run: pnpm --filter @nublestation/vault run build
+
+      - name: Publish
+        run: pnpm --filter @nublestation/vault publish --no-git-checks --access public --tag latest
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
