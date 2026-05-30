@@ -14,9 +14,9 @@ export default async function AuthPage() {
           <div className="p-8">
             <div className="flex justify-center">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/logo-light.svg" alt="NubleStation" width={200} height={40} className="dark:hidden" />
+              <img src="/logo-light.svg" alt="NubleStation Logo" width={200} height={40} className="dark:hidden" />
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/logo.svg" alt="NubleStation" width={200} height={40} className="hidden dark:block" />
+              <img src="/logo.svg" alt="NubleStation Logo" width={200} height={40} className="hidden dark:block" />
             </div>
 
             <div className="mb-5 mt-8 text-center">
