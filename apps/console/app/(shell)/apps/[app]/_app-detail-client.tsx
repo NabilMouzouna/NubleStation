@@ -109,9 +109,11 @@ function PlaceholderTab({ service }: { service: string }) {
 function SettingsTab({
   app,
   apiKeys,
+  orgDomain,
 }: {
   app: AppDetail;
   apiKeys: ApiKeyRow[];
+  orgDomain: string;
 }) {
   const router = useRouter();
   const [, startTransition] = useTransition();
@@ -426,7 +428,7 @@ export function AppDetailClient({
         {activeTab === "database"    && <DatabaseTab tables={tables} />}
         {activeTab === "storage"     && <PlaceholderTab service="Vault" />}
         {activeTab === "users"       && <PlaceholderTab service="Identity" />}
-        {activeTab === "settings"    && <SettingsTab app={app} apiKeys={apiKeys} />}
+        {activeTab === "settings"    && <SettingsTab app={app} apiKeys={apiKeys} orgDomain={orgDomain} />}
       </div>
     </div>
   );
