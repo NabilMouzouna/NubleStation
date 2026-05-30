@@ -1,112 +1,99 @@
 ---
 title: SDK Overview
-description: The @nublestation/sdk package — how to install it, configure it, and what it covers.
+description: NubleStation provides a separate npm package per service — install only what your app needs.
 ---
 
+NubleStation ships one npm package per service. Install only what your app uses — no monolithic SDK bundle.
 
+| Package | Service | What it does |
+|---|---|---|
+| `@nublestation/vault` | Vault | File upload, download, public/private access |
+| `@nublestation/blaze` | Blaze | Database queries on your app's tables *(coming soon)* |
+| `@nublestation/identity` | Identity | User sessions and SSO across apps *(coming soon)* |
 
-## What the SDK is
+Every package follows the same pattern: `createClient({ url, apiKey })` returns a typed client scoped to your app.
 
-`@nublestation/sdk` is the TypeScript client library app developers use to interact with NubleStation. It handles:
+---
 
-- Authentication (API key in every request)
-- Building REST queries from a fluent builder API
-- Type safety derived from your `schema.ts`
-- Real-time subscriptions via Server-Sent Events
-
-The SDK never speaks SQL and never holds a database connection. It builds HTTP requests and sends them to `api.{org}.local` — the gateway handles everything else.
-
-## Installation
+## Quick start
 
 ```bash
-npm install @nublestation/sdk
-# or
-pnpm add @nublestation/sdk
+# Install only the packages your app needs
+npm install @nublestation/vault
 ```
 
-<Aside type="note">
-  The SDK is currently in development alongside the platform. The API shown here reflects the planned v1 surface. Import paths and method signatures may change before the stable release.
-</Aside>
-
-## Creating a client
-
 ```typescript
-import { createClient } from '@nublestation/sdk';
+import { createVaultClient } from "@nublestation/vault";
 
-const nuble = createClient({
-  url: 'http://api.clinic.local',    // your NubleStation gateway URL
-  apiKey: process.env.NUBLE_API_KEY, // nbl_<key_id>.<secret>
+const vault = createVaultClient({
+  url:    "http://api.clinic.local",   // NubleStation gateway URL
+  apiKey: "nbl_<key_id>.<secret>",     // API key from the Console
 });
+
+await vault.upload("reports", "q1.pdf", file);
+const files = await vault.list("reports");
 ```
 
-All methods on `nuble` are authenticated with this API key automatically.
+---
 
-## Client structure
+## Getting an API key
 
-```
-nuble
-├── nuble.db.*           database queries on your custom + built-in tables
-├── nuble.users.*        built-in user management
-├── nuble.files.*        built-in file storage
-├── nuble.notifications.*  built-in notification queue
-└── nuble.realtime.*     SSE subscriptions (Phase 5)
-```
+1. Open the Console at `console.{org}.local`
+2. Go to **Apps → your app → Settings**
+3. Click **Generate API key**
+4. Copy the key — it is shown only once
 
-## Type safety
+The API key is scoped to one app. All requests made with it are isolated to that app's data and files.
 
-After running `nuble db push --app tasks`, the CLI writes `.nuble/types.ts`:
-
-```typescript
-// .nuble/types.ts — auto-generated, do not edit
-export interface Task {
-  id: string;
-  title: string;
-  status: 'pending' | 'in_progress' | 'done';
-  priority: 'low' | 'medium' | 'high';
-  assigneeId: string | null;
-  createdAt: string;
-}
-```
-
-The SDK's TypeScript generics pick these up:
-
-```typescript
-// Fully typed — status autocompletes to 'pending' | 'in_progress' | 'done'
-const tasks = await nuble.db.tasks.findMany({
-  where: { status: 'pending' },
-});
-// tasks: Task[]
-```
+---
 
 ## Error handling
 
-All SDK methods throw structured errors:
+All SDK packages throw a typed error class on non-2xx responses.
 
 ```typescript
-import { NubleError } from '@nublestation/sdk';
+import { VaultError } from "@nublestation/vault";
 
 try {
-  await nuble.db.tasks.create({ title: '' });
+  await vault.upload("docs", "report.pdf", bytes);
 } catch (err) {
-  if (err instanceof NubleError) {
-    console.error(err.code, err.message);
-    // 'validation_error', 'title is required'
+  if (err instanceof VaultError) {
+    console.error(err.status, err.code);
   }
 }
 ```
 
-Common error codes:
+Common error codes across all packages:
 
-| Code | Meaning |
-|---|---|
-| `unauthorized` | API key missing, expired, or invalid |
-| `forbidden` | User lacks access to this app |
-| `not_found` | Row or resource doesn't exist |
-| `validation_error` | Request body failed schema validation |
-| `quota_exceeded` | Request exceeds row limit or body size |
-| `rate_limited` | Too many requests (429) |
+| Code | Status | Meaning |
+|---|---|---|
+| `unauthorized` | 401 | API key missing, invalid, or revoked |
+| `not_found` | 404 | Resource does not exist |
+| `internal_error` | 500 | Unexpected server error |
 
-## Next
+---
 
-- [Database Queries](/sdk/database/) — filters, relations, pagination, aggregations
-- [Real-time Subscriptions](/sdk/realtime/) — SSE-based live updates
+## How it works
+
+The SDK sends plain HTTP requests to `api.{org}.local` with an `Authorization: Bearer nbl_...` header. The Gateway validates the key, resolves the app identity, and signs the forwarded request before it reaches the internal service. Your app never handles HMAC or internal secrets.
+
+```
+Your app
+    │  Authorization: Bearer nbl_<key_id>.<secret>
+    ▼
+api.{org}.local  (Gateway)
+    │  verify key → resolve app_id
+    │  sign request with INTERNAL_HMAC_SECRET
+    ▼
+Internal service (Vault, Blaze, Identity)
+    │  verify HMAC — reject if not from Gateway
+    └  handle request
+```
+
+---
+
+## Packages
+
+- [@nublestation/vault](/sdk/storage/) — file storage
+- [Database queries](/sdk/database/) — Blaze (coming soon)
+- [Real-time](/sdk/realtime/) — SSE subscriptions (coming soon)
