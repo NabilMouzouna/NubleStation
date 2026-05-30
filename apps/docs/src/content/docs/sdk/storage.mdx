@@ -1,0 +1,281 @@
+---
+title: "@nublestation/vault"
+description: File storage SDK — upload, download, list, and manage files in your NubleStation app.
+---
+
+`@nublestation/vault` is the file storage client for NubleStation apps. Upload documents, images, and any binary data to your organization's private storage, with per-file public/private access control.
+
+## Installation
+
+```bash
+npm install @nublestation/vault
+# or
+pnpm add @nublestation/vault
+```
+
+## Creating a client
+
+```typescript
+import { createVaultClient } from "@nublestation/vault";
+
+const vault = createVaultClient({
+  url:    "http://api.clinic.local",   // your NubleStation gateway
+  apiKey: "nbl_<key_id>.<secret>",     // API key from the Console
+});
+```
+
+All methods are scoped to the app that issued the API key. One app cannot read or write another app's files.
+
+---
+
+## Collections
+
+Files are organised into **collections** — namespaces you define. A collection is just a string in the path; no setup required. Think of it as a folder.
+
+```
+patient-records / john-doe-xray.jpg
+invoices        / 2026-01.pdf
+avatars         / user-42.png
+↑                 ↑
+collection        filename
+```
+
+---
+
+## Methods
+
+### `vault.upload(collection, filename, data)`
+
+Upload a file. Throws `VaultError(409)` if a file with the same name already exists in the collection — delete it first or use a different name.
+
+```typescript
+// From a browser file input
+const file = fileInput.files[0];
+const result = await vault.upload("patient-records", file.name, file);
+
+// From a Buffer or Uint8Array (Node.js)
+import { readFileSync } from "node:fs";
+const bytes = readFileSync("./report.pdf");
+const result = await vault.upload("reports", "q1.pdf", bytes);
+```
+
+**Parameters:**
+
+| Parameter | Type | Description |
+|---|---|---|
+| `collection` | `string` | Collection name (letters, numbers, hyphens, underscores) |
+| `filename` | `string` | Filename including extension |
+| `data` | `Blob \| Uint8Array \| ArrayBuffer` | File contents |
+
+**Returns:** `Promise<FileResult>`
+
+**Error codes:**
+
+| Code | Status | Meaning |
+|---|---|---|
+| `file_already_exists` | 409 | File at this path already exists |
+| `file_too_large` | 413 | Exceeds the app's max file size (default 50 MB) |
+| `extension_not_allowed` | 415 | Extension blocked by the app's allowed list |
+| `invalid_content_type` | 400 | Body was not multipart/form-data |
+
+---
+
+### `vault.list(collection?)`
+
+List files. Omit `collection` to list all files for the app.
+
+```typescript
+// All files
+const all = await vault.list();
+
+// Only files in a collection
+const records = await vault.list("patient-records");
+
+// Show filenames
+for (const file of records) {
+  console.log(`${file.collection}/${file.filename} — ${file.sizeBytes} bytes`);
+}
+```
+
+**Returns:** `Promise<FileResult[]>`
+
+---
+
+### `vault.download(collection, filename)`
+
+Download a file and return its raw bytes as an `ArrayBuffer`.
+
+```typescript
+const bytes = await vault.download("patient-records", "john-doe-xray.jpg");
+
+// Browser — display an image
+const url = URL.createObjectURL(new Blob([bytes], { type: "image/jpeg" }));
+document.getElementById("img").src = url;
+
+// Node.js — write to disk
+import { writeFileSync } from "node:fs";
+writeFileSync("./xray.jpg", Buffer.from(bytes));
+```
+
+**Returns:** `Promise<ArrayBuffer>`
+
+**Error codes:**
+
+| Code | Status | Meaning |
+|---|---|---|
+| `not_found` | 404 | File does not exist |
+
+---
+
+### `vault.setPublic(collection, filename, isPublic)`
+
+Make a file public (accessible without an API key) or private.
+
+```typescript
+// Make public
+const file = await vault.setPublic("avatars", "user-42.png", true);
+// file.isPublic === true
+
+// Construct the public URL manually
+const publicUrl = `http://api.clinic.local/vault/${appSlug}/${file.collection}/${file.filename}`;
+
+// Make private again
+await vault.setPublic("avatars", "user-42.png", false);
+```
+
+Public files are served at:
+```
+http://api.{org}.local/vault/{app_slug}/{collection}/{filename}
+```
+
+No API key required to access a public file. The URL is stable until the file is deleted or made private.
+
+**Returns:** `Promise<FileResult>`
+
+---
+
+### `vault.delete(collection, filename)`
+
+Permanently delete a file. Both the bytes on disk and the metadata in the database are removed. **This cannot be undone.**
+
+```typescript
+await vault.delete("patient-records", "old-scan.jpg");
+```
+
+**Returns:** `Promise<void>`
+
+**Error codes:**
+
+| Code | Status | Meaning |
+|---|---|---|
+| `not_found` | 404 | File does not exist |
+
+---
+
+## The `FileResult` type
+
+All methods that return file metadata use this shape:
+
+```typescript
+interface FileResult {
+  id:         string;       // UUID assigned by the platform
+  collection: string;       // collection name
+  filename:   string;       // filename as uploaded
+  mimeType:   string | null; // detected from file bytes, not the client header
+  sizeBytes:  number | null; // file size in bytes
+  isPublic:   boolean;      // whether the file is publicly accessible
+  createdAt:  string;       // ISO 8601 timestamp
+}
+```
+
+---
+
+## Error handling
+
+All methods throw `VaultError` on non-2xx responses.
+
+```typescript
+import { VaultError } from "@nublestation/vault";
+
+try {
+  await vault.upload("docs", "report.pdf", bytes);
+} catch (err) {
+  if (err instanceof VaultError) {
+    console.error(err.status, err.code);
+    // 409 file_already_exists
+  }
+}
+```
+
+```typescript
+class VaultError extends Error {
+  status: number; // HTTP status code
+  code:   string; // machine-readable error code from the server
+}
+```
+
+---
+
+## Complete example
+
+```typescript
+import { createVaultClient, VaultError } from "@nublestation/vault";
+
+const vault = createVaultClient({
+  url:    "http://api.clinic.local",
+  apiKey: process.env.NUBLE_API_KEY!,
+});
+
+// Upload a patient record
+async function uploadRecord(patientId: string, file: File) {
+  try {
+    const result = await vault.upload("records", `${patientId}-${file.name}`, file);
+    console.log("Uploaded:", result.id, result.sizeBytes, "bytes");
+    return result;
+  } catch (err) {
+    if (err instanceof VaultError && err.status === 409) {
+      console.warn("File already exists — deleting old version");
+      await vault.delete("records", `${patientId}-${file.name}`);
+      return vault.upload("records", `${patientId}-${file.name}`, file);
+    }
+    throw err;
+  }
+}
+
+// List all records for a patient
+async function getRecords(patientId: string) {
+  const all = await vault.list("records");
+  return all.filter(f => f.filename.startsWith(patientId));
+}
+
+// Make a report publicly shareable
+async function shareReport(filename: string): Promise<string> {
+  const file = await vault.setPublic("reports", filename, true);
+  return `http://api.clinic.local/vault/tasks/reports/${file.filename}`;
+}
+```
+
+---
+
+## File size and type limits
+
+Limits are configured per app by the organization admin in the **Console → App → Vault Settings**.
+
+| Setting | Default | Description |
+|---|---|---|
+| Max file size | 50 MB | Per-file upload limit |
+| Allowed extensions | *(all)* | If set, only listed extensions are accepted (e.g. `pdf`, `jpg`, `png`) |
+
+Exceeding the size limit returns `VaultError(413, "file_too_large")`.
+Uploading a blocked extension returns `VaultError(415, "extension_not_allowed")`.
+
+---
+
+## Path rules
+
+Collection names and filenames must:
+- Start with a letter or number
+- Contain only letters, numbers, hyphens (`-`), underscores (`_`), or dots (`.`)
+- Not contain `..` or `/`
+
+Invalid paths return `VaultError(400, "invalid_collection")` or `VaultError(400, "invalid_filename")`.
