@@ -36,7 +36,14 @@ ORG_DOMAIN="$(grep '^ORG_DOMAIN=' "$ENV_FILE" | head -1 | cut -d= -f2- | tr -d '
 HOST_IP="$(grep '^HOST_IP=' "$ENV_FILE" | head -1 | cut -d= -f2- | tr -d '"' | tr -d "'")"
 
 [ -n "$ORG_DOMAIN" ] || error "ORG_DOMAIN not found in $ENV_FILE"
-[ -n "$HOST_IP"    ] || error "HOST_IP not found in $ENV_FILE"
+
+# Allow overriding HOST_IP via first argument
+if [ -n "${1:-}" ]; then
+  HOST_IP="$1"
+  info "Using provided IP: $HOST_IP"
+fi
+
+[ -n "$HOST_IP" ] || error "HOST_IP not found in $ENV_FILE and no IP arg provided"
 
 printf '  %sOrg domain:%s  %s\n' "$DIM" "$NC" "$ORG_DOMAIN"
 printf '  %sHost IP:%s     %s\n' "$DIM" "$NC" "$HOST_IP"
