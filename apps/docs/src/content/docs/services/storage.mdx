@@ -1,59 +1,184 @@
 ---
 title: "Vault — Storage Service"
-description: File bytes on the local filesystem with metadata in Postgres. Coming soon.
+description: Path-based file storage on the local filesystem with per-file public/private access control.
 ---
 
+Vault stores arbitrary files for your apps — documents, images, reports — scoped per app and accessible through the standard API gateway.
 
+## Core concepts
 
-<Aside type="caution">
-  The Storage Service is planned for a future phase. This page documents the intended design.
-</Aside>
+### Collections
 
-## Design
+Files are organised into **collections** — developer-defined namespaces within an app (think folders). A collection is just a string in the path; no setup required.
 
-NubleStation file storage follows an S3-like model without S3:
+```
+/patient-records/john-doe-xray.jpg
+/invoices/2026-01.pdf
+/avatars/user-42.png
+ ↑         ↑
+ collection filename
+```
 
-| Layer | What it holds | Lives where |
-|---|---|---|
-| **Bytes** | File content | Filesystem: `/var/nuble/files/{app_id}/{file_id}` |
-| **Metadata** | path, MIME type, size, owner, custom tags | `platform.files` table |
-| **Access** | Public or signed URL with expiry | Storage Service generates on request |
+### Public vs private
 
-No external object store (MinIO, S3) — local filesystem only in v1.
+Every file has an `is_public` flag (default: `false`). Private files require an API key. Public files are accessible by anyone at a stable URL with no credentials.
 
-## Planned SDK methods
+---
+
+## API
+
+All authenticated requests go through the Gateway at `api.{org}.local`. Include your API key:
+
+```
+Authorization: Bearer nbl_<key_id>.<secret>
+```
+
+### Upload a file
+
+```
+POST /v1/vault/files/{collection}/{filename}
+Content-Type: multipart/form-data
+
+file=<binary>
+```
+
+- Returns `409 Conflict` if a file already exists at that path. Delete it first or use a different name.
+- Returns `413` if the file exceeds the app's size limit (default 50 MB).
+- Returns `415` if the file extension is not in the app's allowed list.
+
+**Response:**
+```json
+{
+  "ok": true,
+  "fileId": "d4e5f6a7-...",
+  "path": "/patient-records/john-doe-xray.jpg",
+  "isPublic": false,
+  "publicUrl": null
+}
+```
+
+### List files
+
+```
+GET /v1/vault/files                    # all files for the app
+GET /v1/vault/files/{collection}       # files in a specific collection
+```
+
+**Response:**
+```json
+{
+  "ok": true,
+  "files": [
+    {
+      "id": "d4e5f6a7-...",
+      "collection": "patient-records",
+      "filename": "john-doe-xray.jpg",
+      "mimeType": "image/jpeg",
+      "sizeBytes": 204800,
+      "isPublic": false,
+      "publicUrl": null,
+      "createdAt": "2026-05-30T10:00:00Z"
+    }
+  ]
+}
+```
+
+### Download a file
+
+```
+GET /v1/vault/files/{collection}/{filename}
+```
+
+Returns the raw file bytes with the correct `Content-Type` header. Private files require a valid API key; public files can be fetched from the public URL instead.
+
+### Toggle public access
+
+```
+PATCH /v1/vault/files/{collection}/{filename}
+Content-Type: application/json
+
+{ "isPublic": true }
+```
+
+Once a file is public its URL is stable and permanent until you make it private again.
+
+### Delete a file
+
+```
+DELETE /v1/vault/files/{collection}/{filename}
+```
+
+Permanently removes the file from disk and its metadata from the database. This cannot be undone.
+
+---
+
+## Public URLs
+
+When `isPublic` is `true`, the file is accessible at:
+
+```
+http://api.{org}.local/vault/{app_slug}/{collection}/{filename}
+```
+
+No API key required. The Gateway forwards these requests to Vault, which checks the `is_public` flag before serving. If the flag is `false`, the response is `403 Forbidden` regardless of the URL.
+
+---
+
+## SDK usage
 
 ```typescript
+import { createClient } from "@nublestation/sdk";
+
+const nuble = createClient({ url: "http://api.clinic.local", apiKey: "nbl_..." });
+
 // Upload
-const file = await nuble.files.upload(blob, {
-  folder: 'patient-records',
-  access: 'private',
-});
+const file = await nuble.vault.upload("patient-records", "john-doe-xray.jpg", blob);
 
-// Download via signed URL
-const url = await nuble.files.signedUrl(file.id, { expiresIn: '1h' });
+// List a collection
+const files = await nuble.vault.list("patient-records");
 
-// List
-const records = await nuble.files.list({ folder: 'patient-records' });
+// Make public and get URL
+await nuble.vault.setPublic("patient-records", "john-doe-xray.jpg", true);
+// → http://api.clinic.local/vault/tasks/patient-records/john-doe-xray.jpg
+
+// Download
+const bytes = await nuble.vault.download("patient-records", "john-doe-xray.jpg");
 
 // Delete
-await nuble.files.delete(file.id);
+await nuble.vault.delete("patient-records", "john-doe-xray.jpg");
 ```
 
-## Signed URLs
+---
 
-For private files, the Storage Service generates signed URLs using JWT:
+## App settings
+
+In the Console under **App → Vault Settings**, admins can configure:
+
+| Setting | Default | Description |
+|---|---|---|
+| Allowed extensions | _(all)_ | Whitelist of file extensions (e.g. `pdf, jpg, png`). Empty = allow all. |
+| Max file size | 50 MB | Per-file upload limit. |
+
+---
+
+## Storage layout on disk
+
+Files are stored on the NubleStation host at:
 
 ```
-GET /v1/storage/files/{file_id}?token=<jwt>
+/var/nuble/storage/
+  {app_slug}/
+    {collection}/
+      {filename}
 ```
 
-The JWT encodes `file_id`, `app_id`, and `expires_at`. The storage service verifies it without a database lookup — stateless and fast.
+Paths are validated server-side — path traversal attempts are rejected before any filesystem operation.
 
-## MIME detection
+---
 
-The service uses `file-type` (npm) for magic-byte MIME detection — not extension-based guessing. An attacker cannot upload a PHP file named `photo.jpg` and have it served as the wrong content type.
+## Limits
 
-## Per-app isolation
-
-File paths include `app_id` — `/var/nuble/files/{app_id}/{file_id}`. The storage service verifies the caller's `app_id` (from the HMAC-verified gateway header) matches the file's `app_id` before serving it.
+- **No versioning.** A file at a given path is a single version. To update a file, delete it and re-upload.
+- **No total quota** per app. Disk management is the host administrator's responsibility.
+- **50 MB per file** by default, configurable per app in Console.
+- **LAN only.** Files are not accessible from outside the organisation's network.
