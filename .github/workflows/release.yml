@@ -39,6 +39,12 @@ jobs:
             dockerfile: apps/blaze/Dockerfile
             image: ghcr.io/nabilmouzouna/nublestation-blaze
 
+          - service: vault
+            package: "@nublestation/vault-service"
+            context: .
+            dockerfile: apps/vault/Dockerfile
+            image: ghcr.io/nabilmouzouna/nublestation-vault
+
           - service: console
             package: "@nublestation/console"
             context: .
