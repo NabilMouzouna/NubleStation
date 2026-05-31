@@ -15,6 +15,7 @@ import {
 import { Button } from "@nublestation/ui/components/button";
 import { Input } from "@nublestation/ui/components/input";
 import { createAppAction, type CreateAppState } from "./actions";
+import { copyToClipboard } from "@/lib/clipboard";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -59,6 +60,7 @@ const SERVICES = [
 function StepName({
   displayName,
   slug,
+  orgDomain,
   onDisplayNameChange,
   onSlugChange,
   onSlugEdit,
@@ -66,6 +68,7 @@ function StepName({
 }: {
   displayName: string;
   slug: string;
+  orgDomain: string;
   onDisplayNameChange: (v: string) => void;
   onSlugChange: (v: string) => void;
   onSlugEdit: () => void;
@@ -86,7 +89,7 @@ function StepName({
         <label className="text-sm font-medium text-foreground">
           URL slug
           <span className="ml-2 text-xs font-normal text-muted-foreground">
-            {slug ? `→ ${slug}.clinic.local` : ""}
+            {slug ? `→ ${slug}.${orgDomain}.local` : ""}
           </span>
         </label>
         <Input
@@ -190,15 +193,17 @@ function StepDone({
   displayName,
   slug,
   apiKey,
+  orgDomain,
 }: {
   displayName: string;
   slug: string;
   apiKey: string;
+  orgDomain: string;
 }) {
   const [copied, setCopied] = useState(false);
 
   async function copy() {
-    await navigator.clipboard.writeText(apiKey);
+    await copyToClipboard(apiKey);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   }
@@ -212,7 +217,7 @@ function StepDone({
         <div>
           <p className="font-semibold text-foreground">{displayName} is ready</p>
           <p className="mt-0.5 text-sm text-muted-foreground">
-            {slug}.clinic.local
+            {slug}.{orgDomain}.local
           </p>
         </div>
       </div>
@@ -249,9 +254,11 @@ function StepDone({
 export function CreateAppDialog({
   open,
   onOpenChange,
+  orgDomain,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  orgDomain: string;
 }) {
   const router = useRouter();
   const [, startTransition] = useTransition();
@@ -378,6 +385,7 @@ export function CreateAppDialog({
             <StepName
               displayName={displayName}
               slug={slug}
+              orgDomain={orgDomain}
               onDisplayNameChange={handleDisplayNameChange}
               onSlugChange={setSlug}
               onSlugEdit={() => setSlugEdited(true)}
@@ -387,7 +395,7 @@ export function CreateAppDialog({
           {step === "services" && <StepServices />}
           {step === "creating" && <StepCreating completedCount={completedCount} />}
           {step === "done" && result?.apiKey && (
-            <StepDone displayName={displayName} slug={slug} apiKey={result.apiKey} />
+            <StepDone displayName={displayName} slug={slug} apiKey={result.apiKey} orgDomain={orgDomain} />
           )}
         </DialogBody>
 
