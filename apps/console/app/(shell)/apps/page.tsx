@@ -5,6 +5,7 @@ import { listApps } from "@/lib/platform/apps";
 import { AppsPageClient } from "./_apps-page-client";
 
 export default async function AppsPage() {
+  const orgDomain = process.env.ORG_DOMAIN ?? "nuble";
   let apps: Awaited<ReturnType<typeof listApps>> = [];
   try {
     apps = await listApps();
@@ -13,7 +14,7 @@ export default async function AppsPage() {
   }
 
   return (
-    <AppsPageClient>
+    <AppsPageClient orgDomain={orgDomain}>
       <div className="p-8">
         <div className="mt-8">
           {apps.length === 0 ? (

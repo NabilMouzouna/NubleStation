@@ -6,7 +6,13 @@ import { Plus } from "lucide-react";
 import { Button } from "@nublestation/ui/components/button";
 import { CreateAppDialog } from "./_create-app-dialog";
 
-export function AppsPageClient({ children }: { children: React.ReactNode }) {
+export function AppsPageClient({
+  children,
+  orgDomain,
+}: {
+  children: React.ReactNode;
+  orgDomain: string;
+}) {
   const params = useSearchParams();
   // Initialize open from URL so there's no effect-triggered setState cascade.
   const [open, setOpen] = useState(() => params.get("new") === "1");
@@ -30,7 +36,7 @@ export function AppsPageClient({ children }: { children: React.ReactNode }) {
 
       {children}
 
-      <CreateAppDialog open={open} onOpenChange={setOpen} />
+      <CreateAppDialog open={open} onOpenChange={setOpen} orgDomain={orgDomain} />
     </>
   );
 }

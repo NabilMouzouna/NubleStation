@@ -12,6 +12,7 @@ import { Button } from "@nublestation/ui/components/button";
 import { Badge } from "@nublestation/ui/components/badge";
 import type { AppDetail, DeploymentRow, ApiKeyRow, AppTableRow, StorageFileRow, VaultSettingsRow } from "@/lib/platform/app-detail";
 import { revokeApiKeyAction, deleteAppAction, generateApiKeyAction, deleteFileAction, togglePublicAction, saveVaultSettingsAction } from "./actions";
+import { copyToClipboard } from "@/lib/clipboard";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -295,7 +296,7 @@ function SettingsTab({
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   function copyKeyId(keyId: string) {
-    navigator.clipboard.writeText(`nbl_${keyId}.***`);
+    copyToClipboard(`nbl_${keyId}.***`);
     setCopiedId(keyId);
     setTimeout(() => setCopiedId(null), 2000);
   }
@@ -313,7 +314,7 @@ function SettingsTab({
 
   function copyNewKey() {
     if (!newKey) return;
-    navigator.clipboard.writeText(newKey);
+    copyToClipboard(newKey);
     setCopiedNew(true);
     setTimeout(() => setCopiedNew(false), 2000);
   }
