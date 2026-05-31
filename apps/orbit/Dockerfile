@@ -5,7 +5,7 @@ RUN npm install -g pnpm turbo
 FROM base AS pruner
 WORKDIR /app
 COPY . .
-RUN turbo prune @nublestation/orbit --docker
+RUN turbo prune @nublestation/orbit-service --docker
 
 # ── Stage 2: Install deps from pruned lockfile ───────────────────────────────
 FROM base AS installer
@@ -18,7 +18,7 @@ RUN pnpm install --frozen-lockfile
 FROM installer AS deployer
 WORKDIR /app
 COPY --from=pruner /app/out/full/ .
-RUN pnpm --filter @nublestation/orbit deploy --prod /deploy
+RUN pnpm --filter @nublestation/orbit-service deploy --prod /deploy
 
 # ── Stage 4: Runner ───────────────────────────────────────────────────────────
 FROM node:22-alpine AS runner
