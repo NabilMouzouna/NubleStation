@@ -22,10 +22,10 @@ LAN — *.clinic.local
             ├── CoreDNS         LAN DNS authority
             ├── API Gateway     the only service Caddy forwards to directly
             │                   resolves API keys, authenticates sessions, routes to services
-            ├── DB Service      multi-tenant database (REST API over tenant_data)
-            ├── Auth Service    sessions, API keys, OIDC/SSO  [coming soon]
-            ├── Storage Service file bytes + metadata         [coming soon]
-            ├── Deploy Service  frontend bundle uploads       [coming soon]
+            ├── Blaze           multi-tenant database (REST API over tenant_data)
+            ├── Vault           file storage — bytes on disk, metadata in Postgres
+            ├── Orbit           frontend bundle uploads, atomic deploy
+            ├── Identity        sessions, API keys, OIDC/SSO  [coming soon]
             ├── Console         Next.js admin dashboard
             ├── PgBouncer       connection pooler in front of Postgres
             ├── Redis           API-key cache (sub-ms lookups)

@@ -12,14 +12,12 @@ NubleStation runs as a single Docker Compose stack in `infra/docker-compose.yml`
 services:
   caddy        # reverse proxy + static files — ports 80, 443 published to host
   coredns      # LAN DNS — port 53 published to host
-  gateway      # API gateway — internal only, Caddy forwards to it
-  db           # database service — internal only
-  auth         # auth service — internal only   [coming soon]
-  storage      # storage service — internal only [coming soon]
-  deploy       # deploy service — internal only  [coming soon]
+  api          # Gateway — API entry point, internal only, Caddy forwards to it
+  blaze        # Database service — internal only
+  vault        # File storage service — internal only
+  orbit        # Deploy service — internal only
   console      # Next.js admin dashboard — internal only, Caddy forwards to it
-  pgbouncer    # Postgres connection pooler — internal only
-  redis        # API key cache — internal only
+  identity     # Auth service — sessions, OIDC/SSO   [coming soon]
   postgres     # PostgreSQL 16 — internal only
 
 networks:
@@ -27,7 +25,8 @@ networks:
 
 volumes:
   postgres-data:   # Postgres data directory (persistent)
-  nuble-files:     # uploaded file storage (/var/nuble/)
+  nuble-apps:      # deployed frontend files (/var/nuble/apps/)
+  nuble-storage:   # Vault file storage (/var/nuble/storage/)
   caddy-data:      # Caddy TLS certificates and state
 ```
 
@@ -49,17 +48,11 @@ Every other service listens only on the internal `nuble` network. No other port 
 caddy
   └── depends_on: gateway, console
 
-gateway
-  └── depends_on: postgres, redis, db, auth, storage, deploy
+api (gateway)
+  └── depends_on: postgres, blaze, vault
 
-db
-  └── depends_on: pgbouncer
-
-pgbouncer
+blaze, vault, orbit
   └── depends_on: postgres
-
-auth, storage, deploy
-  └── depends_on: pgbouncer
 
 postgres
   └── (no dependencies — starts first)
