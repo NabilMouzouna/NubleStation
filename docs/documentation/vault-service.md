@@ -181,5 +181,6 @@ File uploads from the Console are not currently supported — files are uploaded
 
 - ADR 012 — `docs/adr/012-vault-storage-service.md`
 - Service contract — `docs/documentation/service-contract.md`
-- SDK — `packages/vault/` (`@nublestation/vault`)
+- **SDK guide** — `docs/documentation/vault-sdk.md` (all methods, error codes, React hook)
+- SDK source — `packages/vault/` (`@nublestation/vault`)
 - Orbit service doc — `docs/documentation/orbit-service.md` (same filesystem + HMAC pattern)

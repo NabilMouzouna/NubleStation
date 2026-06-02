@@ -78,9 +78,9 @@ importers:
 
   apps/bucket:
     dependencies:
-      '@nublestation/client':
+      '@nublestation/vault':
         specifier: workspace:*
-        version: link:../../packages/client
+        version: link:../../packages/vault
       react:
         specifier: ^19.2.6
         version: 19.2.6
