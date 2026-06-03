@@ -1,12 +1,12 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   ChevronRight, Rocket, Database, HardDrive, Users, Settings,
   Copy, CheckCheck, ShieldOff, Trash2, ExternalLink, Clock,
-  Globe, Lock, Upload, X,
+  Globe, Lock, Upload, X, Folder, FolderOpen, ArrowLeft,
 } from "lucide-react";
 import { Button } from "@nublestation/ui/components/button";
 import { Badge } from "@nublestation/ui/components/badge";
@@ -119,6 +119,8 @@ function formatBytes(n: number | null): string {
   return `${(n / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+const MB_PRESETS = [10, 25, 50, 100, 200];
+
 function VaultTab({
   app,
   files,
@@ -132,11 +134,31 @@ function VaultTab({
 }) {
   const router = useRouter();
   const [, startTransition] = useTransition();
+  const [selectedCollection, setSelectedCollection] = useState<string | null>(null);
   const [deletingId, setDeletingId]   = useState<string | null>(null);
   const [togglingId, setTogglingId]   = useState<string | null>(null);
   const [savingSettings, setSaving]   = useState(false);
   const [extInput, setExtInput]       = useState(settings.allowed_extensions.join(", "));
   const [maxMb, setMaxMb]             = useState(Math.round(settings.max_file_bytes / (1024 * 1024)));
+
+  // Derive collection summaries from file list
+  const collections = useMemo(() => {
+    const map = new Map<string, { fileCount: number; totalBytes: number }>();
+    for (const f of files) {
+      const e = map.get(f.collection) ?? { fileCount: 0, totalBytes: 0 };
+      e.fileCount++;
+      e.totalBytes += f.size_bytes ?? 0;
+      map.set(f.collection, e);
+    }
+    return Array.from(map.entries()).map(([name, stats]) => ({ name, ...stats }));
+  }, [files]);
+
+  const collectionFiles = useMemo(
+    () => selectedCollection ? files.filter(f => f.collection === selectedCollection) : [],
+    [files, selectedCollection],
+  );
+
+  const totalBytes = useMemo(() => files.reduce((s, f) => s + (f.size_bytes ?? 0), 0), [files]);
 
   async function handleDelete(file: StorageFileRow) {
     setDeletingId(file.id);
@@ -165,76 +187,168 @@ function VaultTab({
     `http://api.${orgDomain}.local/vault/${app.name}/${file.collection}/${file.filename}`;
 
   return (
-    <div className="space-y-8 max-w-3xl">
+    <div className="space-y-8">
 
-      {/* File list */}
-      <section className="space-y-3">
-        <h3 className="text-sm font-semibold text-foreground">Files</h3>
-        {files.length === 0 ? (
-          <EmptyState message="No files uploaded yet. Use the SDK or CLI to upload files." />
-        ) : (
-          <div className="overflow-hidden rounded-3xl border border-border">
-            <table className="w-full text-sm">
-              <TableHeader cols={["Path", "Size", "Type", "Access", ""]} />
-              <tbody className="divide-y divide-border">
-                {files.map((f) => (
-                  <tr key={f.id} className="hover:bg-muted/40 transition-colors">
-                    <td className="px-5 py-3 font-mono text-foreground">
-                      {f.collection}/{f.filename}
-                    </td>
-                    <td className="px-5 py-3 text-muted-foreground">{formatBytes(f.size_bytes)}</td>
-                    <td className="px-5 py-3 text-muted-foreground">{f.mime_type ?? "—"}</td>
-                    <td className="px-5 py-3">
-                      {f.is_public ? (
-                        <a
-                          href={publicUrl(f)}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex items-center gap-1 text-xs text-brand-blue hover:underline"
-                        >
-                          <Globe className="h-3 w-3" /> Public
-                        </a>
-                      ) : (
-                        <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                          <Lock className="h-3 w-3" /> Private
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-5 py-3">
-                      <div className="flex items-center gap-2 justify-end">
-                        <button
-                          onClick={() => handleToggle(f)}
-                          disabled={togglingId === f.id}
-                          className="text-xs text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
-                        >
-                          {f.is_public ? "Make private" : "Make public"}
-                        </button>
-                        <button
-                          onClick={() => handleDelete(f)}
-                          disabled={deletingId === f.id}
-                          className="text-muted-foreground hover:text-destructive transition-colors disabled:opacity-50"
-                        >
-                          <X className="h-4 w-4" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+      {/* Collections overview OR collection drill-down */}
+      {selectedCollection === null ? (
+        <section className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-foreground">Collections</h3>
+            {files.length > 0 && (
+              <p className="text-xs text-muted-foreground">
+                {collections.length} collection{collections.length !== 1 ? "s" : ""} &middot;{" "}
+                {files.length} file{files.length !== 1 ? "s" : ""} &middot;{" "}
+                {formatBytes(totalBytes)}
+              </p>
+            )}
           </div>
-        )}
+
+          {collections.length === 0 ? (
+            <EmptyState message="No files yet. Use the SDK to upload files to a collection." />
+          ) : (
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {collections.map(col => (
+                <button
+                  key={col.name}
+                  onClick={() => setSelectedCollection(col.name)}
+                  className="group flex items-start gap-3 rounded-2xl border border-border bg-card p-4 text-left transition-all hover:border-primary/40 hover:shadow-sm"
+                >
+                  <div className="mt-0.5 rounded-xl bg-muted p-2 transition-colors group-hover:bg-primary/10">
+                    <Folder className="h-5 w-5 text-muted-foreground transition-colors group-hover:text-primary" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-mono text-sm font-semibold text-foreground">{col.name}</p>
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      {col.fileCount} file{col.fileCount !== 1 ? "s" : ""} &middot; {formatBytes(col.totalBytes)}
+                    </p>
+                  </div>
+                  <ChevronRight className="mt-1 h-4 w-4 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+                </button>
+              ))}
+            </div>
+          )}
+        </section>
+      ) : (
+        <section className="space-y-4">
+          {/* Breadcrumb + back */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setSelectedCollection(null)}
+              className="flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Collections
+            </button>
+            <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+            <span className="flex items-center gap-1.5 font-mono text-sm font-semibold text-foreground">
+              <FolderOpen className="h-4 w-4 text-primary" />
+              {selectedCollection}
+            </span>
+          </div>
+
+          {/* Collection stats */}
+          <div className="flex items-center gap-6 rounded-2xl border border-border bg-muted/30 px-5 py-3">
+            <div>
+              <p className="text-lg font-semibold text-foreground">{collectionFiles.length}</p>
+              <p className="text-xs text-muted-foreground">files</p>
+            </div>
+            <div className="h-8 w-px bg-border" />
+            <div>
+              <p className="text-lg font-semibold text-foreground">
+                {formatBytes(collectionFiles.reduce((s, f) => s + (f.size_bytes ?? 0), 0))}
+              </p>
+              <p className="text-xs text-muted-foreground">total size</p>
+            </div>
+            <div className="h-8 w-px bg-border" />
+            <div>
+              <p className="text-lg font-semibold text-foreground">
+                {collectionFiles.filter(f => f.is_public).length}
+              </p>
+              <p className="text-xs text-muted-foreground">public</p>
+            </div>
+          </div>
+
+          {/* File table */}
+          {collectionFiles.length === 0 ? (
+            <EmptyState message="No files in this collection." />
+          ) : (
+            <div className="overflow-hidden rounded-3xl border border-border">
+              <table className="w-full text-sm">
+                <TableHeader cols={["Filename", "Size", "Type", "Access", "Uploaded", ""]} />
+                <tbody className="divide-y divide-border bg-card">
+                  {collectionFiles.map((f) => (
+                    <tr key={f.id} className="transition-colors hover:bg-muted/40">
+                      <td className="px-5 py-3 font-mono text-xs text-foreground">{f.filename}</td>
+                      <td className="px-5 py-3 text-muted-foreground">{formatBytes(f.size_bytes)}</td>
+                      <td className="px-5 py-3 text-xs text-muted-foreground">{f.mime_type ?? "—"}</td>
+                      <td className="px-5 py-3">
+                        {f.is_public ? (
+                          <a
+                            href={publicUrl(f)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-1 text-xs text-brand-blue hover:underline"
+                          >
+                            <Globe className="h-3 w-3" /> Public
+                          </a>
+                        ) : (
+                          <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                            <Lock className="h-3 w-3" /> Private
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-5 py-3 text-xs text-muted-foreground">
+                        {new Date(f.created_at).toLocaleDateString()}
+                      </td>
+                      <td className="px-5 py-3">
+                        <div className="flex items-center justify-end gap-3">
+                          <button
+                            onClick={() => handleToggle(f)}
+                            disabled={togglingId === f.id}
+                            className="text-xs text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
+                          >
+                            {togglingId === f.id ? "…" : f.is_public ? "Make private" : "Make public"}
+                          </button>
+                          <button
+                            onClick={() => handleDelete(f)}
+                            disabled={deletingId === f.id}
+                            className="text-muted-foreground transition-colors hover:text-destructive disabled:opacity-50"
+                          >
+                            {deletingId === f.id ? <span className="text-xs">…</span> : <X className="h-4 w-4" />}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+      )}
+
+      {/* Upload hint */}
+      <section className="rounded-3xl border border-dashed border-border p-5">
+        <div className="flex items-center gap-3 text-muted-foreground">
+          <Upload className="h-5 w-5 shrink-0" />
+          <p className="text-sm">
+            Upload via SDK:{" "}
+            <span className="font-mono text-foreground">
+              vault.upload(&quot;{selectedCollection ?? "collection"}&quot;, &quot;filename&quot;, data)
+            </span>
+          </p>
+        </div>
       </section>
 
       {/* Settings */}
-      <section className="space-y-3">
+      <section className="max-w-2xl space-y-3">
         <h3 className="text-sm font-semibold text-foreground">Vault Settings</h3>
-        <form onSubmit={handleSaveSettings} className="space-y-4 rounded-3xl border border-border p-5">
+        <form onSubmit={handleSaveSettings} className="space-y-5 rounded-3xl border border-border p-5">
           <div className="space-y-1.5">
-            <label className="text-sm font-medium text-foreground">
-              Allowed extensions
-            </label>
-            <p className="text-xs text-muted-foreground">Comma-separated list (e.g. pdf, jpg, png). Leave blank to allow all.</p>
+            <label className="text-sm font-medium text-foreground">Allowed extensions</label>
+            <p className="text-xs text-muted-foreground">
+              Comma-separated (e.g. pdf, jpg, png). Leave blank to allow all.
+            </p>
             <input
               type="text"
               value={extInput}
@@ -243,33 +357,44 @@ function VaultTab({
               className="flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40"
             />
           </div>
-          <div className="space-y-1.5">
-            <label className="text-sm font-medium text-foreground">
-              Max file size (MB)
-            </label>
-            <input
-              type="number"
-              min={1}
-              max={500}
-              value={maxMb}
-              onChange={e => setMaxMb(Number(e.target.value))}
-              className="flex h-10 w-32 rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40"
-            />
+
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-foreground">Max file size</label>
+            {/* Preset buttons */}
+            <div className="flex flex-wrap gap-2">
+              {MB_PRESETS.map(mb => (
+                <button
+                  key={mb}
+                  type="button"
+                  onClick={() => setMaxMb(mb)}
+                  className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition-all ${
+                    maxMb === mb
+                      ? "border-primary bg-primary/10 text-primary"
+                      : "border-border bg-background text-muted-foreground hover:border-primary/40 hover:text-foreground"
+                  }`}
+                >
+                  {mb} MB
+                </button>
+              ))}
+            </div>
+            {/* Always-visible numeric input — presets set it, or type freely */}
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                min={1}
+                max={500}
+                value={maxMb}
+                onChange={e => setMaxMb(Number(e.target.value))}
+                className="flex h-9 w-24 rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40"
+              />
+              <span className="text-sm text-muted-foreground">MB per file</span>
+            </div>
           </div>
+
           <Button type="submit" disabled={savingSettings} className="h-9 px-5 text-sm rounded-full">
             {savingSettings ? "Saving…" : "Save settings"}
           </Button>
         </form>
-      </section>
-
-      {/* Upload hint */}
-      <section className="rounded-3xl border border-dashed border-border p-5">
-        <div className="flex items-center gap-3 text-muted-foreground">
-          <Upload className="h-5 w-5 shrink-0" />
-          <p className="text-sm">
-            Upload files via the SDK: <span className="font-mono text-foreground">nuble.vault.upload(&quot;{app.name}&quot;, &quot;collection&quot;, file)</span>
-          </p>
-        </div>
       </section>
 
     </div>
@@ -477,15 +602,18 @@ function ServiceTiles({
   onSelect,
   deployments,
   tables,
+  storageFiles,
 }: {
   active: Tab;
   onSelect: (t: Tab) => void;
   deployments: DeploymentRow[];
   tables: AppTableRow[];
+  storageFiles: StorageFileRow[];
 }) {
   function stat(slug: string) {
     if (slug === "orbit")     return `${deployments.length} deployment${deployments.length !== 1 ? "s" : ""}`;
     if (slug === "blazingdb") return `${tables.length} table${tables.length !== 1 ? "s" : ""}`;
+    if (slug === "vault")     return `${storageFiles.length} file${storageFiles.length !== 1 ? "s" : ""}`;
     return "0 items";
   }
 
@@ -575,7 +703,7 @@ export function AppDetailClient({
 
       {/* Service tiles */}
       <div className="mt-8">
-        <ServiceTiles active={activeTab} onSelect={setActiveTab} deployments={deployments} tables={tables} />
+        <ServiceTiles active={activeTab} onSelect={setActiveTab} deployments={deployments} tables={tables} storageFiles={storageFiles} />
       </div>
 
       {/* Tabs */}
