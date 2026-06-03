@@ -100,6 +100,28 @@ export async function getVaultSettings(appId: string): Promise<VaultSettingsRow>
   return rows[0] ?? { allowed_extensions: [], max_file_bytes: 52_428_800 };
 }
 
+export interface StorageStatRow {
+  id: string;
+  name: string;
+  display_name: string;
+  file_count: number;
+  total_bytes: number;
+}
+
+export async function getStorageStats(): Promise<StorageStatRow[]> {
+  const pool = getPlatformPool();
+  const { rows } = await pool.query<StorageStatRow>(
+    `SELECT a.id, a.name, a.display_name,
+            COUNT(sf.id)::int            AS file_count,
+            COALESCE(SUM(sf.size_bytes), 0)::bigint AS total_bytes
+     FROM platform.apps a
+     LEFT JOIN platform.storage_files sf ON sf.app_id = a.id
+     GROUP BY a.id, a.name, a.display_name
+     ORDER BY total_bytes DESC`,
+  );
+  return rows;
+}
+
 export async function getAppTables(appId: string): Promise<AppTableRow[]> {
   const pool = getPlatformPool();
   const { rows } = await pool.query<AppTableRow>(

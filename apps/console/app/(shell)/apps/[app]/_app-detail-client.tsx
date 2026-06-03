@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import {
   ChevronRight, Rocket, Database, HardDrive, Users, Settings,
   Copy, CheckCheck, ShieldOff, Trash2, ExternalLink, Clock,
-  Globe, Lock, Upload, X, Folder, FolderOpen, ArrowLeft,
+  Globe, Lock, Upload, X, Folder, FolderOpen, ArrowLeft, Eye,
 } from "lucide-react";
 import { Button } from "@nublestation/ui/components/button";
 import { Badge } from "@nublestation/ui/components/badge";
@@ -283,14 +283,9 @@ function VaultTab({
                       <td className="px-5 py-3 text-xs text-muted-foreground">{f.mime_type ?? "—"}</td>
                       <td className="px-5 py-3">
                         {f.is_public ? (
-                          <a
-                            href={publicUrl(f)}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="flex items-center gap-1 text-xs text-brand-blue hover:underline"
-                          >
+                          <span className="flex items-center gap-1 text-xs text-success">
                             <Globe className="h-3 w-3" /> Public
-                          </a>
+                          </span>
                         ) : (
                           <span className="flex items-center gap-1 text-xs text-muted-foreground">
                             <Lock className="h-3 w-3" /> Private
@@ -302,6 +297,18 @@ function VaultTab({
                       </td>
                       <td className="px-5 py-3">
                         <div className="flex items-center justify-end gap-3">
+                          {/* Preview — only for public files */}
+                          {f.is_public && (
+                            <a
+                              href={publicUrl(f)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              title="Preview file"
+                              className="text-muted-foreground transition-colors hover:text-primary"
+                            >
+                              <Eye className="h-4 w-4" />
+                            </a>
+                          )}
                           <button
                             onClick={() => handleToggle(f)}
                             disabled={togglingId === f.id}

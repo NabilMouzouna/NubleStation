@@ -14,6 +14,7 @@ import { validateSession } from "@/lib/auth/session";
 import { getRecentDeployments } from "@/lib/platform/events";
 import { checkServices, type ServiceHealth, type ServiceStatus } from "@/lib/platform/health";
 import { listApps } from "@/lib/platform/apps";
+import { getStorageStats } from "@/lib/platform/app-detail";
 
 import type React from "react";
 
@@ -59,12 +60,23 @@ function timeAgo(iso: string): string {
 // ─── Page ────────────────────────────────────────────────────────────────────
 
 export default async function DashboardPage() {
-  const [session, recentDeployments, services, apps] = await Promise.all([
+  const [session, recentDeployments, services, apps, storageStats] = await Promise.all([
     validateSession(),
     getRecentDeployments(),
     checkServices().catch((): ServiceHealth[] => []),
     listApps().catch(() => []),
+    getStorageStats().catch(() => []),
   ]);
+
+  const totalStorageBytes = storageStats.reduce((s, a) => s + a.total_bytes, 0);
+
+  function formatStorageBytes(n: number): string {
+    if (n === 0) return "0 B";
+    if (n < 1024) return `${n} B`;
+    if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+    if (n < 1024 * 1024 * 1024) return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+    return `${(n / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+  }
 
   const handle   = (session?.email ?? "admin").split("@")[0] ?? "admin";
   const initials = handle.slice(0, 2).toUpperCase();
@@ -98,7 +110,7 @@ export default async function DashboardPage() {
   const overallBadge: Status = allRunning ? "running" : anyDown ? "down" : "degraded";
 
   const systemMetrics = [
-    { label: "Disk",    value: 0, detail: "0 GB used", icon: HardDrive, color: "bg-primary"      },
+    { label: "Disk",    value: 0, detail: `${formatStorageBytes(totalStorageBytes)} used`, icon: HardDrive, color: "bg-primary" },
     { label: "Memory",  value: 0, detail: "— MB used", icon: Cpu,       color: "bg-brand-violet"  },
     { label: "Network", value: 0, detail: "— KB/s",    icon: Activity,  color: "bg-success"       },
   ];
@@ -132,7 +144,7 @@ export default async function DashboardPage() {
       <div className="mt-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
         {[
           { label: "Apps",     value: String(apps.length), sub: "registered", icon: LayoutDashboard, tint: "bg-primary/10      text-primary"      },
-          { label: "Storage",  value: "0 GB",              sub: "disk used",  icon: HardDrive,       tint: "bg-success/10      text-success"      },
+          { label: "Storage",  value: formatStorageBytes(totalStorageBytes), sub: "disk used",  icon: HardDrive, tint: "bg-success/10 text-success" },
           { label: "Uptime",   value: "—",                 sub: "last 24 h",  icon: Clock,           tint: "bg-brand-blue/10   text-brand-blue"   },
           { label: "Sessions", value: "1",                 sub: "active",     icon: Users,           tint: "bg-brand-violet/10 text-brand-violet" },
         ].map((s) => {
