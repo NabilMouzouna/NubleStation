@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
+import { cookies } from "next/headers";
 import "./globals.css";
 
 const inter = Inter({
@@ -12,15 +13,15 @@ export const metadata: Metadata = {
   description: "Private cloud infrastructure admin dashboard",
 };
 
-export default function RootLayout({
+// Server component reads the theme cookie so the correct class is on <html>
+// before React hydrates — no mismatch, no class strip on navigation.
+export default async function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
+  const cookieStore = await cookies();
+  const theme = cookieStore.get("nuble-theme")?.value ?? "dark";
   return (
-    <html lang="en" suppressHydrationWarning>
-      <head>
-        {/* Inline script runs before paint to apply saved theme and avoid FOUC */}
-        <script dangerouslySetInnerHTML={{ __html: `(function(){try{if(localStorage.getItem('nuble-theme')!=='light')document.documentElement.classList.add('dark');}catch(e){}})();` }} />
-      </head>
+    <html lang="en" className={theme === "dark" ? "dark" : ""} suppressHydrationWarning>
       <body className={`${inter.className} antialiased`}>{children}</body>
     </html>
   );
