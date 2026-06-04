@@ -1,3 +1,4 @@
+/** @jsxRuntime automatic @jsxImportSource hono/jsx */
 import { Hono } from "hono";
 import { loadConfig } from "../config.js";
 import { verifyPassword } from "../auth/password.js";

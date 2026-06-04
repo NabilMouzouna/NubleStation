@@ -1,3 +1,4 @@
+/** @jsxRuntime automatic @jsxImportSource hono/jsx */
 import type { FC, PropsWithChildren } from "hono/jsx";
 
 const STYLES = `
