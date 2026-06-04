@@ -2,7 +2,7 @@
 
 The `platform` PostgreSQL schema holds all NubleStation infrastructure tables. These are shared across tenants and managed exclusively by the platform layer — app developers never access them directly.
 
-Ten tables are defined under `pgSchema("platform")` in `apps/blaze/src/db/schema/platform.ts` and migrated via drizzle-kit on Blaze boot (see ADR 003 §11).
+These tables are defined under `pgSchema("platform")` in `apps/blaze/src/db/schema/platform.ts` and migrated via drizzle-kit on Blaze boot (see ADR 003 §11). The set has grown since the original ten: ADR 012 added `vault_settings` and `storage_files`; ADR 014 added `sessions` and the `users.avatar_url` column.
 
 ```mermaid
 erDiagram
@@ -18,7 +18,18 @@ erDiagram
         uuid org_id FK
         string email
         string password_hash
+        string display_name
+        string avatar_url
         string role
+        boolean is_active
+        timestamptz created_at
+    }
+
+    SESSIONS {
+        uuid id PK
+        uuid user_id FK
+        string token_hash
+        timestamptz expires_at
         timestamptz created_at
     }
 
@@ -101,6 +112,7 @@ erDiagram
     APPS ||--o{ AUDIT_LOG : "scoped to"
     USERS ||--o{ USER_APP_ACCESS : "receives"
     USERS ||--o{ AUDIT_LOG : "performed by"
+    USERS ||--o{ SESSIONS : "authenticates"
 ```
 
 ## Key Design Notes

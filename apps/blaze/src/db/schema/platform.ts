@@ -29,6 +29,7 @@ export const users = platform.table(
     email: text("email").notNull(),
     passwordHash: text("password_hash").notNull(),
     displayName: text("display_name"),
+    avatarUrl: text("avatar_url"),
     role: text("role").notNull().default("end_user"),
     isActive: boolean("is_active").notNull().default(true),
     createdAt: timestamp("created_at", { withTimezone: true })
@@ -37,6 +38,29 @@ export const users = platform.table(
   },
   (t) => ({
     emailUq: uniqueIndex("users_email_uq").on(t.email),
+  }),
+);
+
+// ADR 014: server-side sessions for Identity SSO. The cookie carries a raw
+// random token; only its sha256 is stored here, so a DB read cannot hijack a
+// session. Sessions are revocable (logout deletes the row; admin force-logout
+// deletes all rows for a user).
+export const sessions = platform.table(
+  "sessions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    tokenHash: text("token_hash").notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    tokenHashUq: uniqueIndex("sessions_token_hash_uq").on(t.tokenHash),
+    userIdIdx: index("sessions_user_id_idx").on(t.userId),
   }),
 );
 
