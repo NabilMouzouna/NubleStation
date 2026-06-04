@@ -1,5 +1,6 @@
 /** @jsxRuntime automatic @jsxImportSource hono/jsx */
 import type { FC, PropsWithChildren } from "hono/jsx";
+import { raw } from "hono/html";
 
 const STYLES = `
   :root {
@@ -15,15 +16,12 @@ const STYLES = `
   }
   .card {
     width: 100%; max-width: 380px; background: var(--card); border: 1px solid var(--border);
-    border-radius: 16px; padding: 32px; box-shadow: 0 8px 30px rgba(15,18,34,0.06);
+    border-radius: 16px; padding: 30px 32px 22px; box-shadow: 0 8px 30px rgba(15,18,34,0.06);
   }
-  .brand { display: flex; align-items: center; gap: 8px; margin-bottom: 24px; }
-  .brand-dot { width: 22px; height: 22px; border-radius: 7px;
-    background: linear-gradient(135deg, #7c3aed, #a78bfa); }
-  .brand-name { font-weight: 600; font-size: 15px; letter-spacing: -0.01em; }
-  .brand-sub { color: var(--muted); font-size: 12px; }
-  h1 { font-size: 20px; margin: 0 0 4px; letter-spacing: -0.02em; }
-  .sub { color: var(--muted); font-size: 13px; margin: 0 0 22px; }
+  .logo-wrap { text-align: center; margin-bottom: 24px; }
+  .logo { height: 30px; width: auto; }
+  h1 { font-size: 20px; margin: 0 0 4px; letter-spacing: -0.02em; text-align: center; }
+  .sub { color: var(--muted); font-size: 13px; margin: 0 0 22px; text-align: center; }
   label { display: block; font-size: 12.5px; font-weight: 500; margin: 0 0 6px; }
   input[type=text], input[type=email], input[type=password] {
     width: 100%; height: 40px; padding: 0 12px; font-size: 14px; color: var(--text);
@@ -31,7 +29,6 @@ const STYLES = `
   }
   input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(109,40,217,0.12); }
   .field { margin-bottom: 16px; }
-  .file { font-size: 13px; color: var(--muted); }
   button {
     width: 100%; height: 42px; margin-top: 6px; border: 0; border-radius: 10px; cursor: pointer;
     background: var(--accent); color: #fff; font-size: 14px; font-weight: 600; transition: background .15s;
@@ -44,14 +41,53 @@ const STYLES = `
     border-radius: 9px; padding: 10px 12px; font-size: 13px; margin-bottom: 18px;
   }
   .app-chip {
-    display: inline-flex; align-items: center; gap: 6px; background: rgba(109,40,217,0.08);
-    color: var(--accent); border-radius: 999px; padding: 4px 10px; font-size: 12px; font-weight: 500;
-    margin-bottom: 18px;
+    display: flex; width: fit-content; margin: 0 auto 18px; align-items: center; gap: 6px;
+    background: rgba(109,40,217,0.08); color: var(--accent); border-radius: 999px;
+    padding: 4px 12px; font-size: 12px; font-weight: 500;
   }
-  .msg-icon { font-size: 34px; margin-bottom: 10px; }
+  .msg-icon { font-size: 34px; margin-bottom: 10px; text-align: center; }
   .row { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
-  .avatar { width: 44px; height: 44px; border-radius: 50%; object-fit: cover; border: 1px solid var(--border); }
-  .muted { color: var(--muted); font-size: 13px; }
+  .row-avatar { width: 44px; height: 44px; border-radius: 50%; object-fit: cover; border: 1px solid var(--border); }
+
+  /* iOS-style avatar upload box */
+  .avatar-field { display: flex; flex-direction: column; align-items: center; margin-bottom: 20px; }
+  .avatar-box {
+    position: relative; width: 104px; height: 104px; border-radius: 26px; overflow: hidden;
+    cursor: pointer; border: 1px solid var(--border); box-shadow: 0 2px 10px rgba(15,18,34,0.1);
+    transition: transform .12s, box-shadow .12s;
+  }
+  .avatar-box:hover { transform: translateY(-1px); box-shadow: 0 6px 16px rgba(109,40,217,0.18); }
+  .avatar-box img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .avatar-overlay {
+    position: absolute; left: 0; right: 0; bottom: 0; padding: 14px 6px 7px; font-size: 9.5px;
+    font-weight: 600; letter-spacing: .02em; text-align: center; color: #fff;
+    background: linear-gradient(transparent, rgba(0,0,0,0.78));
+  }
+  .avatar-hint { margin-top: 9px; font-size: 11.5px; color: var(--muted); }
+
+  /* powered-by footer */
+  .powered {
+    margin-top: 26px; padding-top: 16px; border-top: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: center; gap: 6px;
+    font-size: 11px; color: var(--muted);
+  }
+  .powered img { height: 15px; width: auto; }
+  .powered .id-name { font-weight: 600; color: var(--text); }
+`;
+
+// Tiny client script: live-preview the chosen avatar in the box.
+const AVATAR_SCRIPT = `
+  (function(){
+    var inp = document.getElementById('avatar-input');
+    if(!inp) return;
+    inp.addEventListener('change', function(e){
+      var f = e.target.files && e.target.files[0];
+      if(!f) return;
+      document.getElementById('avatar-preview').src = URL.createObjectURL(f);
+      var ov = document.getElementById('avatar-overlay');
+      if(ov){ ov.textContent = 'Change photo'; }
+    });
+  })();
 `;
 
 export const Layout: FC<PropsWithChildren<{ title: string }>> = ({ title, children }) => (
@@ -64,12 +100,16 @@ export const Layout: FC<PropsWithChildren<{ title: string }>> = ({ title, childr
     </head>
     <body>
       <div class="card">
-        <div class="brand">
-          <span class="brand-dot" />
-          <span class="brand-name">NubleStation</span>
-          <span class="brand-sub">· Identity</span>
+        <div class="logo-wrap">
+          {/* NubleStation brand logo */}
+          <img class="logo" src="/assets/logo-light.png" alt="NubleStation" />
         </div>
         {children}
+        <div class="powered">
+          powered by
+          <img src="/assets/identity.svg" alt="" />
+          <span class="id-name">Identity</span>
+        </div>
       </div>
     </body>
   </html>
@@ -129,6 +169,17 @@ export const RegisterPage: FC<{ app?: string; redirectUri?: string; error?: stri
     {error ? <div class="error">{error}</div> : null}
     <form method="post" action="/register" enctype="multipart/form-data">
       <Hidden app={app} redirectUri={redirectUri} />
+
+      {/* iOS-style avatar uploader */}
+      <div class="avatar-field">
+        <label class="avatar-box" for="avatar-input">
+          <img id="avatar-preview" src="/assets/identity-avatar-default.jpg" alt="" />
+          <span id="avatar-overlay" class="avatar-overlay">Upload your profile</span>
+        </label>
+        <input id="avatar-input" type="file" name="avatar" accept="image/*" hidden />
+        <span class="avatar-hint">Optional — tap to choose a photo</span>
+      </div>
+
       <div class="field">
         <label>Full name</label>
         <input type="text" name="display_name" autocomplete="name" />
@@ -141,15 +192,12 @@ export const RegisterPage: FC<{ app?: string; redirectUri?: string; error?: stri
         <label>Password</label>
         <input type="password" name="password" required minlength={8} autocomplete="new-password" />
       </div>
-      <div class="field">
-        <label>Profile photo <span class="muted">(optional)</span></label>
-        <input class="file" type="file" name="avatar" accept="image/*" />
-      </div>
       <button type="submit">Create account</button>
     </form>
     <p class="alt">
       Already have an account? <a href={`/login${qs(app, redirectUri)}`}>Sign in</a>
     </p>
+    <script>{raw(AVATAR_SCRIPT)}</script>
   </Layout>
 );
 
@@ -170,12 +218,10 @@ export const AccountPage: FC<{
     <h1>You're signed in</h1>
     <p class="sub">This identity works across every app on the network.</p>
     <div class="row">
-      {avatarUrl
-        ? <img class="avatar" src={avatarUrl} alt="" />
-        : <span class="brand-dot" style="width:44px;height:44px;border-radius:50%" />}
+      <img class="row-avatar" src={avatarUrl ?? "/assets/identity-avatar-default.jpg"} alt="" />
       <div>
         <div style="font-weight:600">{displayName ?? email}</div>
-        <div class="muted">{email}</div>
+        <div style="color:var(--muted);font-size:13px">{email}</div>
       </div>
     </div>
     <form method="post" action="/logout">

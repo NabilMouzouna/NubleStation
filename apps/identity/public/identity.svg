@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" fill="none">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#F5F3FF"/>
+      <stop offset="100%" stop-color="#E9E7FF"/>
+    </linearGradient>
+
+    <linearGradient id="accent" x1="32" y1="20" x2="96" y2="108">
+      <stop offset="0%" stop-color="#8B5CF6"/>
+      <stop offset="100%" stop-color="#4F46E5"/>
+    </linearGradient>
+
+    <filter id="softGlow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <rect width="128" height="128" rx="32" fill="url(#bg)"/>
+
+  <!-- Soft shield background -->
+  <path
+    d="M64 18L96 30V56C96 80 82 99 64 110C46 99 32 80 32 56V30L64 18Z"
+    fill="#FFFFFF"
+    opacity="0.7"
+  />
+
+  <!-- Fingerprint / identity core -->
+  <g
+    stroke="url(#accent)"
+    fill="none"
+    stroke-linecap="round"
+    filter="url(#softGlow)"
+  >
+    <path d="M48 82C48 71 55 64 64 64C73 64 80 71 80 82" stroke-width="5"/>
+    <path d="M40 82C40 66 50 54 64 54C78 54 88 66 88 82" stroke-width="4.5" opacity="0.95"/>
+    <path d="M32 82C32 61 46 44 64 44C82 44 96 61 96 82" stroke-width="4" opacity="0.85"/>
+    <path d="M56 84C56 90 59 96 64 100C69 96 72 90 72 84" stroke-width="4.5"/>
+  </g>
+
+  <!-- Central identity node -->
+  <circle cx="64" cy="70" r="6" fill="#8B5CF6"/>
+
+  <!-- Secure connection accents -->
+  <g stroke="#8B5CF6" stroke-width="2" opacity="0.45">
+    <path d="M64 28V38"/>
+    <path d="M100 64H90"/>
+    <path d="M38 64H28"/>
+  </g>
+</svg>

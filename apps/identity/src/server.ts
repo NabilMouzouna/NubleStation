@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { Hono } from "hono";
+import { serveStatic } from "@hono/node-server/serve-static";
 import { loadConfig } from "./config.js";
 import { logger as rootLogger } from "./logger.js";
 import { onError } from "./middleware/error.js";
@@ -44,6 +45,12 @@ export function buildServer() {
   });
 
   app.onError(onError);
+
+  // Brand assets (logo, default avatar, identity mark) — served from ./public
+  app.use(
+    "/assets/*",
+    serveStatic({ root: "./public", rewriteRequestPath: (p) => p.replace(/^\/assets/, "") }),
+  );
 
   // Health probes — no auth
   app.route("/", health);
