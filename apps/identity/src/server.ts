@@ -3,7 +3,9 @@ import { Hono } from "hono";
 import { loadConfig } from "./config.js";
 import { logger as rootLogger } from "./logger.js";
 import { onError } from "./middleware/error.js";
+import { auth } from "./routes/auth.js";
 import { health } from "./routes/health.js";
+import { pages } from "./routes/pages.js";
 import type { HonoVariables } from "./types.js";
 
 const HEALTH_PATHS = new Set(["/healthz", "/readyz"]);
@@ -45,6 +47,12 @@ export function buildServer() {
 
   // Health probes — no auth
   app.route("/", health);
+
+  // JSON API consumed via the Gateway (api.{org}.local/v1/auth/*)
+  app.route("/", auth);
+
+  // User-facing pages + form posts (identity.{org}.local/*)
+  app.route("/", pages);
 
   return app;
 }
