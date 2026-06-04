@@ -32,7 +32,8 @@ program
   .description("Zip dist/ and deploy to Orbit via Gateway")
   .option("--dist <path>",    "Path to built frontend directory", "dist")
   .option("--profile <name>", "Config profile to use", "default")
-  .action((opts: { dist: string; profile: string }) => runDeploy(opts));
+  .option("--build",          "Run the project build script before deploying (reads .env automatically)")
+  .action((opts: { dist: string; profile: string; build?: boolean }) => runDeploy(opts));
 
 program
   .command("status")

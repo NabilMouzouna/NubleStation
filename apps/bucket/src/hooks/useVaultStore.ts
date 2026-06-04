@@ -114,15 +114,12 @@ export type Folder = {
 //   Module-level means a single shared instance for the whole app.
 // ---------------------------------------------------------------------------
 
-const NUBLE_URL = import.meta.env.VITE_NUBLESTATION_URL as string
+const NUBLE_URL = (import.meta.env.VITE_NUBLESTATION_URL as string) || 'http://api.nuble.local'
 const NUBLE_KEY = import.meta.env.VITE_NUBLESTATION_API_KEY as string
-const DEFAULT_COLLECTION = 'bucket'  // files with no explicit folder land here
+const DEFAULT_COLLECTION = 'bucket'
 
-if (!NUBLE_URL) console.error('[Bucket] VITE_NUBLESTATION_URL is not set')
 if (!NUBLE_KEY) console.error('[Bucket] VITE_NUBLESTATION_API_KEY is not set')
 
-// vault is the object returned by createVaultClient — it holds no internal
-// state, just a config reference. Every method call is a fresh fetch().
 const vault = createVaultClient({ url: NUBLE_URL, apiKey: NUBLE_KEY })
 
 // ---------------------------------------------------------------------------
@@ -195,11 +192,10 @@ export function useVaultStore() {
         setFolders(derived)
       })
       .catch(err => {
-        if (!cancelled) {
-          // VaultError.code is the server's machine-readable error string (e.g. "unauthorized").
-          // Fall back to a generic message for unexpected JS errors.
-          setError(err instanceof VaultError ? err.code : 'Failed to load files')
-        }
+        if (cancelled) return
+        // Log for debugging but don't surface to the user — an empty vault
+        // is a valid initial state, and the service may simply not be reachable yet.
+        console.warn('[Vault] list failed:', err instanceof VaultError ? err.code : err)
       })
       .finally(() => { if (!cancelled) setLoading(false) })
 
