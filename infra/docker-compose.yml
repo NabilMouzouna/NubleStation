@@ -31,6 +31,7 @@ services:
       - console
       - api
       - orbit
+      - identity
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:80"]
       interval: 30s
@@ -113,9 +114,10 @@ services:
       NODE_ENV: production
       DATABASE_URL: ${DATABASE_URL}
       INTERNAL_HMAC_SECRET: ${INTERNAL_HMAC_SECRET}
-      DB_INTERNAL_URL:    http://blaze:3001
-      ORBIT_INTERNAL_URL: http://orbit:3002
-      VAULT_INTERNAL_URL: http://vault:3003
+      DB_INTERNAL_URL:       http://blaze:3001
+      ORBIT_INTERNAL_URL:    http://orbit:3002
+      VAULT_INTERNAL_URL:    http://vault:3003
+      IDENTITY_INTERNAL_URL: http://identity:3004
       PORT: 3000
     expose:
       - "3000"
@@ -175,6 +177,32 @@ services:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:3003/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  identity:
+    image: ghcr.io/nabilmouzouna/nublestation-identity:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: ${DATABASE_URL}
+      INTERNAL_HMAC_SECRET: ${INTERNAL_HMAC_SECRET}
+      ORG_DOMAIN: ${ORG_DOMAIN}
+      VAULT_INTERNAL_URL: http://vault:3003
+      SECURE_COOKIES: "false"
+      PORT: 3004
+    expose:
+      - "3004"
+    networks:
+      - nuble
+    depends_on:
+      postgres:
+        condition: service_healthy
+      vault:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3004/healthz"]
       interval: 30s
       timeout: 5s
       retries: 3
