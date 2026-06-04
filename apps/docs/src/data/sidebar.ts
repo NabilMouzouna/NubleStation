@@ -11,6 +11,12 @@ export interface SidebarGroup {
 
 export const sidebar: SidebarGroup[] = [
   {
+    title: 'AI Agents',
+    items: [
+      { title: 'AGENT.md', slug: 'agent', badge: { text: 'AI', color: '#7c3aed' } },
+    ],
+  },
+  {
     title: 'Getting Started',
     items: [
       { title: 'Introduction', slug: 'getting-started/introduction' },
