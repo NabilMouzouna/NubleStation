@@ -19,6 +19,10 @@ export function buildServer() {
       allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
       allowHeaders: ["Authorization", "Content-Type"],
       exposeHeaders: ["Content-Type", "Content-Length"],
+      // Lets app frontends call /v1/auth/me with credentials:'include' so the
+      // session cookie is honored cross-subdomain (Identity SSO). Safe because
+      // the origin is reflected from the LAN allow-list above, never "*".
+      credentials: true,
       maxAge: 86400,
     }),
   );
