@@ -1,5 +1,6 @@
 /** @jsxRuntime automatic @jsxImportSource hono/jsx */
 import { Hono } from "hono";
+import type { Context } from "hono";
 import { loadConfig } from "../config.js";
 import { verifyPassword } from "../auth/password.js";
 import {
@@ -11,10 +12,19 @@ import {
   getSessionToken,
 } from "../auth/session.js";
 import { getUserAppRole, resolveAppIdBySlug } from "../services/access.js";
-import { EmailExistsError, findByEmail, getById, registerUser, updateAvatarUrl } from "../services/users.js";
+import {
+  EmailExistsError,
+  changePassword,
+  findByEmail,
+  getProfile,
+  listUserApps,
+  registerUser,
+  updateAvatarUrl,
+  updateProfile,
+} from "../services/users.js";
 import { uploadAvatar } from "../services/vault.js";
 import { isAllowedRedirect } from "../util/redirect.js";
-import { AccountPage, LoginPage, MessagePage, RegisterPage } from "../views.js";
+import { LoginPage, MessagePage, ProfilePage, RegisterPage } from "../views.js";
 import type { HonoVariables } from "../types.js";
 
 export const pages = new Hono<{ Variables: HonoVariables }>();
@@ -170,17 +180,77 @@ pages.get("/authorize", async (c) => {
   return c.redirect(redirectUri);
 });
 
-// ── Account (default post-login landing) ────────────────────────────────────
+// ── Account / profile (default post-login landing) ──────────────────────────
+
+const ADMIN_ROLES = new Set(["super_admin", "admin"]);
+
+/** Renders the profile card; `editError` re-opens the edit modal with a message. */
+async function renderProfile(c: Context<{ Variables: HonoVariables }>, userId: string, editError?: string) {
+  const profile = await getProfile(userId);
+  if (!profile) {
+    clearSessionCookie(c);
+    return c.redirect("/login");
+  }
+  const isAdmin = ADMIN_ROLES.has(profile.role);
+  const apps = isAdmin ? [] : await listUserApps(userId);
+  return c.html(
+    <ProfilePage
+      email={profile.email}
+      displayName={profile.displayName}
+      avatarUrl={profile.avatarUrl}
+      role={profile.role}
+      createdAt={profile.createdAt}
+      apps={apps}
+      isAdmin={isAdmin}
+      editError={editError}
+    />,
+  );
+}
 
 pages.get("/account", async (c) => {
   const userId = await resolveSession(getSessionToken(c));
   if (!userId) return c.redirect("/login");
-  const user = await getById(userId);
-  if (!user) {
-    clearSessionCookie(c);
-    return c.redirect("/login");
+  return renderProfile(c, userId);
+});
+
+pages.post("/account", async (c) => {
+  const log = c.var.log;
+  const userId = await resolveSession(getSessionToken(c));
+  if (!userId) return c.redirect("/login");
+
+  const body = await c.req.parseBody();
+  const email = str(body.email).trim().toLowerCase();
+  const displayName = opt(body.display_name) ?? null;
+  const currentPw = str(body.current_password);
+  const newPw = str(body.new_password);
+
+  if (!EMAIL_RE.test(email)) return renderProfile(c, userId, "Enter a valid email address.");
+
+  // Optional password change — only when a new password is supplied.
+  if (newPw) {
+    if (newPw.length < 8) return renderProfile(c, userId, "New password must be at least 8 characters.");
+    const ok = await changePassword(userId, currentPw, newPw);
+    if (!ok) return renderProfile(c, userId, "Current password is incorrect.");
   }
-  return c.html(
-    <AccountPage email={user.email} displayName={user.displayName} avatarUrl={user.avatarUrl} />,
-  );
+
+  try {
+    await updateProfile(userId, { displayName, email });
+  } catch (e) {
+    if (e instanceof EmailExistsError) return renderProfile(c, userId, "That email is already in use.");
+    throw e;
+  }
+
+  // Avatar is best-effort — a Vault hiccup shouldn't fail the whole save.
+  const avatar = body.avatar;
+  if (avatar && typeof avatar !== "string" && avatar.size > 0) {
+    try {
+      const bytes = new Uint8Array(await avatar.arrayBuffer());
+      const url = await uploadAvatar(userId, bytes, avatar.type || "image/jpeg");
+      await updateAvatarUrl(userId, url);
+    } catch (err) {
+      log?.warn({ err, userId }, "avatar update failed; profile saved without it");
+    }
+  }
+
+  return c.redirect("/account");
 });
