@@ -265,6 +265,61 @@ importers:
         specifier: ^2.1.8
         version: 2.1.9(@types/node@22.15.3)(lightningcss@1.32.0)
 
+  apps/identity:
+    dependencies:
+      '@hono/node-server':
+        specifier: ^1.13.7
+        version: 1.19.14(hono@4.12.19)
+      '@node-rs/argon2':
+        specifier: ^2.0.2
+        version: 2.0.2
+      '@nublestation/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
+      dotenv:
+        specifier: ^16.4.5
+        version: 16.6.1
+      hono:
+        specifier: ^4.6.12
+        version: 4.12.19
+      pg:
+        specifier: ^8.13.1
+        version: 8.20.0
+      pino:
+        specifier: ^9.5.0
+        version: 9.14.0
+      undici:
+        specifier: ^7.2.0
+        version: 7.25.0
+      zod:
+        specifier: ^3.23.8
+        version: 3.25.76
+    devDependencies:
+      '@nublestation/eslint-config':
+        specifier: workspace:*
+        version: link:../../packages/eslint-config
+      '@nublestation/typescript-config':
+        specifier: workspace:*
+        version: link:../../packages/typescript-config
+      '@types/node':
+        specifier: ^22.10.1
+        version: 22.15.3
+      '@types/pg':
+        specifier: ^8.11.10
+        version: 8.20.0
+      pino-pretty:
+        specifier: ^11.3.0
+        version: 11.3.0
+      tsx:
+        specifier: ^4.19.2
+        version: 4.22.1
+      typescript:
+        specifier: 5.9.2
+        version: 5.9.2
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.15.3)(lightningcss@1.32.0)
+
   apps/orbit:
     dependencies:
       '@hono/node-server':
@@ -12450,7 +12505,7 @@ snapshots:
   vite@5.4.21(@types/node@22.15.3)(lightningcss@1.32.0):
     dependencies:
       esbuild: 0.21.5
-      postcss: 8.5.14
+      postcss: 8.5.15
       rollup: 4.60.4
     optionalDependencies:
       '@types/node': 22.15.3

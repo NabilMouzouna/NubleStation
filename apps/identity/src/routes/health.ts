@@ -1,0 +1,6 @@
+import { Hono } from "hono";
+
+export const health = new Hono();
+
+health.get("/healthz", (c) => c.json({ ok: true }));
+health.get("/readyz",  (c) => c.json({ ok: true }));
