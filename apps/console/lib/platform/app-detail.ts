@@ -122,6 +122,30 @@ export async function getStorageStats(): Promise<StorageStatRow[]> {
   return rows;
 }
 
+export interface AppUserRow {
+  id: string;
+  email: string;
+  display_name: string | null;
+  avatar_url: string | null;
+  role: string;
+  created_at: string;
+}
+
+/** End-users granted access to this app. Console admins are implicit admins on
+ *  every app (ADR 014) and are intentionally not listed here. */
+export async function getAppUsers(appId: string): Promise<AppUserRow[]> {
+  const pool = getPlatformPool();
+  const { rows } = await pool.query<AppUserRow>(
+    `SELECT u.id, u.email, u.display_name, u.avatar_url, ua.role, ua.created_at
+     FROM platform.user_app_access ua
+     JOIN platform.users u ON u.id = ua.user_id
+     WHERE ua.app_id = $1
+     ORDER BY u.email`,
+    [appId],
+  );
+  return rows;
+}
+
 export async function getAppTables(appId: string): Promise<AppTableRow[]> {
   const pool = getPlatformPool();
   const { rows } = await pool.query<AppTableRow>(

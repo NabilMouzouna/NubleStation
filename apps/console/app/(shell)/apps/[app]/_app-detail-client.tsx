@@ -6,12 +6,12 @@ import { useRouter } from "next/navigation";
 import {
   ChevronRight, Rocket, Database, HardDrive, Users, Settings,
   Copy, CheckCheck, ShieldOff, Trash2, ExternalLink, Clock,
-  Globe, Lock, Upload, X, Folder, FolderOpen, ArrowLeft, Eye,
+  Globe, Lock, Upload, X, Folder, FolderOpen, ArrowLeft, Eye, UserPlus,
 } from "lucide-react";
 import { Button } from "@nublestation/ui/components/button";
 import { Badge } from "@nublestation/ui/components/badge";
-import type { AppDetail, DeploymentRow, ApiKeyRow, AppTableRow, StorageFileRow, VaultSettingsRow } from "@/lib/platform/app-detail";
-import { revokeApiKeyAction, deleteAppAction, generateApiKeyAction, deleteFileAction, togglePublicAction, saveVaultSettingsAction } from "./actions";
+import type { AppDetail, DeploymentRow, ApiKeyRow, AppTableRow, StorageFileRow, VaultSettingsRow, AppUserRow } from "@/lib/platform/app-detail";
+import { revokeApiKeyAction, deleteAppAction, generateApiKeyAction, deleteFileAction, togglePublicAction, saveVaultSettingsAction, grantUserAccessAction, changeUserRoleAction, revokeUserAccessAction } from "./actions";
 import { copyToClipboard } from "@/lib/clipboard";
 
 // ---------------------------------------------------------------------------
@@ -102,10 +102,6 @@ function DatabaseTab({ tables }: { tables: AppTableRow[] }) {
       </table>
     </div>
   );
-}
-
-function PlaceholderTab({ service }: { service: string }) {
-  return <EmptyState message={`${service} data will appear here once the service is in use.`} />;
 }
 
 // ---------------------------------------------------------------------------
@@ -408,6 +404,147 @@ function VaultTab({
   );
 }
 
+// ---------------------------------------------------------------------------
+// UsersTab — per-app access management (Identity, ADR 014)
+// ---------------------------------------------------------------------------
+
+const APP_ROLES = ["end_user", "editor", "admin"];
+
+function UsersTab({ app, users }: { app: AppDetail; users: AppUserRow[] }) {
+  const router = useRouter();
+  const [, startTransition] = useTransition();
+  const [email, setEmail]       = useState("");
+  const [role, setRole]         = useState("end_user");
+  const [granting, setGranting] = useState(false);
+  const [error, setError]       = useState<string | null>(null);
+  const [busyId, setBusyId]     = useState<string | null>(null);
+
+  async function handleGrant(e: React.FormEvent) {
+    e.preventDefault();
+    setGranting(true);
+    setError(null);
+    const res = await grantUserAccessAction(app.id, app.name, email, role);
+    setGranting(false);
+    if (!res.ok) { setError(res.error ?? "Failed to grant access."); return; }
+    setEmail("");
+    startTransition(() => router.refresh());
+  }
+
+  async function handleChangeRole(userId: string, newRole: string) {
+    setBusyId(userId);
+    await changeUserRoleAction(app.id, app.name, userId, newRole);
+    setBusyId(null);
+    startTransition(() => router.refresh());
+  }
+
+  async function handleRevoke(userId: string) {
+    setBusyId(userId);
+    await revokeUserAccessAction(app.id, app.name, userId);
+    setBusyId(null);
+    startTransition(() => router.refresh());
+  }
+
+  return (
+    <div className="space-y-8">
+      {/* Grant access */}
+      <section className="space-y-3">
+        <h3 className="text-sm font-semibold text-foreground">Grant access</h3>
+        <p className="text-xs text-muted-foreground">
+          Give an existing NubleStation account a role on this app. Users register themselves at{" "}
+          <span className="font-mono">identity.{"{org}"}.local</span>; org admins already have full access to every app.
+        </p>
+        {error && (
+          <div className="rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-2.5 text-xs text-destructive">
+            {error}
+          </div>
+        )}
+        <form onSubmit={handleGrant} className="flex flex-wrap items-center gap-2">
+          <input
+            type="email"
+            required
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="user@email.com"
+            className="h-9 flex-1 min-w-[200px] rounded-lg border border-input bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40"
+          />
+          <select
+            value={role}
+            onChange={(e) => setRole(e.target.value)}
+            className="h-9 rounded-lg border border-input bg-background px-3 text-sm text-foreground focus-visible:outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40"
+          >
+            {APP_ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
+          </select>
+          <Button type="submit" disabled={granting} className="h-9 gap-1.5 rounded-full px-4 text-sm">
+            <UserPlus className="h-3.5 w-3.5" />
+            {granting ? "Granting…" : "Grant"}
+          </Button>
+        </form>
+      </section>
+
+      {/* Members */}
+      <section className="space-y-3">
+        <h3 className="text-sm font-semibold text-foreground">
+          Members <span className="text-muted-foreground">({users.length})</span>
+        </h3>
+        {users.length === 0 ? (
+          <EmptyState message="No users granted access yet. Org admins can already use this app." />
+        ) : (
+          <div className="overflow-hidden rounded-3xl border border-border">
+            <table className="w-full text-sm">
+              <TableHeader cols={["User", "Role", "Granted", ""]} />
+              <tbody className="divide-y divide-border bg-card">
+                {users.map((u) => (
+                  <tr key={u.id} className="transition-colors hover:bg-muted/40">
+                    <td className="px-5 py-3">
+                      <div className="flex items-center gap-3">
+                        {u.avatar_url ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={u.avatar_url} alt="" width={32} height={32} className="size-8 rounded-full object-cover" />
+                        ) : (
+                          <span className="flex size-8 items-center justify-center rounded-full bg-muted text-xs font-medium text-muted-foreground">
+                            {(u.display_name ?? u.email).slice(0, 1).toUpperCase()}
+                          </span>
+                        )}
+                        <div className="min-w-0">
+                          <p className="truncate text-foreground">{u.display_name ?? u.email}</p>
+                          {u.display_name && <p className="truncate text-xs text-muted-foreground">{u.email}</p>}
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-5 py-3">
+                      <select
+                        value={u.role}
+                        disabled={busyId === u.id}
+                        onChange={(e) => handleChangeRole(u.id, e.target.value)}
+                        className="h-8 rounded-lg border border-input bg-background px-2 text-xs text-foreground focus-visible:outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40 disabled:opacity-50"
+                      >
+                        {APP_ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
+                        {!APP_ROLES.includes(u.role) && <option value={u.role}>{u.role}</option>}
+                      </select>
+                    </td>
+                    <td className="px-5 py-3 text-xs text-muted-foreground">
+                      {new Date(u.created_at).toLocaleDateString()}
+                    </td>
+                    <td className="px-5 py-3 text-right">
+                      <button
+                        onClick={() => handleRevoke(u.id)}
+                        disabled={busyId === u.id}
+                        className="text-xs text-muted-foreground transition-colors hover:text-destructive disabled:opacity-50"
+                      >
+                        Revoke
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+    </div>
+  );
+}
+
 function SettingsTab({
   app,
   apiKeys,
@@ -610,17 +747,20 @@ function ServiceTiles({
   deployments,
   tables,
   storageFiles,
+  appUsers,
 }: {
   active: Tab;
   onSelect: (t: Tab) => void;
   deployments: DeploymentRow[];
   tables: AppTableRow[];
   storageFiles: StorageFileRow[];
+  appUsers: AppUserRow[];
 }) {
   function stat(slug: string) {
     if (slug === "orbit")     return `${deployments.length} deployment${deployments.length !== 1 ? "s" : ""}`;
     if (slug === "blazingdb") return `${tables.length} table${tables.length !== 1 ? "s" : ""}`;
     if (slug === "vault")     return `${storageFiles.length} file${storageFiles.length !== 1 ? "s" : ""}`;
+    if (slug === "identity")  return `${appUsers.length} user${appUsers.length !== 1 ? "s" : ""}`;
     return "0 items";
   }
 
@@ -662,6 +802,7 @@ export function AppDetailClient({
   tables,
   storageFiles,
   vaultSettings,
+  appUsers,
   orgDomain,
 }: {
   app: AppDetail;
@@ -670,6 +811,7 @@ export function AppDetailClient({
   tables: AppTableRow[];
   storageFiles: StorageFileRow[];
   vaultSettings: VaultSettingsRow;
+  appUsers: AppUserRow[];
   orgDomain: string;
 }) {
   const [activeTab, setActiveTab] = useState<Tab>("deployments");
@@ -710,7 +852,7 @@ export function AppDetailClient({
 
       {/* Service tiles */}
       <div className="mt-8">
-        <ServiceTiles active={activeTab} onSelect={setActiveTab} deployments={deployments} tables={tables} storageFiles={storageFiles} />
+        <ServiceTiles active={activeTab} onSelect={setActiveTab} deployments={deployments} tables={tables} storageFiles={storageFiles} appUsers={appUsers} />
       </div>
 
       {/* Tabs */}
@@ -736,7 +878,7 @@ export function AppDetailClient({
         {activeTab === "deployments" && <DeploymentsTab deployments={deployments} />}
         {activeTab === "database"    && <DatabaseTab tables={tables} />}
         {activeTab === "storage"     && <VaultTab app={app} files={storageFiles} settings={vaultSettings} orgDomain={orgDomain} />}
-        {activeTab === "users"       && <PlaceholderTab service="Identity" />}
+        {activeTab === "users"       && <UsersTab app={app} users={appUsers} />}
         {activeTab === "settings"    && <SettingsTab app={app} apiKeys={apiKeys} orgDomain={orgDomain} />}
       </div>
     </div>
