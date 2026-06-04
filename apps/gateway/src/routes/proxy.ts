@@ -49,6 +49,39 @@ proxy.get("/vault/*", async (c) => {
   }
 });
 
+// Identity auth endpoints are cookie-based, not API-key-based. The gateway
+// forwards them to Identity verbatim — passing the Cookie header through and
+// relaying Set-Cookie back — without resolving an API key. Registered before
+// the generic /v1/* handler so it wins. (ADR 014)
+proxy.all("/v1/auth/*", async (c) => {
+  const cfg = loadConfig();
+  const u = new URL(c.req.url);
+  const target = `${cfg.IDENTITY_INTERNAL_URL}${u.pathname}${u.search}`;
+
+  const headers: Record<string, string> = {};
+  const cookie = c.req.header("cookie");
+  if (cookie) headers.cookie = cookie;
+  const contentType = c.req.header("content-type");
+  if (contentType) headers["content-type"] = contentType;
+
+  const method = c.req.method;
+  const body =
+    method === "GET" || method === "HEAD" ? undefined : await c.req.raw.arrayBuffer();
+
+  try {
+    const resp = await fetch(target, { method, headers, body });
+    const respBody = await resp.arrayBuffer();
+    const out = new Headers();
+    const ct = resp.headers.get("content-type");
+    if (ct) out.set("content-type", ct);
+    for (const sc of resp.headers.getSetCookie()) out.append("set-cookie", sc);
+    return new Response(respBody, { status: resp.status, headers: out });
+  } catch (err) {
+    logger.error({ err, path: c.req.path }, "identity forward failed");
+    return c.json({ ok: false, error: "upstream_unavailable" }, 502);
+  }
+});
+
 proxy.all("/v1/*", async (c) => {
   const cfg = loadConfig();
 
