@@ -8,6 +8,13 @@ badge:
 
 This page is written for AI coding agents. It tells you everything you need to use NubleStation in a project — environment setup, SDK usage, CLI commands, and what to avoid.
 
+<div style="display:flex;align-items:center;gap:10px;margin-bottom:1.5rem;padding:12px 16px;border-radius:10px;border:1px solid var(--border);background:var(--surface)">
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;color:var(--accent)"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+  <span style="font-size:0.875rem;color:var(--text-muted)">Want the raw file?</span>
+  <a href="/NubleStation/AGENT.md" download="AGENT.md" style="font-size:0.875rem;font-weight:600;color:var(--accent);text-decoration:none">Download AGENT.md</a>
+  <span style="font-size:0.75rem;color:var(--text-muted);margin-left:auto">Plain Markdown · no MDX · paste directly into your agent context</span>
+</div>
+
 <Aside type="tip">
 **TL;DR** — Install `@nublestation/vault`. Call `createVaultClient({ url, apiKey })`. Upload with `vault.upload(collection, filename, data)`. Deploy with `nuble deploy --build`. That's most of it.
 </Aside>
