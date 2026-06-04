@@ -174,7 +174,6 @@ export const RegisterPage: FC<{ app?: string; redirectUri?: string; error?: stri
       <div class="avatar-field">
         <label class="avatar-box" for="avatar-input">
           <img id="avatar-preview" src="/assets/identity-avatar-default.jpg" alt="" />
-          <span id="avatar-overlay" class="avatar-overlay">Upload your profile</span>
         </label>
         <input id="avatar-input" type="file" name="avatar" accept="image/*" hidden />
         <span class="avatar-hint">Optional — tap to choose a photo</span>
