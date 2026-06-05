@@ -6,6 +6,8 @@ import FileGrid from './components/FileGrid'
 import UploadModal from './components/UploadModal'
 import RenameModal from './components/RenameModal'
 import Tutorial from './components/Tutorial'
+import { UserChip } from './components/AuthGate'
+import type { AuthSession } from './components/AuthGate'
 import './App.css'
 
 type RenameTarget = { id: string; name: string; type: 'file' | 'folder' }
@@ -17,7 +19,7 @@ function getBreadcrumb(folderId: string | null, folders: Folder[]): Folder[] {
   return folder ? [folder] : []
 }
 
-export default function App() {
+export default function App({ session }: { session: AuthSession }) {
   const store = useVaultStore()
   const [currentFolderId, setCurrentFolderId] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
@@ -94,6 +96,7 @@ export default function App() {
             onChange={e => setSearchQuery(e.target.value)}
           />
         </div>
+        <UserChip user={session.user} onLogout={session.logout} />
       </header>
 
       <div className="vault-body">

@@ -78,6 +78,9 @@ importers:
 
   apps/bucket:
     dependencies:
+      '@nublestation/identity':
+        specifier: workspace:*
+        version: link:../../packages/identity
       '@nublestation/vault':
         specifier: workspace:*
         version: link:../../packages/vault
@@ -535,6 +538,24 @@ importers:
       typescript-eslint:
         specifier: ^8.50.0
         version: 8.50.0(eslint@9.39.1(jiti@2.7.0))(typescript@5.9.2)
+
+  packages/identity:
+    devDependencies:
+      '@nublestation/typescript-config':
+        specifier: workspace:*
+        version: link:../typescript-config
+      '@types/node':
+        specifier: ^22.10.1
+        version: 22.15.3
+      tsx:
+        specifier: ^4.19.2
+        version: 4.22.1
+      typescript:
+        specifier: 5.9.2
+        version: 5.9.2
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.15.3)(lightningcss@1.32.0)
 
   packages/shared:
     devDependencies:
