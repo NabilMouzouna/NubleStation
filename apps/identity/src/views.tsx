@@ -38,6 +38,7 @@ const STYLES = `
   button:hover { background: var(--accent-hover); }
   .alt { margin-top: 18px; font-size: 13px; color: var(--muted); text-align: center; }
   .alt a { color: var(--accent); text-decoration: none; font-weight: 500; }
+  .alt a:hover { color: var(--accent-hover); text-decoration: underline; }
   .error {
     background: rgba(220,38,38,0.08); color: var(--danger); border: 1px solid rgba(220,38,38,0.2);
     border-radius: 9px; padding: 10px 12px; font-size: 13px; margin-bottom: 18px;
@@ -88,6 +89,12 @@ const STYLES = `
     border: 4px solid var(--card); background: var(--card);
     box-shadow: 0 4px 16px rgba(10,19,23,0.16);
   }
+  .pf-initials {
+    display: flex; align-items: center; justify-content: center;
+    font-size: 34px; font-weight: 700; letter-spacing: 0.01em; color: #fff;
+    background: linear-gradient(135deg, var(--brand1), var(--brand2) 55%, var(--brand3));
+    user-select: none;
+  }
   .pf-name { font-size: 21px; font-weight: 700; letter-spacing: -0.02em; margin: 12px 0 2px; }
   .pf-email { font-size: 13px; color: var(--muted); margin: 0; }
   .pf-badge {
@@ -113,20 +120,27 @@ const STYLES = `
     display: inline-flex; align-items: center; gap: 7px; padding: 6px 11px;
     border: 1px solid var(--border); border-radius: 999px; font-size: 12.5px; background: var(--card);
   }
+  .pf-app { transition: border-color .15s, box-shadow .15s; }
+  .pf-app:hover { border-color: var(--accent); box-shadow: 0 2px 8px rgba(107,72,245,0.14); }
   .pf-app .role { color: var(--muted); font-size: 11px; }
   .pf-empty { font-size: 13px; color: var(--muted); }
 
   .pf-actions { display: flex; gap: 10px; margin-top: 24px; }
   .btn-outline {
     flex: 1; height: 40px; border: 1px solid var(--border); background: var(--card); color: var(--text);
-    border-radius: 10px; font-size: 13.5px; font-weight: 600; cursor: pointer; transition: border-color .12s, background .12s;
+    border-radius: 10px; font-size: 13.5px; font-weight: 600; cursor: pointer;
+    transition: border-color .15s, background .15s, color .15s, box-shadow .15s;
   }
-  .btn-outline:hover { border-color: var(--accent); color: var(--accent); }
+  .btn-outline:hover {
+    border-color: var(--accent); background: var(--accent); color: #fff;
+    box-shadow: 0 4px 12px rgba(107,72,245,0.28);
+  }
   .btn-ghost {
-    height: 40px; padding: 0 16px; border: 0; background: transparent; color: var(--muted);
+    height: 40px; padding: 0 16px; border: 1px solid transparent; background: transparent; color: var(--muted);
     border-radius: 10px; font-size: 13.5px; font-weight: 600; cursor: pointer; width: auto; margin: 0;
+    transition: color .15s, background .15s, border-color .15s;
   }
-  .btn-ghost:hover { color: var(--danger); background: rgba(228,30,63,0.06); }
+  .btn-ghost:hover { color: var(--danger); background: rgba(228,30,63,0.06); border-color: rgba(228,30,63,0.25); }
 
   /* ── Edit modal ────────────────────────────────────────────────────────── */
   .modal-overlay {
@@ -142,11 +156,14 @@ const STYLES = `
   .pw-toggle {
     width: 100%; text-align: left; background: transparent; color: var(--accent); border: 0; padding: 0;
     font-size: 12.5px; font-weight: 600; cursor: pointer; margin: 2px 0 14px; height: auto;
+    transition: color .15s;
   }
+  .pw-toggle:hover { color: var(--accent-hover); }
   .pw-fields { display: none; }
   .pw-fields.open { display: block; }
-  .modal-actions { display: flex; gap: 10px; margin-top: 8px; }
-  .modal-actions .btn-outline { margin: 0; }
+  /* Equal-width, same-height row — override the default full-width button rule. */
+  .modal-actions { display: flex; gap: 10px; margin-top: 18px; }
+  .modal-actions > button { flex: 1; width: auto; height: 42px; margin: 0; }
 `;
 
 // Tiny client script: live-preview the chosen avatar in the box.
@@ -312,6 +329,13 @@ function monthYear(iso: string): string {
   return d.toLocaleString("en-US", { month: "short", year: "numeric" });
 }
 
+/** First letters of the first two name parts ("John Doe" → "JD"), upper-cased. */
+function initials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  const letters = (parts[0]?.[0] ?? "") + (parts[1]?.[0] ?? "");
+  return (letters || name[0] || "?").toUpperCase();
+}
+
 export interface ProfileApp { name: string; displayName: string; role: string }
 
 export const ProfilePage: FC<{
@@ -324,8 +348,9 @@ export const ProfilePage: FC<{
   isAdmin: boolean;
   editError?: string;
 }> = ({ email, displayName, avatarUrl, role, createdAt, apps, isAdmin, editError }) => {
+  const name = displayName ?? email.split("@")[0] ?? email;
+  // Prefer the uploaded avatar (Vault); otherwise show name initials.
   const avatar = avatarUrl ?? "/assets/identity-avatar-default.jpg";
-  const name = displayName ?? email.split("@")[0];
   const roleLabel = isAdmin ? "Administrator" : role === "end_user" ? "Member" : role;
 
   return (
@@ -333,7 +358,11 @@ export const ProfilePage: FC<{
       {/* Hero + identity */}
       <div class="cover" />
       <div class="pf-head">
-        <img class="pf-avatar" src={avatar} alt="" />
+        {avatarUrl ? (
+          <img class="pf-avatar" src={avatarUrl} alt="" />
+        ) : (
+          <div class="pf-avatar pf-initials">{initials(name)}</div>
+        )}
         <h1 class="pf-name">{name}</h1>
         <p class="pf-email">{email}</p>
         <span class={`pf-badge ${isAdmin ? "admin" : "member"}`}>
