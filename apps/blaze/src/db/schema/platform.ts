@@ -236,6 +236,9 @@ export const vaultSettings = platform.table("vault_settings", {
 });
 
 // ADR 012: file metadata. Bytes live on disk at storage_path.
+// ADR 016: owner_id ties a file to the Identity user who uploaded it. Null means
+// communal/legacy (app-scoped, no per-user owner). Visibility is private by
+// default; is_public=true makes it world-readable; shares live in vault_grants.
 export const storageFiles = platform.table(
   "storage_files",
   {
@@ -243,6 +246,7 @@ export const storageFiles = platform.table(
     appId: uuid("app_id")
       .notNull()
       .references(() => apps.id, { onDelete: "cascade" }),
+    ownerId: uuid("owner_id").references(() => users.id, { onDelete: "set null" }),
     collection: text("collection").notNull(),
     filename: text("filename").notNull(),
     storagePath: text("storage_path").notNull(),
@@ -260,5 +264,42 @@ export const storageFiles = platform.table(
       t.filename,
     ),
     appIdIdx: index("storage_files_app_id_idx").on(t.appId),
+    ownerIdIdx: index("storage_files_owner_id_idx").on(t.ownerId),
+  }),
+);
+
+// ADR 016: per-user file/collection shares. A grant lets `granteeUserId` access
+// a resource owned by `ownerId` inside one app. filename = null grants the whole
+// collection; a filename grants that single file. role is viewer (read/download)
+// or editor (read/download/overwrite/delete).
+export const vaultGrants = platform.table(
+  "vault_grants",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    appId: uuid("app_id")
+      .notNull()
+      .references(() => apps.id, { onDelete: "cascade" }),
+    ownerId: uuid("owner_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    granteeUserId: uuid("grantee_user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    collection: text("collection").notNull(),
+    filename: text("filename"), // null = whole-collection grant
+    role: text("role").notNull().default("viewer"), // viewer | editor
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    grantUq: uniqueIndex("vault_grants_unique").on(
+      t.appId,
+      t.granteeUserId,
+      t.collection,
+      t.filename,
+    ),
+    granteeIdx: index("vault_grants_grantee_idx").on(t.appId, t.granteeUserId),
+    ownerIdx: index("vault_grants_owner_idx").on(t.appId, t.ownerId),
   }),
 );
