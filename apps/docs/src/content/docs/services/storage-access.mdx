@@ -1,0 +1,120 @@
+---
+title: "Vault — Access Control & Sharing"
+description: File ownership, per-user sharing, and visibility — how Vault decides who can see and touch a file.
+---
+
+This page describes Vault's **access-control model**: how files become *owned* by a user, how owners share them, and how the platform decides — server-side — who is allowed to read, edit, or delete a file. The model is Cognito + S3 in spirit: [Identity](/docs/services/auth) supplies *who you are*, Vault enforces *what you can touch*.
+
+<Aside type="caution" title="Upcoming">
+  This is the agreed design for the next Vault release. The current build scopes files **per app** (every app member shares them); the ownership and sharing model below is not yet live. Code examples will be added once the reference app (Bucket) is migrated to it.
+</Aside>
+
+## The keystone: how the system knows who you are
+
+The most important property — and the strongest security guarantee — is that **the app frontend never decides who you are. The platform does, server-side, from something the app cannot touch.**
+
+1. You sign in once at `identity.{org}.local`. Identity sets a session cookie on `.{org}.local` that is **`HttpOnly`** — JavaScript cannot read it, so app code can never read, steal, or forge it.
+2. Every request your browser makes to `api.{org}.local` carries that cookie **automatically** — you don't attach it, the browser does.
+3. The **Gateway** takes the cookie, validates it against `platform.sessions` (real? not expired?), and resolves it to your `user_id`.
+4. It forwards the request to Vault with your `user_id` in an **HMAC-signed** internal header. Vault trusts it *only* because it's signed with the Gateway's secret — a compromised app container cannot forge it.
+5. Vault stamps that `user_id` as the file's `owner`, and uses it for every later access check.
+
+```
+Browser ──cookie (HttpOnly, .{org}.local)──▶ Gateway
+                                              │ validate session → resolve user_id
+                                              │ sign internal headers (HMAC)
+                                              ▼
+                                            Vault  ── owner / access checks keyed on user_id
+```
+
+> **In one line:** identity is never asserted by the frontend — it's derived by the Gateway from an unforgeable cookie and signed inward, so a malicious app frontend cannot impersonate another user, because it never handles identity at all.
+
+## Two kinds of app
+
+You choose your app's model simply by *whether you wire in Identity*:
+
+| App type | Login? | Default visibility | Available |
+|---|---|---|---|
+| **Communal** | no | app-shared (everyone using the app shares everything) | + public |
+| **Personal** (Drive-like) | yes — via Identity | **private** | + share per-user · + public |
+
+There is no halfway: "private to me" is meaningless if the system doesn't know who "me" is, so **private requires Identity**. The moment you want per-user files, you're a Personal app.
+
+## Visibility: every file/folder has exactly one
+
+In a Personal app, each file **and each collection (folder)** has a single visibility setting:
+
+| Visibility | Who can see it | Set by |
+|---|---|---|
+| **Private** *(default)* | the owner only | nothing to do — it's the default |
+| **Shared** | specific people you name, each as `viewer` or `editor` | the owner, per user |
+| **Public** | **anyone — even logged-out** — via a stable URL | owner toggles `is_public` |
+
+The crucial distinction: **public ≠ "everyone in the app."** Public means *no authentication at all* — a public file is fetchable by anyone on the LAN who has the URL. That's why public is its own tool, separate from sharing: it lets you publish something to the world **without inviting strangers into your user database**.
+
+## Roles
+
+Sharing is **per individual user** (no group/role grants — kept deliberately simple). Each grant carries one role:
+
+| Role | Can | How you get it |
+|---|---|---|
+| **owner** | everything + share + make public + transfer | you uploaded it |
+| **editor** | read, download, upload/overwrite, **delete** | an owner shared it with you |
+| **viewer** | read + download only | an owner shared it with you |
+| **app admin** | list + delete/transfer for housekeeping — **never reads private contents** | implicit (Console admin) |
+| **public** | read + download | the file is `is_public` |
+
+A collection `editor` grant is what enables *"others can upload into my folder."*
+
+## Two gates, by design
+
+Access is two independent layers that **stack** — both must pass:
+
+1. **App access** *(Layer 1 — Identity):* are you allowed into this app at all? **Default-deny, admin-granted.** This is the gate every NubleStation app already enforces.
+2. **File access** *(Layer 2 — Vault):* within the app, can you see *this* file? Owner + shares + public.
+
+A consequence worth saying out loud: **you can only share a file with someone who is already a member of the app.** Creating an account isn't enough — an admin must first grant them app access (Layer 1); only then do they appear in your share picker (Layer 2). Admins control *who's in the app*; owners control *who sees their files*.
+
+## How Vault resolves a request
+
+For any action, with the principal being the **cookie-derived user**:
+
+```
+public + read              → allow (even anonymous, via the public URL)
+principal == owner          → allow all
+grant on the file OR its collection → that role's capabilities
+app admin                   → list / delete / transfer only — never read contents
+otherwise                   → deny
+```
+
+## Listing
+
+So a user's "My Drive" view never fills with other people's public files, listing is explicit about scope:
+
+| Call | Returns |
+|---|---|
+| `listMine()` | files you own |
+| `listSharedWithMe()` | files explicitly shared with you |
+| `list()` | the "My Drive" view — owned **+** shared-with-me |
+| `listPublic()` | the separate public space |
+
+## Defaults (locked)
+
+- **New files and collections are private** to their owner.
+- Sharing is **per individual user**, with role `viewer` or `editor`.
+- **Public is anonymous** — no login required to read a public file.
+- Sharing requires the recipient to **already have app access**.
+
+## SDK & example
+
+The `@nublestation/vault` SDK will expose `listMine` / `listSharedWithMe` / `list` / `listPublic`, `share` / `unshare` / `listGrants`, and the visibility toggles; `@nublestation/identity` will expose a `listAppUsers` directory to populate share pickers.
+
+Worked code examples — using the **Bucket** app as the reference — will be added here once Bucket is migrated to this model.
+
+## See also
+
+<CardGrid>
+  <LinkCard title="Vault — Storage Service" href="/docs/services/storage" description="The current storage API: collections, upload/download, public URLs." />
+  <LinkCard title="Identity — Auth Service" href="/docs/services/auth" description="Where 'who you are' comes from — sessions, SSO, app access." />
+  <LinkCard title="@nublestation/vault" href="/docs/sdk/storage" description="The storage SDK." />
+</CardGrid>
