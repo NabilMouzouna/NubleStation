@@ -5,8 +5,8 @@ description: File ownership, per-user sharing, and visibility — how Vault deci
 
 This page describes Vault's **access-control model**: how files become *owned* by a user, how owners share them, and how the platform decides — server-side — who is allowed to read, edit, or delete a file. The model is Cognito + S3 in spirit: [Identity](/docs/services/auth) supplies *who you are*, Vault enforces *what you can touch*.
 
-<Aside type="note" title="Reference examples">
-  Worked code examples — using the Bucket app — will be added here as Bucket is wired to this model.
+<Aside type="tip" title="Shipped">
+  This model is live (ADR 016). The **Bucket** app is built on it end-to-end — the snippets below are taken from its source.
 </Aside>
 
 ## The keystone: how the system knows who you are
@@ -93,10 +93,12 @@ So a user's "My Drive" view never fills with other people's public files, listin
 
 | Call | Returns |
 |---|---|
-| `listMine()` | files you own |
-| `listSharedWithMe()` | files explicitly shared with you |
-| `list()` | the "My Drive" view — owned **+** shared-with-me |
-| `listPublic()` | the separate public space |
+| `listMine(collection?)` | files you own |
+| `listSharedWithMe()` | files explicitly shared with you (each annotated with your role) |
+| `listPublic(collection?)` | the separate public space |
+| `list(collection?)` | everything you can access — own ∪ shared ∪ public ∪ communal (app-admins see all) |
+
+Bucket uses the first three to back its **My Files / Shared with me / Public** tabs. `list()` is the catch-all for apps that don't need the split.
 
 ## Defaults (locked)
 
@@ -107,9 +109,55 @@ So a user's "My Drive" view never fills with other people's public files, listin
 
 ## SDK & example
 
-The `@nublestation/vault` SDK will expose `listMine` / `listSharedWithMe` / `list` / `listPublic`, `share` / `unshare` / `listGrants`, and the visibility toggles; `@nublestation/identity` will expose a `listAppUsers` directory to populate share pickers.
+The `@nublestation/vault` SDK exposes `listMine` / `listSharedWithMe` / `listPublic` / `list`, `share` / `unshare` / `listGrants`, plus the existing `upload` / `download` / `setPublic` / `delete`. `@nublestation/identity` exposes `listAppUsers()` to populate a share picker.
 
-Worked code examples — using the **Bucket** app as the reference — will be added here once Bucket is migrated to this model.
+The SDK does **not** take any user argument — identity comes from the cookie. The only setup difference from a communal app is that the Vault client sends the session cookie automatically (`credentials: "include"`, built in).
+
+### Loading the three views
+
+This is the whole of Bucket's view loader — the `view` toggles which scoped call runs:
+
+```typescript
+// apps/bucket — useVaultStore.ts
+import { createVaultClient } from "@nublestation/vault";
+
+const vault = createVaultClient({ url: NUBLE_URL, apiKey: NUBLE_KEY });
+
+async function load(view: "mine" | "shared" | "public") {
+  if (view === "mine")   return vault.listMine();          // files I own
+  if (view === "shared") return vault.listSharedWithMe();  // shared with me (+ role)
+  return vault.listPublic();                               // public space
+}
+```
+
+### Sharing a file
+
+Owners share with one user at a time, as `viewer` or `editor`:
+
+```typescript
+// Who can I share with? (everyone with access to this app, minus me)
+const people = await identity.listAppUsers();
+
+// Grant — filename = the file, or null for a whole collection
+await vault.share("reports", "q1.pdf", granteeUserId, "editor");
+
+// See and revoke current grants on a resource I own
+const grants = await vault.listGrants("reports", "q1.pdf");
+await vault.unshare("reports", "q1.pdf", granteeUserId);
+```
+
+### Uploading & publishing
+
+Upload is always private to the uploader; `setPublic` opts a file into the anonymous public URL:
+
+```typescript
+await vault.upload("reports", "q1.pdf", bytes);  // private, owner = me
+await vault.setPublic("reports", "q1.pdf", true); // now world-readable
+```
+
+### Enforcement is server-side
+
+The SDK is a thin client — every rule above is enforced in Vault, not the browser. A `viewer` who calls `delete()`, or anyone trying to read a private file they weren't granted, gets a `403` regardless of what the frontend allows. The UI hides those buttons (via the per-file `role` field) purely for ergonomics.
 
 ## See also
 
