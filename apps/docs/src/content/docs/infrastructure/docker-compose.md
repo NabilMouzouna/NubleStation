@@ -17,7 +17,7 @@ services:
   vault        # File storage service — internal only
   orbit        # Deploy service — internal only
   console      # Next.js admin dashboard — internal only, Caddy forwards to it
-  identity     # Auth service — sessions, OIDC/SSO   [coming soon]
+  identity     # Auth service — sessions, shared-cookie SSO
   postgres     # PostgreSQL 16 — internal only
 
 networks:

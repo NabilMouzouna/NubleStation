@@ -29,8 +29,8 @@ NubleStation is a self-hosted backend platform running on a single Linux machine
 |---|---|---|
 | `/v1/vault/*` | **Vault** — file storage | ✅ Live |
 | `/v1/orbit/*` | **Orbit** — frontend deploy | ✅ Live |
-| `/v1/db/*` | **Blaze** — database | 🔜 Soon |
-| `/v1/auth/*` | **Identity** — auth/SSO | 🔜 Soon |
+| `/v1/db/*` | **Blaze** — database | ✅ Live |
+| `/v1/auth/*` | **Identity** — auth/SSO | ✅ Live |
 
 Every request from app code must carry an API key (`Authorization: Bearer nbl_<id>.<secret>`). The Gateway validates the key, resolves it to an app context, and forwards to the right service. **One app cannot access another app's data** — isolation is enforced at the platform layer.
 

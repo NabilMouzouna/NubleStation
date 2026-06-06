@@ -8,7 +8,7 @@ NubleStation ships one npm package per service. Install only what your app uses 
 | Package | Service | What it does |
 |---|---|---|
 | `@nublestation/vault` | Vault | File upload, download, public/private access |
-| `@nublestation/blaze` | Blaze | Database queries on your app's tables *(coming soon)* |
+| `@nublestation/blaze` | Blaze | Database queries on your app's tables |
 | `@nublestation/identity` | Identity | User sessions, SSO, and per-app authorization |
 
 Every package follows the same factory pattern — `createClient({ ... })` returns a typed client scoped to your app. Data-plane SDKs (Vault, Blaze) authenticate with an API key; `@nublestation/identity` is the exception — it rides the shared-cookie SSO session, so it takes no API key. See [its page](/docs/sdk/auth) for details.
@@ -96,5 +96,5 @@ Internal service (Vault, Blaze, Identity)
 
 - [@nublestation/vault](/sdk/storage/) — file storage
 - [@nublestation/identity](/sdk/auth/) — auth, sessions, SSO
-- [Database queries](/sdk/database/) — Blaze (coming soon)
+- [Database queries](/sdk/database/) — Blaze
 - [Real-time](/sdk/realtime/) — SSE subscriptions (coming soon)

@@ -31,7 +31,7 @@ export const sidebar: SidebarGroup[] = [
       { title: 'Orbit — Deploy', slug: 'services/deploy', badge: { text: 'Live', color: '#059669' } },
       { title: 'Blaze — Database', slug: 'services/database' },
       { title: 'Vault — Storage', slug: 'services/storage', badge: { text: 'Live', color: '#059669' } },
-      { title: 'Vault — Access Control', slug: 'services/storage-access', badge: { text: 'Soon', color: '#d97706' } },
+      { title: 'Vault — Access Control', slug: 'services/storage-access', badge: { text: 'Live', color: '#059669' } },
       { title: 'Identity — Auth', slug: 'services/auth', badge: { text: 'Live', color: '#059669' } },
     ],
   },
@@ -71,7 +71,7 @@ export const sidebar: SidebarGroup[] = [
       { title: 'Overview', slug: 'sdk/overview' },
       { title: '@nublestation/vault', slug: 'sdk/storage', badge: { text: 'Live', color: '#059669' } },
       { title: '@nublestation/identity', slug: 'sdk/auth', badge: { text: 'Live', color: '#059669' } },
-      { title: '@nublestation/blaze', slug: 'sdk/database', badge: { text: 'Soon', color: '#d97706' } },
+      { title: '@nublestation/blaze', slug: 'sdk/database', badge: { text: 'Live', color: '#059669' } },
     ],
   },
   {

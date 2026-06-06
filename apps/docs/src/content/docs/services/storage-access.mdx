@@ -5,8 +5,8 @@ description: File ownership, per-user sharing, and visibility — how Vault deci
 
 This page describes Vault's **access-control model**: how files become *owned* by a user, how owners share them, and how the platform decides — server-side — who is allowed to read, edit, or delete a file. The model is Cognito + S3 in spirit: [Identity](/docs/services/auth) supplies *who you are*, Vault enforces *what you can touch*.
 
-<Aside type="caution" title="Upcoming">
-  This is the agreed design for the next Vault release. The current build scopes files **per app** (every app member shares them); the ownership and sharing model below is not yet live. Code examples will be added once the reference app (Bucket) is migrated to it.
+<Aside type="note" title="Reference examples">
+  Worked code examples — using the Bucket app — will be added here as Bucket is wired to this model.
 </Aside>
 
 ## The keystone: how the system knows who you are
