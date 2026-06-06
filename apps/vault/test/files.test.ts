@@ -28,6 +28,7 @@ function mockPool(responses: Array<{ rows: unknown[]; rowCount?: number }>) {
 const FAKE_FILE_ROW = {
   id:           "aaaaaaaa-0000-0000-0000-000000000001",
   app_id:       TEST_APP_ID,
+  owner_id:     null, // communal — resolveFileAccess grants full access (ADR 016)
   collection:   "docs",
   filename:     "hello.txt",
   storage_path: "", // filled per-test
@@ -38,6 +39,11 @@ const FAKE_FILE_ROW = {
 };
 
 const DEFAULT_SETTINGS = { rows: [{ allowed_extensions: [], max_file_bytes: 52_428_800 }] };
+
+// resolveCaller() with no matching users row → { userId: null, isAdmin: false },
+// i.e. a communal/anonymous caller. Combined with owner_id=null files above,
+// access checks resolve to "owner" (the pre-ADR-016 full-access behaviour).
+const CALLER_COMMUNAL = { rows: [] as unknown[] };
 
 let app: ReturnType<typeof buildServer>;
 let tmpRoot: string;
@@ -157,7 +163,7 @@ describe("POST /v1/vault/files/docs/hello.txt — validation", () => {
   it("returns 415 when extension is not in allowed list", async () => {
     const { bodyBytes, contentType } = await makeFileUploadRequest("data", "script.sh", "text/x-sh");
     const signed = makeSignedHeaders("POST", path, bodyBytes);
-    mockPool([{ rows: [{ allowed_extensions: ["pdf", "jpg"], max_file_bytes: 52_428_800 }] }]);
+    mockPool([CALLER_COMMUNAL, { rows: [{ allowed_extensions: ["pdf", "jpg"], max_file_bytes: 52_428_800 }] }]);
     const res = await app.request(
       new Request(`http://localhost${path}`, {
         method: "POST",
@@ -172,8 +178,12 @@ describe("POST /v1/vault/files/docs/hello.txt — validation", () => {
   it("returns 409 when file already exists", async () => {
     const { bodyBytes, contentType } = await makeFileUploadRequest("hello");
     const signed = makeSignedHeaders("POST", path, bodyBytes);
-    // settings → file exists check returns 1 row
-    mockPool([DEFAULT_SETTINGS, { rows: [{ "?column?": 1 }], rowCount: 1 }]);
+    // caller → settings → conflict check returns a file owned by someone else
+    mockPool([
+      CALLER_COMMUNAL,
+      DEFAULT_SETTINGS,
+      { rows: [{ ...FAKE_FILE_ROW, owner_id: "ffffffff-0000-0000-0000-000000000099" }], rowCount: 1 },
+    ]);
     const res = await app.request(
       new Request(`http://localhost${path}`, {
         method: "POST",
@@ -197,8 +207,8 @@ describe("POST /v1/vault/files/docs/hello.txt — success", () => {
     const { bodyBytes, contentType } = await makeFileUploadRequest("hello", "hello.txt", "text/plain");
     const signed = makeSignedHeaders("POST", path, bodyBytes);
     const fileRow = { ...FAKE_FILE_ROW, storage_path: join(tmpRoot, "test-app", "docs", "hello.txt") };
-    // settings → no conflict → insert
-    mockPool([DEFAULT_SETTINGS, { rows: [], rowCount: 0 }, { rows: [fileRow] }]);
+    // caller → settings → no conflict → insert
+    mockPool([CALLER_COMMUNAL, DEFAULT_SETTINGS, { rows: [], rowCount: 0 }, { rows: [fileRow] }]);
     const res = await app.request(
       new Request(`http://localhost${path}`, {
         method: "POST",
@@ -226,7 +236,7 @@ describe("GET /v1/vault/files", () => {
 
   it("returns 200 with file list", async () => {
     const signed = makeSignedHeaders("GET", path, new Uint8Array());
-    mockPool([{ rows: [FAKE_FILE_ROW, { ...FAKE_FILE_ROW, id: "bbb" }] }]);
+    mockPool([CALLER_COMMUNAL, { rows: [FAKE_FILE_ROW, { ...FAKE_FILE_ROW, id: "bbb" }] }]);
     const res = await app.request(
       new Request(`http://localhost${path}`, { headers: signed }),
     );
@@ -238,7 +248,7 @@ describe("GET /v1/vault/files", () => {
 
   it("returns 200 with empty list when no files", async () => {
     const signed = makeSignedHeaders("GET", path, new Uint8Array());
-    mockPool([{ rows: [] }]);
+    mockPool([CALLER_COMMUNAL, { rows: [] }]);
     const res = await app.request(
       new Request(`http://localhost${path}`, { headers: signed }),
     );
@@ -256,7 +266,7 @@ describe("GET /v1/vault/files/docs", () => {
 
   it("returns 200 with collection-filtered list", async () => {
     const signed = makeSignedHeaders("GET", path, new Uint8Array());
-    mockPool([{ rows: [FAKE_FILE_ROW] }]);
+    mockPool([CALLER_COMMUNAL, { rows: [FAKE_FILE_ROW] }]);
     const res = await app.request(
       new Request(`http://localhost${path}`, { headers: signed }),
     );
@@ -294,7 +304,7 @@ describe("GET /v1/vault/files/docs/hello.txt — download", () => {
 
     const signed   = makeSignedHeaders("GET", path, new Uint8Array());
     const fileRow  = { ...FAKE_FILE_ROW, storage_path: filePath };
-    mockPool([{ rows: [fileRow] }]);
+    mockPool([{ rows: [fileRow] }, CALLER_COMMUNAL]);
 
     const res = await app.request(
       new Request(`http://localhost${path}`, { headers: { "x-nuble-app-slug": "test-app", ...signed } }),
@@ -356,7 +366,8 @@ describe("PATCH /v1/vault/files/docs/hello.txt", () => {
   it("returns 200 with updated file on success", async () => {
     const body   = new TextEncoder().encode(JSON.stringify({ isPublic: true }));
     const signed = makeSignedHeaders("PATCH", path, body);
-    mockPool([{ rows: [{ ...FAKE_FILE_ROW, is_public: true }] }]);
+    // getFile → caller → setPublic
+    mockPool([{ rows: [FAKE_FILE_ROW] }, CALLER_COMMUNAL, { rows: [{ ...FAKE_FILE_ROW, is_public: true }] }]);
     const res = await app.request(
       new Request(`http://localhost${path}`, {
         method: "PATCH",
@@ -398,7 +409,9 @@ describe("DELETE /v1/vault/files/docs/hello.txt", () => {
 
     const body   = Buffer.alloc(0);
     const signed = makeSignedHeaders("DELETE", path, body);
-    mockPool([{ rows: [{ ...FAKE_FILE_ROW, storage_path: filePath }] }]);
+    // getFile → caller → deleteFileMeta
+    const delRow = { rows: [{ ...FAKE_FILE_ROW, storage_path: filePath }] };
+    mockPool([delRow, CALLER_COMMUNAL, delRow]);
 
     const res = await app.request(
       new Request(`http://localhost${path}`, {
