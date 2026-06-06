@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { resolveApiKey } from "../auth/api-key.js";
+import { resolveSessionUser } from "../auth/session.js";
 import { loadConfig, type Config } from "../config.js";
 import { forwardSigned } from "../forward/proxy.js";
 import { logger } from "../logger.js";
@@ -14,16 +15,18 @@ export const proxy = new Hono();
 function resolveUpstream(
   path: string,
   cfg: Config,
-): { baseUrl: string; needsSlug: boolean } | null {
+): { baseUrl: string; needsSlug: boolean; userScoped: boolean } | null {
   const segment = path.split("/")[2]; // /v1/{segment}/...
   switch (segment) {
     case "orbit":
-      return { baseUrl: cfg.ORBIT_INTERNAL_URL, needsSlug: true };
+      return { baseUrl: cfg.ORBIT_INTERNAL_URL, needsSlug: true, userScoped: false };
     case "vault":
-      return { baseUrl: cfg.VAULT_INTERNAL_URL, needsSlug: false };
+      // ADR 016: Vault is user-aware — the session cookie identifies the human
+      // who owns/accesses a file, on top of the app-scoping API key.
+      return { baseUrl: cfg.VAULT_INTERNAL_URL, needsSlug: false, userScoped: true };
     case "blaze":
     case "db": // legacy prefix — kept for compatibility
-      return { baseUrl: cfg.DB_INTERNAL_URL, needsSlug: false };
+      return { baseUrl: cfg.DB_INTERNAL_URL, needsSlug: false, userScoped: false };
     default:
       return null;
   }
@@ -95,7 +98,15 @@ proxy.all("/v1/*", async (c) => {
     return c.json({ ok: false, error: "unauthorized" }, 401);
   }
 
-  const userId = resolved.apiKeyId;
+  // For user-scoped services (Vault, ADR 016) the session cookie identifies the
+  // human. We inject the real Identity user_id when a valid cookie is present;
+  // otherwise the call is anonymous (apiKeyId) and only public reads succeed.
+  let userId = resolved.apiKeyId;
+  if (upstream.userScoped) {
+    const sessionUser = await resolveSessionUser(c.req.header("cookie"));
+    if (sessionUser) userId = sessionUser;
+  }
+
   const body = new Uint8Array(await c.req.raw.arrayBuffer());
   const contentType = c.req.header("content-type") ?? null;
 
