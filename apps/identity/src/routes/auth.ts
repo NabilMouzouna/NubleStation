@@ -5,7 +5,7 @@ import {
   clearSessionCookie,
   getSessionToken,
 } from "../auth/session.js";
-import { getUserAppRole, resolveAppIdBySlug } from "../services/access.js";
+import { getUserAppRole, listAppUsers, resolveAppIdBySlug } from "../services/access.js";
 import { getById } from "../services/users.js";
 import type { HonoVariables } from "../types.js";
 
@@ -45,6 +45,29 @@ auth.get("/v1/auth/me", async (c) => {
       role,
     },
   });
+});
+
+/**
+ * GET /v1/auth/app-users?app=slug
+ * Lists users the caller can share with in this app (ADR 016). The caller must
+ * be authenticated and have access to the app. The caller is omitted from the
+ * result. Used by app frontends to populate a "share with" picker.
+ */
+auth.get("/v1/auth/app-users", async (c) => {
+  const userId = await resolveSession(getSessionToken(c));
+  if (!userId) return c.json({ ok: false, error: "unauthenticated" }, 401);
+
+  const app = c.req.query("app");
+  if (!app) return c.json({ ok: false, error: "missing_app" }, 400);
+
+  const appId = await resolveAppIdBySlug(app);
+  if (!appId) return c.json({ ok: false, error: "unknown_app" }, 404);
+
+  const role = await getUserAppRole(userId, appId);
+  if (!role) return c.json({ ok: false, error: "forbidden" }, 403);
+
+  const users = (await listAppUsers(appId)).filter((u) => u.id !== userId);
+  return c.json({ ok: true, users });
 });
 
 /** POST /v1/auth/logout — revoke the current session server-side and clear the cookie. */

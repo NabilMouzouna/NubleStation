@@ -1,5 +1,6 @@
 import { IdentityError } from "./errors.js";
 import type {
+  AppUser,
   IdentityConfig,
   IdentityUser,
   RequireUserOptions,
@@ -123,6 +124,26 @@ export function createIdentityClient(config: IdentityConfig) {
       }
       client.login(opts.redirectUri);
       return new Promise<IdentityUser>(() => {}); // navigation in flight
+    },
+
+    // ── Sharing helpers ─────────────────────────────────────────────────────
+
+    /**
+     * Users you can share with in this app (ADR 016) — everyone with access to
+     * the app, minus yourself. Requires a session with access; throws
+     * `IdentityError` otherwise. Feeds a "share with" picker.
+     */
+    async listAppUsers(): Promise<AppUser[]> {
+      const res = await fetch(
+        `${config.url}/v1/auth/app-users?app=${encodeURIComponent(config.app)}`,
+        { method: "GET", credentials: "include", headers: { accept: "application/json" } },
+      );
+      if (!res.ok) {
+        let code = "request_failed";
+        try { code = ((await res.json()) as { error?: string }).error ?? code; } catch { /* ignore */ }
+        throw new IdentityError(res.status, code);
+      }
+      return ((await res.json()) as { users: AppUser[] }).users;
     },
 
     // ── Sign-in / sign-out ──────────────────────────────────────────────────

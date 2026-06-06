@@ -36,3 +36,44 @@ export async function resolveAppIdBySlug(slug: string): Promise<string | null> {
   );
   return rows[0]?.id ?? null;
 }
+
+export interface AppUser {
+  id: string;
+  email: string;
+  displayName: string | null;
+  avatarUrl: string | null;
+  role: string;
+}
+
+/**
+ * Users who can be granted access to a resource in this app (ADR 016 share
+ * picker): everyone with an explicit grant for the app, plus org admins (who
+ * are implicit app-admins). Inactive accounts are excluded.
+ */
+export async function listAppUsers(appId: string): Promise<AppUser[]> {
+  const { rows } = await getPool().query<{
+    id: string;
+    email: string;
+    display_name: string | null;
+    avatar_url: string | null;
+    role: string;
+  }>(
+    `SELECT u.id, u.email, u.display_name, u.avatar_url,
+            COALESCE(ua.role,
+                     CASE WHEN u.role IN ('super_admin','admin') THEN 'admin' END) AS role
+     FROM platform.users u
+     LEFT JOIN platform.user_app_access ua
+       ON ua.user_id = u.id AND ua.app_id = $1
+     WHERE u.is_active = true
+       AND (ua.app_id IS NOT NULL OR u.role IN ('super_admin','admin'))
+     ORDER BY u.display_name NULLS LAST, u.email`,
+    [appId],
+  );
+  return rows.map((r) => ({
+    id: r.id,
+    email: r.email,
+    displayName: r.display_name,
+    avatarUrl: r.avatar_url,
+    role: r.role,
+  }));
+}

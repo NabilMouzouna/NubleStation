@@ -35,3 +35,13 @@ export interface RequireUserOptions {
   /** Called instead of throwing when the user is signed in but lacks access. */
   onForbidden?: (user: IdentityUser) => void;
 }
+
+/** A user who can be granted access to a resource in this app (share picker). */
+export interface AppUser {
+  id: string;
+  email: string;
+  displayName: string | null;
+  avatarUrl: string | null;
+  /** The user's role on this app ("admin" for org admins). */
+  role: string;
+}
