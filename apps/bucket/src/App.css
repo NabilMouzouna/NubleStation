@@ -312,6 +312,37 @@
 }
 
 /* ─── Toolbar ─── */
+.vault-views {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 20px 0;
+  flex-shrink: 0;
+}
+
+.vault-view-tab {
+  background: none;
+  border: none;
+  padding: 7px 14px;
+  border-radius: 8px;
+  color: var(--text-2);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  font-family: var(--sans);
+  transition: color 0.12s, background 0.12s;
+}
+
+.vault-view-tab:hover {
+  color: var(--text-h);
+  background: var(--code-bg);
+}
+
+.vault-view-tab.active {
+  color: var(--accent);
+  background: var(--accent-bg);
+}
+
 .vault-toolbar {
   display: flex;
   align-items: center;

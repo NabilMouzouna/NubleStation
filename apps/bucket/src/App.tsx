@@ -1,16 +1,23 @@
 import { useState, useCallback } from 'react'
 import { useVaultStore } from './hooks/useVaultStore'
-import type { FileItem, Folder } from './hooks/useVaultStore'
+import type { FileItem, Folder, VaultView } from './hooks/useVaultStore'
 import Sidebar from './components/Sidebar'
 import FileGrid from './components/FileGrid'
 import UploadModal from './components/UploadModal'
 import RenameModal from './components/RenameModal'
+import ShareModal from './components/ShareModal'
 import Tutorial from './components/Tutorial'
 import { UserChip } from './components/AuthGate'
 import type { AuthSession } from './components/AuthGate'
 import './App.css'
 
-type RenameTarget = { id: string; name: string; type: 'file' | 'folder' }
+type RenameTarget = { id: string; name: string; type: 'folder' }
+
+const VIEW_TABS: { id: VaultView; label: string }[] = [
+  { id: 'mine',   label: 'My Files' },
+  { id: 'shared', label: 'Shared with me' },
+  { id: 'public', label: 'Public' },
+]
 
 // Collections are flat — breadcrumb is at most one level deep
 function getBreadcrumb(folderId: string | null, folders: Folder[]): Folder[] {
@@ -25,8 +32,22 @@ export default function App({ session }: { session: AuthSession }) {
   const [searchQuery, setSearchQuery] = useState('')
   const [showUpload, setShowUpload] = useState(false)
   const [renameTarget, setRenameTarget] = useState<RenameTarget | null>(null)
+  const [shareTarget, setShareTarget] = useState<FileItem | null>(null)
 
+  const { view, setView } = store
+  const isMine = view === 'mine'
   const breadcrumb = getBreadcrumb(currentFolderId, store.folders)
+
+  const handleSwitchView = useCallback((v: VaultView) => {
+    setCurrentFolderId(null)
+    setSearchQuery('')
+    setView(v)
+  }, [setView])
+
+  const handleShare = useCallback((id: string) => {
+    const f = store.files.find(x => x.id === id)
+    if (f) setShareTarget(f)
+  }, [store.files])
 
   const handleUpload = useCallback(async (pending: { file: File; isPublic: boolean }[]) => {
     const items = pending.map(({ file, isPublic }) => ({ file, isPublic, folderName: currentFolderId }))
@@ -36,8 +57,7 @@ export default function App({ session }: { session: AuthSession }) {
 
   const handleRename = useCallback((newName: string) => {
     if (!renameTarget) return
-    if (renameTarget.type === 'file') store.renameFile(renameTarget.id, newName)
-    else store.renameFolder(renameTarget.id, newName)
+    store.renameFolder(renameTarget.id, newName)
     setRenameTarget(null)
   }, [renameTarget, store])
 
@@ -57,11 +77,6 @@ export default function App({ session }: { session: AuthSession }) {
     store.deleteFolder(id)
     if (currentFolderId === id) setCurrentFolderId(null)
   }, [store, currentFolderId])
-
-  const startRenameFile = useCallback((id: string) => {
-    const f = store.files.find(x => x.id === id)
-    if (f) setRenameTarget({ id, name: f.name, type: 'file' })
-  }, [store.files])
 
   const startRenameFolder = useCallback((id: string) => {
     const f = store.folders.find(x => x.id === id)
@@ -111,13 +126,27 @@ export default function App({ session }: { session: AuthSession }) {
         />
 
         <main className="vault-main">
+          <nav className="vault-views" role="tablist" aria-label="File views">
+            {VIEW_TABS.map(t => (
+              <button
+                key={t.id}
+                role="tab"
+                aria-selected={view === t.id}
+                className={`vault-view-tab${view === t.id ? ' active' : ''}`}
+                onClick={() => handleSwitchView(t.id)}
+              >
+                {t.label}
+              </button>
+            ))}
+          </nav>
+
           <div className="vault-toolbar">
             <nav className="vault-breadcrumb">
               <button
                 className={!currentFolderId ? 'active' : ''}
                 onClick={() => setCurrentFolderId(null)}
               >
-                My Vault
+                {VIEW_TABS.find(t => t.id === view)?.label}
               </button>
               {breadcrumb.map((f, i) => (
                 <span key={f.id} style={{ display: 'flex', alignItems: 'center' }}>
@@ -131,22 +160,24 @@ export default function App({ session }: { session: AuthSession }) {
                 </span>
               ))}
             </nav>
-            <div className="vault-actions">
-              <button className="btn-ghost" onClick={handleCreateFolder}>
-                <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
-                  <path d="M1 4a1 1 0 011-1h4.586a1 1 0 01.707.293L8.414 4.5H14a1 1 0 011 1V13a1 1 0 01-1 1H2a1 1 0 01-1-1V4z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round"/>
-                  <path d="M8 8v4M6 10h4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
-                </svg>
-                New Folder
-              </button>
-              <button className="btn-primary" onClick={() => setShowUpload(true)} data-tutorial="upload-btn">
-                <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
-                  <path d="M8 10V3M5 6l3-3 3 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                  <path d="M2 12v1a1 1 0 001 1h10a1 1 0 001-1v-1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-                </svg>
-                Upload
-              </button>
-            </div>
+            {isMine && (
+              <div className="vault-actions">
+                <button className="btn-ghost" onClick={handleCreateFolder}>
+                  <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+                    <path d="M1 4a1 1 0 011-1h4.586a1 1 0 01.707.293L8.414 4.5H14a1 1 0 011 1V13a1 1 0 01-1 1H2a1 1 0 01-1-1V4z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round"/>
+                    <path d="M8 8v4M6 10h4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+                  </svg>
+                  New Folder
+                </button>
+                <button className="btn-primary" onClick={() => setShowUpload(true)} data-tutorial="upload-btn">
+                  <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+                    <path d="M8 10V3M5 6l3-3 3 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                    <path d="M2 12v1a1 1 0 001 1h10a1 1 0 001-1v-1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                  </svg>
+                  Upload
+                </button>
+              </div>
+            )}
           </div>
 
           {store.error && (
@@ -160,13 +191,14 @@ export default function App({ session }: { session: AuthSession }) {
             folders={store.folders}
             currentFolderId={currentFolderId}
             searchQuery={searchQuery}
+            view={view}
             onNavigate={setCurrentFolderId}
             onDownload={handleDownload}
             onToggleVisibility={store.toggleFileVisibility}
             onDeleteFile={store.deleteFile}
-            onRenameFile={startRenameFile}
             onRenameFolder={startRenameFolder}
             onDeleteFolder={handleDeleteFolder}
+            onShare={handleShare}
             onUpload={() => setShowUpload(true)}
           />
         </main>
@@ -183,6 +215,16 @@ export default function App({ session }: { session: AuthSession }) {
           initialName={renameTarget.name}
           onConfirm={handleRename}
           onClose={() => setRenameTarget(null)}
+        />
+      )}
+
+      {shareTarget && (
+        <ShareModal
+          file={shareTarget}
+          onClose={() => setShareTarget(null)}
+          getGrants={store.getGrants}
+          onShare={store.shareFile}
+          onUnshare={store.unshareFile}
         />
       )}
     </div>

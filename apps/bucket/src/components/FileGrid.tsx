@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react'
-import type { FileItem, Folder } from '../hooks/useVaultStore'
+import type { FileItem, Folder, VaultView } from '../hooks/useVaultStore'
 import ContextMenu from './ContextMenu'
 import type { ContextMenuItem } from './ContextMenu'
 
@@ -8,15 +8,20 @@ type Props = {
   folders: Folder[]
   currentFolderId: string | null
   searchQuery: string
+  view: VaultView
   onNavigate: (id: string | null) => void
   onDownload: (file: FileItem) => void
   onToggleVisibility: (id: string) => void
   onDeleteFile: (id: string) => void
-  onRenameFile: (id: string) => void
   onRenameFolder: (id: string) => void
   onDeleteFolder: (id: string) => void
+  onShare: (id: string) => void
   onUpload: () => void
 }
+
+// Capability helpers driven by the caller's role on each file (ADR 016).
+const canEdit  = (f: FileItem) => f.role === 'owner' || f.role === 'editor'
+const canShare = (f: FileItem) => f.role === 'owner'
 
 type CtxTarget = { id: string; type: 'file' | 'folder'; x: number; y: number }
 
@@ -145,18 +150,29 @@ function VisibilityBadge({ isPublic, onToggle }: { isPublic: boolean; onToggle: 
   )
 }
 
+function RoleBadge({ file, view }: { file: FileItem; view: VaultView }) {
+  // What to show when the caller is NOT the owner: their grant role, or "Public".
+  const text = view === 'public'
+    ? 'Public'
+    : file.role === 'editor' ? 'Can edit'
+    : file.role === 'viewer' ? 'View only'
+    : file.isPublic ? 'Public' : 'Shared'
+  return <span className="vis-badge" style={{ cursor: 'default' }} title="Your access to this file">{text}</span>
+}
+
 export default function FileGrid({
   files,
   folders,
   currentFolderId,
   searchQuery,
+  view,
   onNavigate,
   onDownload,
   onToggleVisibility,
   onDeleteFile,
-  onRenameFile,
   onRenameFolder,
   onDeleteFolder,
+  onShare,
   onUpload,
 }: Props) {
   const [ctx, setCtx] = useState<CtxTarget | null>(null)
@@ -178,30 +194,32 @@ export default function FileGrid({
   )
   const isEmpty = subfolders.length === 0 && currentFiles.length === 0
 
+  const ctxFile = ctx?.type === 'file' ? files.find(x => x.id === ctx.id) : undefined
+
   const ctxItems: ContextMenuItem[] = ctx
     ? ctx.type === 'file'
       ? [
           {
             label: 'Download',
             icon: <DownloadIcon />,
-            onClick: () => { const f = files.find(x => x.id === ctx.id); if (f) onDownload(f) },
+            onClick: () => { if (ctxFile) onDownload(ctxFile) },
           },
-          {
-            label: 'Rename',
-            icon: <PencilIcon />,
-            onClick: () => onRenameFile(ctx.id),
-          },
-          {
-            label: files.find(x => x.id === ctx.id)?.isPublic ? 'Make Private' : 'Make Public',
+          ...(ctxFile && canShare(ctxFile) ? [{
+            label: 'Share',
+            icon: <ShareIcon />,
+            onClick: () => onShare(ctx.id),
+          }] : []),
+          ...(ctxFile && canShare(ctxFile) ? [{
+            label: ctxFile.isPublic ? 'Make Private' : 'Make Public',
             icon: <GlobeIcon />,
             onClick: () => onToggleVisibility(ctx.id),
-          },
-          {
+          }] : []),
+          ...(ctxFile && canEdit(ctxFile) ? [{
             label: 'Delete',
             icon: <TrashIcon />,
             danger: true,
             onClick: () => onDeleteFile(ctx.id),
-          },
+          }] : []),
         ]
       : [
           {
@@ -301,7 +319,9 @@ export default function FileGrid({
                 </span>
               </div>
               <div className="file-card-footer">
-                <VisibilityBadge isPublic={file.isPublic} onToggle={() => onToggleVisibility(file.id)} />
+                {canShare(file)
+                  ? <VisibilityBadge isPublic={file.isPublic} onToggle={() => onToggleVisibility(file.id)} />
+                  : <RoleBadge file={file} view={view} />}
                 <div className="file-card-actions">
                   <button
                     className="icon-btn"
@@ -310,20 +330,24 @@ export default function FileGrid({
                   >
                     <DownloadIcon />
                   </button>
-                  <button
-                    className="icon-btn"
-                    title="Rename"
-                    onClick={e => { e.stopPropagation(); onRenameFile(file.id) }}
-                  >
-                    <PencilIcon />
-                  </button>
-                  <button
-                    className="icon-btn danger"
-                    title="Delete"
-                    onClick={e => { e.stopPropagation(); onDeleteFile(file.id) }}
-                  >
-                    <TrashIcon />
-                  </button>
+                  {canShare(file) && (
+                    <button
+                      className="icon-btn"
+                      title="Share"
+                      onClick={e => { e.stopPropagation(); onShare(file.id) }}
+                    >
+                      <ShareIcon />
+                    </button>
+                  )}
+                  {canEdit(file) && (
+                    <button
+                      className="icon-btn danger"
+                      title="Delete"
+                      onClick={e => { e.stopPropagation(); onDeleteFile(file.id) }}
+                    >
+                      <TrashIcon />
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
@@ -374,6 +398,17 @@ function TrashIcon() {
   return (
     <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
       <path d="M3 5h10M6 5V3h4v2M5 5l1 8h4l1-8" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  )
+}
+
+function ShareIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+      <circle cx="12" cy="3.5" r="2" stroke="currentColor" strokeWidth="1.4"/>
+      <circle cx="4" cy="8" r="2" stroke="currentColor" strokeWidth="1.4"/>
+      <circle cx="12" cy="12.5" r="2" stroke="currentColor" strokeWidth="1.4"/>
+      <path d="M10.2 4.6L5.8 7M5.8 9l4.4 2.4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
     </svg>
   )
 }
