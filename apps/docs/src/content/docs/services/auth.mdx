@@ -1,49 +1,124 @@
 ---
 title: "Identity — Auth Service"
-description: Sessions, API keys, and single sign-on across all apps. Coming soon.
+description: Cross-app user accounts with shared-cookie single sign-on and per-app, default-deny authorization.
 ---
 
+Identity gives a NubleStation org **cross-platform user accounts** — one identity per human, usable across every app — with **per-app authorization**. A user registers once at `identity.{org}.local`, and a session cookie scoped to the parent domain logs them in everywhere. App access is **default-deny**: a Console admin grants a role per app.
 
-
-<Aside type="caution">
-  The Auth Service is under active development. This page documents the planned design. Current builds use API-key-only authentication via the gateway.
+<Aside type="tip" title="Shipped">
+  Identity is live. For the client library, see [`@nublestation/identity`](/docs/sdk/auth).
 </Aside>
 
-## Planned capabilities
+## The model in one line
 
-- **Email/password login** — standard credentials with Argon2id hashing
-- **Session management** — via [Lucia v3](https://lucia-auth.com/), TypeScript-native, no vendor lock-in
-- **Single Sign-On** — one login works across all `*.{org}.local` subdomains (shared `Domain=.{org}.local` cookie)
-- **OIDC provider** — issues OIDC tokens for programmatic / token-based access via [`oidc-provider`](https://github.com/panva/node-oidc-provider)
-- **API key management** — create, list, revoke keys for apps
-- **Role-based access** — roles from `user_app_access` flow into session context
+> Register once at `identity.{org}.local`; a session cookie scoped to `.{org}.local` signs you in across every app; an admin grants you a role per app (default-deny).
 
-## SSO mechanism
+There are **no browser-side tokens**. Authentication is a server-side, revocable session referenced by an `HttpOnly` cookie. This is shared-cookie SSO, chosen over full OIDC because every app is first-party under one parent domain — it delivers SSO while eliminating OAuth's browser-token attack surface (open redirects, code interception, `localStorage` token theft).
 
-All apps live under `*.{org}.local` — a shared eTLD+1. This allows a single cookie:
+## The two reach paths
 
-1. User logs in at `console.{org}.local`
-2. Auth service sets `Set-Cookie: session=...; Domain=.{org}.local; HttpOnly; Secure; SameSite=Lax`
-3. Browser sends this cookie automatically to `tasks.{org}.local`, `records.{org}.local`, every subdomain
-4. The API Gateway validates the session cookie on every request and resolves it to `user_id`
+```
+identity.{org}.local/*       →  Caddy  →  identity:3004                 (pages + form posts; sets the cookie)
+api.{org}.local/v1/auth/*    →  Caddy  →  gateway  →  identity:3004     (JSON; cookie passed through)
+```
 
-Revoking the session at the Auth service logs the user out of every app at once.
+The Gateway forwards `/v1/auth/*` **without** requiring an API key — it passes the `Cookie` header through and relays `Set-Cookie` back.
 
-## Technology choices
+## The SSO "login button" flow
 
-| Component | Choice | Rationale |
+```
+tasks.{org}.local  ──"Login"──▶  identity.{org}.local/authorize?app=tasks&redirect_uri=http://tasks.{org}.local/
+                                       │
+                       session cookie on .{org}.local?
+                        ├─ no  ▶ render login/register ▶ on success ▼
+                        └─ yes ▼
+                       role for (user, tasks)?
+                        │   admin if user is super_admin/admin, else user_app_access lookup
+                        ├─ has role ▶ 302 redirect_uri   (validated: host ends with .{org}.local)
+                        └─ none     ▶ "No access" page (default-deny)
+                                       │
+tasks.{org}.local  ◀──redirect──  app calls GET api.{org}.local/v1/auth/me?app=tasks
+                                   ▶ { id, email, displayName, avatarUrl, role }   (403 if no access)
+```
+
+`redirect_uri` is **allow-listed**: its host must be `{org}.local` or a `*.{org}.local` subdomain, blocking open redirects.
+
+## Routes
+
+### User-facing pages (direct via `identity.{org}.local`)
+
+| Method | Path | Description |
 |---|---|---|
-| Session library | Lucia v3 | TypeScript-native, lightweight, no vendor lock-in |
-| OIDC server | `oidc-provider` | Battle-tested, ~100 lines of integration |
-| Password hashing | `@node-rs/argon2` | Argon2id — the modern recommendation |
+| `GET`  | `/login` | Sign-in page (carries `?app` & `?redirect_uri` through the flow) |
+| `POST` | `/login` | Verify credentials, create session, set cookie, continue |
+| `GET`  | `/register` | Registration page (full name, email, password, optional avatar) |
+| `POST` | `/register` | Create account (default-deny), upload avatar, sign in |
+| `POST` | `/logout` | Revoke session, clear cookie, back to `/login` |
+| `GET`  | `/authorize` | SSO grant flow (the login-button target) |
+| `GET`  | `/account` | Signed-in landing (avatar, name, sign out) |
 
-## Planned endpoints
+### JSON API (via Gateway `api.{org}.local/v1/auth/*`)
+
+| Method | Path | Status | Description |
+|---|---|---|---|
+| `GET`  | `/v1/auth/me?app={slug}` | 200, 401, 403, 404 | Current user; with `app`, resolves role (403 if none) |
+| `POST` | `/v1/auth/logout` | 200 | Revoke session, clear cookie |
+
+## Sessions (revocable, server-side)
+
+Backed by `platform.sessions` (`id`, `user_id`, `token_hash`, `expires_at`, `created_at`).
+
+- The cookie carries a **32-byte CSPRNG token**; the DB stores only its **sha256** (`token_hash`). A DB read cannot reconstruct a usable cookie.
+- **Revocable** — logout deletes the row; an admin can force-log-out a user everywhere by deleting their rows.
+- **Token rotation on login** — every login mints a fresh token, so a pre-set (fixated) token is never elevated.
+- TTL: `SESSION_TTL_HOURS` (default 8).
+
+### Cookie attributes (HTTP-only deployment)
+
+| Attribute | Value | Why |
+|---|---|---|
+| `HttpOnly` | on | Blocks JS/XSS theft (works over HTTP) |
+| `SameSite` | `Lax` | CSRF backstop; `Lax` so the authorize redirect carries the cookie |
+| `Domain` | `.{org}.local` | Sent to every app subdomain — the SSO backbone |
+| `Secure` | **off for now** | Requires HTTPS; flip via `SECURE_COOKIES=true` once TLS lands |
+
+<Aside type="caution" title="HTTP-era limitation">
+  Without TLS, a same-LAN sniffer could capture the session cookie. This is the one accepted trade-off; it's resolved the moment Caddy HTTPS (internal CA) is enabled — only `SECURE_COOKIES` changes. Every other control stays at maximum.
+</Aside>
+
+## Authorization
+
+`getUserAppRole(userId, appId)`:
+
+1. If the user's `platform.users.role` is `super_admin` or `admin` → **`admin`** (implicit on every app; no `user_app_access` row needed).
+2. Otherwise → their `platform.user_app_access` role for that app, or **`null`** (default-deny).
+
+Admins are the **grantors**. Console → App → **Users** tab grants, revokes, and changes end-user roles (writing `platform.audit_log`). A freshly registered user has **zero** app access until an admin acts.
+
+## Avatars
+
+Profile photos live in a **reserved system Vault bucket** (app slug `identity-system`, seeded idempotently at boot). On registration Identity HMAC-signs an upload to [Vault](/docs/services/storage) as the system app, makes the file public, and stores the URL in `platform.users.avatar_url`. Avatars are therefore cross-app, not scoped to the app a user registered from.
 
 ```
-POST /v1/auth/login              → create session, set cookie
-POST /v1/auth/logout             → revoke session
-GET  /v1/auth/me                 → current user info
-POST /v1/auth/register           → create user (admin only in Phase 1)
-POST /v1/auth/keys               → create API key
-DELETE /v1/auth/keys/:id         → revoke API key
+http://api.{org}.local/vault/identity-system/avatars/{userId}.{ext}
 ```
+
+## Environment variables
+
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `DATABASE_URL` | ✅ | — | Postgres connection string |
+| `INTERNAL_HMAC_SECRET` | ✅ | — | Shared HMAC secret (≥32 chars); signs Vault calls |
+| `ORG_DOMAIN` | | `nuble` | Org domain root; cookie domain is `.{ORG_DOMAIN}.local` |
+| `VAULT_INTERNAL_URL` | | `http://vault:3003` | Vault base URL for avatar uploads |
+| `IDENTITY_SYSTEM_APP_SLUG` | | `identity-system` | Reserved app owning the avatar bucket |
+| `SESSION_TTL_HOURS` | | `8` | Session lifetime |
+| `SECURE_COOKIES` | | `false` | Set `true` once HTTPS is available |
+| `PORT` | | `3004` | HTTP port |
+
+## See also
+
+<CardGrid>
+  <LinkCard title="@nublestation/identity SDK" href="/docs/sdk/auth" description="Client library — getUser, getSession, requireUser, and the React gate." />
+  <LinkCard title="Row-Level Security" href="/docs/security/row-level-security" description="How resolved identity flows into per-tenant data access." />
+</CardGrid>
