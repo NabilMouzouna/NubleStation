@@ -450,6 +450,28 @@ importers:
 
   packages/assets: {}
 
+  packages/blaze:
+    dependencies:
+      zod:
+        specifier: ^3.23.8
+        version: 3.25.76
+    devDependencies:
+      '@nublestation/typescript-config':
+        specifier: workspace:*
+        version: link:../typescript-config
+      '@types/node':
+        specifier: ^22.10.1
+        version: 22.15.3
+      tsx:
+        specifier: ^4.19.2
+        version: 4.22.1
+      typescript:
+        specifier: 5.9.2
+        version: 5.9.2
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.15.3)(lightningcss@1.32.0)
+
   packages/cli:
     dependencies:
       '@inquirer/prompts':

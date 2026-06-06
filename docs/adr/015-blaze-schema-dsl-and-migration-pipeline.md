@@ -19,13 +19,19 @@ ADR 003 stays the immutable architecture record. Where this ADR makes a concrete
 
 ## Decisions
 
-### 1. The schema DSL is a new package, `@nublestation/schema`
+### 1. The schema DSL is a new package, `@nublestation/blaze`
 
-The "Blaze schema model" the developer writes (ADR 003 §6) lives in a new workspace package `packages/schema`, separate from the SDK and CLI (same separation rationale as ADR 008 §1).
+> **Implementation note (2026-06-06):** The package was originally named `@nublestation/schema` in this ADR's draft. The actual package is `@nublestation/blaze` (`packages/blaze/`) — the bare name follows the repo convention where the client package takes the service codename (same as `@nublestation/vault` / `@nublestation/identity`). The service container remains `@nublestation/blaze-service`. Any tooling or docs that still reference `@nublestation/schema` or `packages/schema` are stale.
 
-- **`.` export (browser-safe):** `defineSchema`, the `t` builders (`string/number/decimal/boolean/uuid/json/timestamp/enum/ref` + `computed.*`), and all public + inferred types. Zero runtime deps so it never bloats the browser SDK bundle.
-- **`./compile` export (Node-only):** `compileToDrizzle()` and the RLS/trigger SQL templates. Imports `drizzle-orm`; kept behind a subpath so `drizzle-orm` cannot leak into browser bundles.
-- **Wire format:** `defineSchema(...)` serializes to a canonical `SerializedSchema` JSON (stable key order). This JSON — never SQL — travels on the wire and is stored in `platform.app_tables.schema_json`. Upholds ADR 003 §6/§17 "no SQL on the wire."
+The "Blaze schema model" the developer writes (ADR 003 §6) lives in `packages/blaze/`, separate from the SDK and CLI (same separation rationale as ADR 008 §1).
+
+**DSL surface — model-wrapper shape.** Each table is defined as `t.model({ …fields }).index(col)`. The `t.model()` wrapper carries the field map plus a per-model config slot (`.index()` now; `.unique([])`, `.authorization()`, composite constraints later) with no future breaking change to any `schema.ts`. A bare field map `{ tableName: { col: t.string() } }` is also accepted and normalized to a model, keeping all ADR 003 §6 examples valid.
+
+**Subpath exports:**
+- **`.` (browser-safe):** `defineSchema`, the `t` builders (`string/number/decimal/boolean/uuid/json/timestamp/enum/ref`), `serializeSchema`, `canonicalJson`, `canonicalChecksum`, and all public + inferred types (`InferRow`, `InferInsert`, `InferSchema`). **Zero runtime deps** — nothing in this import graph touches `zod` or `drizzle-orm`, so it never bloats the browser SDK bundle.
+- **`./validate` (Node/server):** `toZodSchema(table, "insert"|"update")` for Blaze write-payload validation. Imports `zod`; kept behind a subpath so `zod` cannot leak into browser bundles.
+- **`./compile` (Node/server, M2):** `compileToDrizzle()` and the RLS/trigger/grant SQL templates. Imports `drizzle-orm`; declared in M2, not M1.
+- **Wire format:** `defineSchema(...)` serializes to a canonical `SerializedSchema` JSON (stable key order via `canonicalJson`; checksum via Web Crypto `sha256`). This JSON — never SQL — travels on the wire and is stored in `platform.app_tables.schema_json`. Upholds ADR 003 §6/§17 "no SQL on the wire."
 
 ### 2. Migrations are generated **server-side, in-process**, via drizzle-kit's programmatic API
 
