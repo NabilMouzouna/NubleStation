@@ -51,3 +51,26 @@ http://speedtest.{org}.local
 ```
 
 Press **Start**. No login, no setup.
+
+## Console integration — the Bandwidth card
+
+The Network page in Console (`app/(shell)/network/`) has a **Bandwidth** card that
+runs the test *inside* the dashboard rather than linking out. Rather than iframe the
+OpenSpeedTest UI (which can't hand its results back), a small client widget
+(`_bandwidth-card.tsx`) drives the container's data endpoints directly and computes
+throughput in the browser — so the numbers are ours to display and keep.
+
+- **Endpoints used:** `GET /downloading` (30 MB incompressible payload) and
+  `POST /upload` (sink), both on `speedtest.{org}.local`, served with
+  `Access-Control-Allow-Origin: *` and `no-transform` so cross-origin reads from
+  `console.{org}.local` work and the garbage isn't gzipped.
+- **Method:** ping/jitter from request RTT, then download and upload each measured
+  over an 8 s window across 4 parallel streams with a 1.5 s warm-up discarded (TCP
+  slow-start). All HTTP/application layer — no ICMP, no raw sockets.
+- **History:** the last 8 runs are kept in `localStorage` (`nuble.speedtest.history`)
+  — intentionally client-side only, no platform DB table. Each device keeps its own
+  history, which matches "is *this* tablet's link healthy?".
+- **Credit:** the card footer links back to OpenSpeedTest.
+
+The full standalone UI remains available at `speedtest.{org}.local` (linked from the
+card header).
