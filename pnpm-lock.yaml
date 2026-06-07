@@ -520,6 +520,12 @@ importers:
 
   packages/client:
     dependencies:
+      '@nublestation/blaze':
+        specifier: workspace:*
+        version: link:../blaze
+      '@nublestation/identity':
+        specifier: workspace:*
+        version: link:../identity
       '@nublestation/vault':
         specifier: workspace:*
         version: link:../vault

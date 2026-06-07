@@ -23,7 +23,7 @@ export type BlazeClient<S extends Schema<any>> = {
 interface BlazeConfig<S extends Schema<any>> {
   baseUrl: string;
   apiKey: string;
-  schema: S;
+  schema?: S;
 }
 
 async function req<T>(url: string, init: RequestInit): Promise<T> {
@@ -80,7 +80,8 @@ export function createBlazeClient<S extends Schema<any>>(
 
   return {
     db: new Proxy({} as BlazeClient<S>["db"], {
-      get(_, prop: string) {
+      get(_, prop) {
+        if (typeof prop !== "string") return undefined;
         return makeTableClient(baseUrl, headers, prop);
       },
     }),

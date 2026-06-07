@@ -20,7 +20,9 @@
     "check-types": "tsc --noEmit"
   },
   "dependencies": {
-    "@nublestation/vault": "workspace:*"
+    "@nublestation/vault": "workspace:*",
+    "@nublestation/identity": "workspace:*",
+    "@nublestation/blaze": "workspace:*"
   },
   "devDependencies": {
     "@nublestation/typescript-config": "workspace:*",
