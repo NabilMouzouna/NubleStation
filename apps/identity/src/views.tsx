@@ -4,7 +4,8 @@ import { raw } from "hono/html";
 
 const STYLES = `
   :root {
-    --bg: #f6f7fb; --card: #ffffff; --text: #0a1317; --muted: #5d6c7b;
+    --bg: #f6f7fb; --card: #ffffff; --text: #0a1317; --muted: #4a5867;
+    --muted-soft: #eef1f5;
     --border: #dee3e9; --accent: #6b48f5; --accent-hover: #5236d4;
     --danger: #e41e3f; --field: #fbfbfd; --success: #31a24c;
     /* brand gradient — from packages/ui tokens (logo-light.png) */
@@ -101,8 +102,8 @@ const STYLES = `
     display: inline-flex; align-items: center; gap: 5px; margin-top: 10px;
     padding: 3px 11px; border-radius: 999px; font-size: 11.5px; font-weight: 600;
   }
-  .pf-badge.admin  { background: rgba(107,72,245,0.12); color: var(--accent); }
-  .pf-badge.member { background: var(--muted); color: var(--muted-foreground, #5d6c7b); }
+  .pf-badge.admin  { background: rgba(107,72,245,0.14); color: var(--accent-hover); }
+  .pf-badge.member { background: var(--muted-soft); color: #3c4856; }
   .pf-badge .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
 
   .pf-stats {
