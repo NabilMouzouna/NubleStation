@@ -1121,6 +1121,13 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  text-decoration: none;
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+.user-chip-name:hover {
+  color: var(--accent, #4f46e5);
+  text-decoration: underline;
 }
 .user-chip-logout {
   display: inline-flex;

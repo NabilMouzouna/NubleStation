@@ -11,6 +11,9 @@ import type { ReactNode } from 'react'
 import { useIdentity } from '../hooks/useIdentity'
 import type { IdentityUser } from '@nublestation/identity'
 
+const IDENTITY_URL =
+  (import.meta.env.VITE_NUBLESTATION_IDENTITY_URL as string) || 'http://identity.nuble.local'
+
 export interface AuthSession {
   user: IdentityUser
   logout: () => void
@@ -34,7 +37,15 @@ export function UserChip({ user, onLogout }: { user: IdentityUser; onLogout: () 
       ) : (
         <span className="user-chip-avatar user-chip-initials">{initials(user)}</span>
       )}
-      <span className="user-chip-name">{user.displayName ?? user.email}</span>
+      <a
+        className="user-chip-name"
+        href={`${IDENTITY_URL}/account`}
+        target="_blank"
+        rel="noopener noreferrer"
+        title="View account"
+      >
+        {user.displayName ?? user.email}
+      </a>
       <button className="user-chip-logout" onClick={onLogout} title="Sign out">
         <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
           <path d="M6 14H3a1 1 0 01-1-1V3a1 1 0 011-1h3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
