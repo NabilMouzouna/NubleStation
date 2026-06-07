@@ -190,11 +190,18 @@ export type AccessRole = "owner" | "editor" | "viewer" | "admin" | "public" | nu
  * (not a real user) when no session cookie is present; that id won't exist in
  * platform.users, so we treat it as a communal/anonymous caller (userId=null).
  */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export async function resolveCaller(
   pool: pg.Pool,
   appId: string,
   rawUserId: string,
 ): Promise<Caller> {
+  // The gateway falls back to sending the apiKeyId (a short hex, not a UUID)
+  // when no Identity session is present. Guard here to avoid a PostgreSQL
+  // "invalid input syntax for type uuid" error on the users.id column.
+  if (!rawUserId || !UUID_RE.test(rawUserId)) return { userId: null, isAdmin: false };
+
   const r = await pool.query<{ user_role: string; access_role: string | null }>(
     `SELECT u.role AS user_role, ua.role AS access_role
      FROM platform.users u
