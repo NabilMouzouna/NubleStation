@@ -12,13 +12,16 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "eslint . --max-warnings 0",
-    "check-types": "tsc --noEmit"
+    "check-types": "tsc --noEmit",
+    "test:migrations": "vitest run --config vitest.migrations.config.ts"
   },
   "dependencies": {
     "@hono/node-server": "^1.13.7",
     "@node-rs/argon2": "^2.0.2",
     "@nublestation/shared": "workspace:*",
     "dotenv": "^16.4.5",
+    "@nublestation/blaze": "workspace:*",
+    "drizzle-kit": "0.28.1",
     "drizzle-orm": "^0.36.4",
     "hono": "^4.6.12",
     "pg": "^8.13.1",
@@ -30,7 +33,6 @@
     "@nublestation/typescript-config": "workspace:*",
     "@types/node": "^22.10.1",
     "@types/pg": "^8.11.10",
-    "drizzle-kit": "^0.28.1",
     "pino-pretty": "^11.3.0",
     "tsx": "^4.19.2",
     "typescript": "5.9.2",

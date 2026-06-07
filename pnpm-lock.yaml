@@ -26,12 +26,18 @@ importers:
       '@node-rs/argon2':
         specifier: ^2.0.2
         version: 2.0.2
+      '@nublestation/blaze':
+        specifier: workspace:*
+        version: link:../../packages/blaze
       '@nublestation/shared':
         specifier: workspace:*
         version: link:../../packages/shared
       dotenv:
         specifier: ^16.4.5
         version: 16.6.1
+      drizzle-kit:
+        specifier: 0.28.1
+        version: 0.28.1
       drizzle-orm:
         specifier: ^0.36.4
         version: 0.36.4(@types/better-sqlite3@7.6.13)(@types/pg@8.20.0)(@types/react@19.2.15)(better-sqlite3@12.10.0)(pg@8.20.0)(react@19.2.6)
@@ -60,9 +66,6 @@ importers:
       '@types/pg':
         specifier: ^8.11.10
         version: 8.20.0
-      drizzle-kit:
-        specifier: ^0.28.1
-        version: 0.28.1
       pino-pretty:
         specifier: ^11.3.0
         version: 11.3.0
@@ -452,6 +455,9 @@ importers:
 
   packages/blaze:
     dependencies:
+      drizzle-orm:
+        specifier: ^0.36.4
+        version: 0.36.4(@types/better-sqlite3@7.6.13)(@types/pg@8.20.0)(@types/react@19.2.15)(better-sqlite3@12.10.0)(pg@8.20.0)(react@19.2.6)
       zod:
         specifier: ^3.23.8
         version: 3.25.76

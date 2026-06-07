@@ -13,6 +13,10 @@
     "./validate": {
       "types": "./dist/validate.d.ts",
       "import": "./dist/validate.js"
+    },
+    "./compile": {
+      "types": "./dist/compile.d.ts",
+      "import": "./dist/compile.js"
     }
   },
   "files": ["dist"],
@@ -24,6 +28,7 @@
     "check-types": "tsc --noEmit"
   },
   "dependencies": {
+    "drizzle-orm": "^0.36.4",
     "zod": "^3.23.8"
   },
   "devDependencies": {
