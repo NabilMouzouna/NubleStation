@@ -26,7 +26,7 @@ export async function generateMigrationSQL(
   const rls = newTables.flatMap((name) => [
     `ALTER TABLE "tenant_data"."${name}" ENABLE ROW LEVEL SECURITY`,
     `ALTER TABLE "tenant_data"."${name}" FORCE ROW LEVEL SECURITY`,
-    `CREATE OR REPLACE POLICY tenant_isolation ON "tenant_data"."${name}" USING (app_id = current_setting('app.current_tenant')::uuid) WITH CHECK (app_id = current_setting('app.current_tenant')::uuid)`,
+    `CREATE POLICY tenant_isolation ON "tenant_data"."${name}" AS PERMISSIVE FOR ALL USING (app_id = current_setting('app.current_tenant')::uuid) WITH CHECK (app_id = current_setting('app.current_tenant')::uuid)`,
     `GRANT SELECT, INSERT, UPDATE, DELETE ON "tenant_data"."${name}" TO blaze_app`,
   ]);
 

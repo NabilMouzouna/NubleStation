@@ -18,12 +18,13 @@
   "dependencies": {
     "@hono/node-server": "^1.13.7",
     "@node-rs/argon2": "^2.0.2",
+    "@nublestation/blaze": "workspace:*",
     "@nublestation/shared": "workspace:*",
     "dotenv": "^16.4.5",
-    "@nublestation/blaze": "workspace:*",
     "drizzle-kit": "0.28.1",
     "drizzle-orm": "^0.36.4",
     "hono": "^4.6.12",
+    "libpg-query": "^17.7.3",
     "pg": "^8.13.1",
     "pino": "^9.5.0",
     "zod": "^3.23.8"

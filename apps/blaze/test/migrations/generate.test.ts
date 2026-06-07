@@ -23,7 +23,7 @@ describe("generateMigrationSQL", () => {
 
     expect(sql).toContain("ENABLE ROW LEVEL SECURITY");
     expect(sql).toContain("FORCE ROW LEVEL SECURITY");
-    expect(sql).toContain("tenant_isolation");
+    expect(sql).toContain("CREATE POLICY tenant_isolation");
     expect(sql).toContain("app.current_tenant");
     expect(sql).toContain("GRANT SELECT");
   });
