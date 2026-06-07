@@ -69,6 +69,7 @@ export const sidebar: SidebarGroup[] = [
     title: 'SDK',
     items: [
       { title: 'Overview', slug: 'sdk/overview' },
+      { title: '@nublestation/client', slug: 'sdk/client', badge: { text: 'Live', color: '#059669' } },
       { title: '@nublestation/vault', slug: 'sdk/storage', badge: { text: 'Live', color: '#059669' } },
       { title: '@nublestation/identity', slug: 'sdk/auth', badge: { text: 'Live', color: '#059669' } },
       { title: '@nublestation/blaze', slug: 'sdk/database', badge: { text: 'Live', color: '#059669' } },

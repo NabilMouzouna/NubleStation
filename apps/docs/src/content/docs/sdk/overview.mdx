@@ -3,15 +3,18 @@ title: SDK Overview
 description: NubleStation provides a separate npm package per service — install only what your app needs.
 ---
 
-NubleStation ships one npm package per service. Install only what your app uses — no monolithic SDK bundle.
+NubleStation ships one npm package per service, plus an umbrella package that bundles them behind a single client. Use the umbrella for convenience, or install one service for the smallest footprint.
 
 | Package | Service | What it does |
 |---|---|---|
-| `@nublestation/vault` | Vault | File upload, download, public/private access |
+| `@nublestation/client` | All | Unified client — one config, `nuble.vault.*`, etc. |
+| `@nublestation/vault` | Vault | File upload, download, sharing, public/private access |
 | `@nublestation/blaze` | Blaze | Database queries on your app's tables |
 | `@nublestation/identity` | Identity | User sessions, SSO, and per-app authorization |
 
-Every package follows the same factory pattern — `createClient({ ... })` returns a typed client scoped to your app. Data-plane SDKs (Vault, Blaze) authenticate with an API key; `@nublestation/identity` is the exception — it rides the shared-cookie SSO session, so it takes no API key. See [its page](/docs/sdk/auth) for details.
+Every package follows the same factory pattern — `createClient({ ... })` (or `createVaultClient`, `createIdentityClient`) returns a typed client scoped to your app. Data-plane SDKs (Vault, Blaze) authenticate with an API key; `@nublestation/identity` is the exception — it rides the shared-cookie SSO session, so it takes no API key. See [its page](/sdk/auth) for details.
+
+New to the SDK? Start with [`@nublestation/client`](/sdk/client) — one install covers the data-plane services.
 
 ---
 
@@ -94,6 +97,7 @@ Internal service (Vault, Blaze, Identity)
 
 ## Packages
 
+- [@nublestation/client](/sdk/client/) — unified client (start here)
 - [@nublestation/vault](/sdk/storage/) — file storage
 - [@nublestation/identity](/sdk/auth/) — auth, sessions, SSO
 - [Database queries](/sdk/database/) — Blaze
