@@ -11,6 +11,7 @@ type Props = {
   view: VaultView
   onNavigate: (id: string | null) => void
   onDownload: (file: FileItem) => void
+  onPreviewFile: (file: FileItem) => void
   onToggleVisibility: (id: string) => void
   onDeleteFile: (id: string) => void
   onRenameFolder: (id: string) => void
@@ -168,6 +169,7 @@ export default function FileGrid({
   view,
   onNavigate,
   onDownload,
+  onPreviewFile,
   onToggleVisibility,
   onDeleteFile,
   onRenameFolder,
@@ -307,7 +309,9 @@ export default function FileGrid({
             <div
               key={file.id}
               className="file-card"
+              onDoubleClick={() => onPreviewFile(file)}
               onContextMenu={e => showCtx(e, file.id, 'file')}
+              title="Double-click to preview"
             >
               <div className="file-card-icon">
                 <FileTypeIcon mime={file.type} dataUrl={file.dataUrl} />

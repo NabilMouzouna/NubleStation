@@ -235,6 +235,12 @@ export function useVaultStore() {
     }
   }, [])
 
+  // ── Preview — fetch bytes and return a blob URL the caller must revoke ────
+  const getPreviewUrl = useCallback(async (file: FileItem): Promise<string> => {
+    const buffer = await vault.download(file.folderName ?? DEFAULT_COLLECTION, file.name)
+    return URL.createObjectURL(new Blob([buffer], { type: file.type }))
+  }, [])
+
   // ── Sharing (ADR 016) ────────────────────────────────────────────────────
   const getGrants = useCallback(async (file: FileItem): Promise<Grant[]> => {
     return vault.listGrants(file.folderName ?? DEFAULT_COLLECTION, file.name)
@@ -288,6 +294,7 @@ export function useVaultStore() {
     deleteFile,
     toggleFileVisibility,
     downloadFile,
+    getPreviewUrl,
     getGrants,
     shareFile,
     unshareFile,

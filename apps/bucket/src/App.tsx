@@ -6,6 +6,7 @@ import FileGrid from './components/FileGrid'
 import UploadModal from './components/UploadModal'
 import RenameModal from './components/RenameModal'
 import ShareModal from './components/ShareModal'
+import PreviewModal from './components/PreviewModal'
 import Tutorial from './components/Tutorial'
 import { UserChip } from './components/AuthGate'
 import type { AuthSession } from './components/AuthGate'
@@ -33,6 +34,7 @@ export default function App({ session }: { session: AuthSession }) {
   const [showUpload, setShowUpload] = useState(false)
   const [renameTarget, setRenameTarget] = useState<RenameTarget | null>(null)
   const [shareTarget, setShareTarget] = useState<FileItem | null>(null)
+  const [previewTarget, setPreviewTarget] = useState<FileItem | null>(null)
 
   const { view, setView } = store
   const isMine = view === 'mine'
@@ -194,6 +196,7 @@ export default function App({ session }: { session: AuthSession }) {
             view={view}
             onNavigate={setCurrentFolderId}
             onDownload={handleDownload}
+            onPreviewFile={setPreviewTarget}
             onToggleVisibility={store.toggleFileVisibility}
             onDeleteFile={store.deleteFile}
             onRenameFolder={startRenameFolder}
@@ -225,6 +228,15 @@ export default function App({ session }: { session: AuthSession }) {
           getGrants={store.getGrants}
           onShare={store.shareFile}
           onUnshare={store.unshareFile}
+        />
+      )}
+
+      {previewTarget && (
+        <PreviewModal
+          file={previewTarget}
+          getPreviewUrl={store.getPreviewUrl}
+          onDownload={handleDownload}
+          onClose={() => setPreviewTarget(null)}
         />
       )}
     </div>
