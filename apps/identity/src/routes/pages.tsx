@@ -47,6 +47,11 @@ function continueUrl(app?: string, redirectUri?: string): string {
   return "/account";
 }
 
+// ── Root ─────────────────────────────────────────────────────────────────────
+// Landing for identity.{org}.local — send signed-in users to their profile and
+// everyone else to the sign-in page (which links to "Create an account").
+pages.get("/", (c) => c.redirect("/account"));
+
 // ── Login ────────────────────────────────────────────────────────────────────
 
 pages.get("/login", (c) =>
