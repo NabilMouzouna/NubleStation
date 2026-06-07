@@ -10,7 +10,7 @@ import {
 } from "lucide-react";
 import { Button } from "@nublestation/ui/components/button";
 import { Badge } from "@nublestation/ui/components/badge";
-import type { AppDetail, DeploymentRow, ApiKeyRow, AppTableRow, StorageFileRow, VaultSettingsRow, AppUserRow, OrgAdminRow } from "@/lib/platform/app-detail";
+import type { AppDetail, DeploymentRow, ApiKeyRow, AppTableRow, MigrationRow, StorageFileRow, VaultSettingsRow, AppUserRow, OrgAdminRow } from "@/lib/platform/app-detail";
 import { revokeApiKeyAction, deleteAppAction, generateApiKeyAction, deleteFileAction, togglePublicAction, saveVaultSettingsAction, grantUserAccessAction, changeUserRoleAction, revokeUserAccessAction, searchPlatformUsersAction } from "./actions";
 import { copyToClipboard } from "@/lib/clipboard";
 
@@ -85,21 +85,76 @@ function DeploymentsTab({ deployments }: { deployments: DeploymentRow[] }) {
   );
 }
 
-function DatabaseTab({ tables }: { tables: AppTableRow[] }) {
-  if (tables.length === 0) return <EmptyState message="No tables yet. Use the BlazingDB API to create your first table." />;
+function DatabaseTab({ tables, migrations }: { tables: AppTableRow[]; migrations: MigrationRow[] }) {
+  if (tables.length === 0) {
+    return (
+      <EmptyState message="No tables yet. Run nuble db push from your project to apply your schema." />
+    );
+  }
+
+  // Deduplicate tables by name (all rows for the same app share schema_json).
+  const seen = new Set<string>();
+  const uniqueTables = tables.filter((t) => {
+    if (seen.has(t.table_name)) return false;
+    seen.add(t.table_name);
+    return true;
+  });
+
   return (
-    <div className="overflow-hidden rounded-3xl border border-border">
-      <table className="w-full text-sm">
-        <TableHeader cols={["Table name", "Created"]} />
-        <tbody className="divide-y divide-border bg-card">
-          {tables.map((t) => (
-            <tr key={t.id}>
-              <td className="px-5 py-3 font-mono text-xs text-foreground">{t.table_name}</td>
-              <td className="px-5 py-3 text-muted-foreground">{new Date(t.created_at).toLocaleDateString()}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+    <div className="space-y-6">
+      {/* Tables */}
+      <div className="overflow-hidden rounded-3xl border border-border">
+        <div className="border-b border-border bg-muted/40 px-5 py-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Tables</p>
+        </div>
+        <div className="divide-y divide-border bg-card">
+          {uniqueTables.map((t) => {
+            const fields = t.schema_json?.tables?.[t.table_name]?.fields ?? {};
+            const cols = ["id", "app_id", ...Object.keys(fields)];
+            return (
+              <div key={t.id} className="px-5 py-4">
+                <div className="flex items-center justify-between">
+                  <span className="font-mono text-sm font-semibold text-foreground">{t.table_name}</span>
+                  <span className="text-xs text-muted-foreground">{cols.length} col{cols.length !== 1 ? "s" : ""}</span>
+                </div>
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {cols.map((col) => {
+                    const field = fields[col];
+                    const colType = col === "id" || col === "app_id" ? "uuid" : (field?.type ?? "");
+                    return (
+                      <span key={col} className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-0.5 font-mono text-xs text-muted-foreground">
+                        <span className="text-foreground">{col}</span>
+                        {colType && <span className="opacity-60">{colType}</span>}
+                      </span>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Migration history */}
+      {migrations.length > 0 && (
+        <div className="overflow-hidden rounded-3xl border border-border">
+          <div className="border-b border-border bg-muted/40 px-5 py-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Migration history</p>
+          </div>
+          <table className="w-full text-sm">
+            <TableHeader cols={["Run", "Checksum", "Applied"]} />
+            <tbody className="divide-y divide-border bg-card">
+              {migrations.map((m) => (
+                <tr key={m.id}>
+                  <td className="px-5 py-3 font-mono text-xs text-foreground">{m.filename}</td>
+                  <td className="px-5 py-3 font-mono text-xs text-muted-foreground">{m.checksum.slice(0, 12)}…</td>
+                  <td className="px-5 py-3 text-muted-foreground">{new Date(m.applied_at).toLocaleString()}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
@@ -874,6 +929,7 @@ export function AppDetailClient({
   deployments,
   apiKeys,
   tables,
+  migrations,
   storageFiles,
   vaultSettings,
   appUsers,
@@ -884,6 +940,7 @@ export function AppDetailClient({
   deployments: DeploymentRow[];
   apiKeys: ApiKeyRow[];
   tables: AppTableRow[];
+  migrations: MigrationRow[];
   storageFiles: StorageFileRow[];
   vaultSettings: VaultSettingsRow;
   appUsers: AppUserRow[];
@@ -952,7 +1009,7 @@ export function AppDetailClient({
       {/* Tab content */}
       <div className="mt-6">
         {activeTab === "deployments" && <DeploymentsTab deployments={deployments} />}
-        {activeTab === "database"    && <DatabaseTab tables={tables} />}
+        {activeTab === "database"    && <DatabaseTab tables={tables} migrations={migrations} />}
         {activeTab === "storage"     && <VaultTab app={app} files={storageFiles} settings={vaultSettings} orgDomain={orgDomain} />}
         {activeTab === "users"       && <UsersTab app={app} users={appUsers} orgAdmins={orgAdmins} orgDomain={orgDomain} />}
         {activeTab === "settings"    && <SettingsTab app={app} apiKeys={apiKeys} orgDomain={orgDomain} />}

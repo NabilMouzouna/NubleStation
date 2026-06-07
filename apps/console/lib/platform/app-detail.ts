@@ -26,7 +26,15 @@ export interface ApiKeyRow {
 export interface AppTableRow {
   id: string;
   table_name: string;
+  schema_json: { version: 1; tables: Record<string, { fields: Record<string, { type: string; required: boolean }> }> } | null;
   created_at: string;
+}
+
+export interface MigrationRow {
+  id: string;
+  filename: string;
+  checksum: string;
+  applied_at: string;
 }
 
 export async function getAppBySlug(slug: string): Promise<AppDetail | null> {
@@ -168,10 +176,23 @@ export async function getAppUsers(appId: string): Promise<AppUserRow[]> {
 export async function getAppTables(appId: string): Promise<AppTableRow[]> {
   const pool = getPlatformPool();
   const { rows } = await pool.query<AppTableRow>(
-    `SELECT id, table_name, created_at
+    `SELECT id, table_name, schema_json, created_at
      FROM platform.app_tables
      WHERE app_id = $1
      ORDER BY created_at ASC`,
+    [appId],
+  );
+  return rows;
+}
+
+export async function getMigrations(appId: string): Promise<MigrationRow[]> {
+  const pool = getPlatformPool();
+  const { rows } = await pool.query<MigrationRow>(
+    `SELECT id, filename, checksum, applied_at
+     FROM platform.migrations
+     WHERE app_id = $1
+     ORDER BY applied_at DESC
+     LIMIT 20`,
     [appId],
   );
   return rows;
