@@ -3,6 +3,7 @@ import { logger as pinoLogger } from "./logger.js";
 import { onError } from "./middleware/error.js";
 import { hmacAuth } from "./middleware/hmac.js";
 import { health } from "./routes/health.js";
+import { admin } from "./routes/admin.js";
 import { placeholder } from "./routes/_placeholder.js";
 import type { HonoVariables } from "./types.js";
 
@@ -30,6 +31,7 @@ export function buildServer() {
 
   // Every /v1/* route requires the gateway's HMAC signature.
   app.use("/v1/*", hmacAuth);
+  app.route("/", admin);
   app.route("/", placeholder);
 
   return app;
