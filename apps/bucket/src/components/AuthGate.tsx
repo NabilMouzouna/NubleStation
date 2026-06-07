@@ -6,6 +6,7 @@
  * Children is a render-prop receiving the live session ({ user, logout }) so
  * the app can show the user chip without a second session lookup.
  * ------------------------------------------------------------------------- */
+import { useState } from 'react'
 import type { ReactNode } from 'react'
 import { useIdentity } from '../hooks/useIdentity'
 import type { IdentityUser } from '@nublestation/identity'
@@ -24,10 +25,12 @@ function initials(user: IdentityUser): string {
 
 /** Avatar + name chip with a Sign-out button — for the app header. */
 export function UserChip({ user, onLogout }: { user: IdentityUser; onLogout: () => void }) {
+  const [imgFailed, setImgFailed] = useState(false)
   return (
     <div className="user-chip">
-      {user.avatarUrl ? (
-        <img className="user-chip-avatar" src={user.avatarUrl} alt="" />
+      {user.avatarUrl && !imgFailed ? (
+        <img className="user-chip-avatar" src={user.avatarUrl} alt=""
+             onError={() => setImgFailed(true)} />
       ) : (
         <span className="user-chip-avatar user-chip-initials">{initials(user)}</span>
       )}
