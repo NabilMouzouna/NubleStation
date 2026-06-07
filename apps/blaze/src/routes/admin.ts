@@ -6,15 +6,8 @@ import type { HonoVariables } from "../types.js";
 
 export const admin = new Hono<{ Variables: HonoVariables }>();
 
-admin.post("/v1/blaze/admin/apps/:appId/migrations", async (c) => {
-  const routeAppId = c.req.param("appId");
-  const callerAppId = c.var.appId;
-
-  // The Gateway resolves the API key → appId and injects it via HMAC-signed headers.
-  // The route param must match — reject cross-app migration attempts.
-  if (routeAppId !== callerAppId) {
-    return c.json({ error: "Forbidden" }, 403);
-  }
+async function handleMigrationPush(c: any): Promise<Response> {
+  const callerAppId: string = c.var.appId;
 
   let body: unknown;
   try {
@@ -49,4 +42,17 @@ admin.post("/v1/blaze/admin/apps/:appId/migrations", async (c) => {
     }
     throw err;
   }
+}
+
+// Explicit appId in path — for integrations that already know the app UUID.
+admin.post("/v1/blaze/admin/apps/:appId/migrations", async (c) => {
+  // The Gateway resolves the API key → appId and injects it via HMAC-signed headers.
+  // The route param must match — reject cross-app migration attempts.
+  if (c.req.param("appId") !== c.var.appId) {
+    return c.json({ error: "Forbidden" }, 403);
+  }
+  return handleMigrationPush(c);
 });
+
+// No appId in path — used by the CLI (appId comes from HMAC headers, no UUID required).
+admin.post("/v1/blaze/admin/migrations", handleMigrationPush);

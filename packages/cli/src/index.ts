@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { Command } from "commander";
+import { runDbPush } from "./commands/db.js";
 import { runDeploy } from "./commands/deploy.js";
 import { runInit } from "./commands/init.js";
 import { runStatus } from "./commands/status.js";
@@ -39,6 +40,18 @@ program
   .command("status")
   .description("Check Gateway health for all configured profiles")
   .action(() => runStatus());
+
+// ── Database ──────────────────────────────────────────────────────────────────
+const db = program
+  .command("db")
+  .description("Manage your app's database schema");
+
+db
+  .command("push")
+  .description("Compile schema.ts and apply it to Blaze")
+  .option("--schema <path>", "Path to schema.ts", "schema.ts")
+  .option("--profile <name>", "Config profile to use", "default")
+  .action((opts: { schema: string; profile: string }) => runDbPush(opts));
 
 // ── Server management (runs on the NubleStation host) ─────────────────────────
 const server = program
