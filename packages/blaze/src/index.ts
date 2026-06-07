@@ -20,3 +20,5 @@ export type {
   SerializedTable,
   SerializedSchema,
 } from "./types.js";
+export { createBlazeClient } from "./client.js";
+export type { BlazeClient, TableClient } from "./client.js";
