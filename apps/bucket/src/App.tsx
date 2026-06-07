@@ -234,6 +234,7 @@ export default function App({ session }: { session: AuthSession }) {
       {previewTarget && (
         <PreviewModal
           file={previewTarget}
+          session={session}
           getPreviewUrl={store.getPreviewUrl}
           onDownload={handleDownload}
           onClose={() => setPreviewTarget(null)}

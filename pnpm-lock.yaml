@@ -84,6 +84,9 @@ importers:
 
   apps/bucket:
     dependencies:
+      '@nublestation/blaze':
+        specifier: workspace:*
+        version: link:../../packages/blaze
       '@nublestation/identity':
         specifier: workspace:*
         version: link:../../packages/identity
