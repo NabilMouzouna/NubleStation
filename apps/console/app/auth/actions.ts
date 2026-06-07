@@ -9,8 +9,10 @@ export async function login(
   _prev: unknown,
   formData: FormData
 ): Promise<{ error: string }> {
-  const email = (formData.get("email") as string).trim().toLowerCase();
-  const password = formData.get("password") as string;
+  const email = (formData.get("email") as string | null)?.trim().toLowerCase() ?? "";
+  const password = formData.get("password") as string | null ?? "";
+
+  if (!email || !password) return { error: "Email and password are required." };
 
   const pool = getPool();
   const { rows } = await pool.query<{ id: string; password_hash: string; role: string }>(
