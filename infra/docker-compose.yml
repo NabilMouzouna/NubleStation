@@ -230,3 +230,16 @@ services:
       interval: 30s
       timeout: 5s
       retries: 3
+
+  # ── LAN diagnostics ──────────────────────────────────────────────────────────
+
+  # OpenSpeedTest — browser-based LAN throughput test (download/upload/ping/jitter).
+  # Stateless, fully offline. Reachable only on the internal network; Caddy is the
+  # LAN entry point at speedtest.{org}.local.
+  openspeedtest:
+    image: openspeedtest/latest
+    restart: unless-stopped
+    expose:
+      - "3000"
+    networks:
+      - nuble
