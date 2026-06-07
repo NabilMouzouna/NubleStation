@@ -81,6 +81,12 @@ const NUBLE_URL = (import.meta.env.VITE_NUBLESTATION_URL as string) || 'http://a
 const NUBLE_KEY = import.meta.env.VITE_NUBLESTATION_API_KEY as string
 const DEFAULT_COLLECTION = 'bucket'
 
+// Vault collections are implicit — they exist only while a file lives in them.
+// To make an *empty* folder persist, we drop a hidden zero-byte marker file in
+// the collection. The marker is filtered out of the file list but still keeps
+// the collection alive across reloads.
+const KEEP_MARKER = '.keep'
+
 if (!NUBLE_KEY) console.error('[Bucket] VITE_NUBLESTATION_API_KEY is not set')
 
 const vault = createVaultClient({ url: NUBLE_URL, apiKey: NUBLE_KEY })
@@ -134,11 +140,13 @@ export function useVaultStore() {
     load()
       .then(({ rows }) => {
         if (cancelled) return
-        setFiles(rows.map((r) => toFileItem(r)))
+        // Marker files keep empty collections alive but must never be shown.
+        setFiles(rows.filter((r) => r.filename !== KEEP_MARKER).map((r) => toFileItem(r)))
 
         if (view === 'mine') {
           const seen = new Set<string>()
           const derived: Folder[] = []
+          // Derive folders from ALL rows (incl. markers) so empty folders show.
           for (const r of rows) {
             if (!seen.has(r.collection)) {
               seen.add(r.collection)
@@ -254,9 +262,16 @@ export function useVaultStore() {
     await vault.unshare(file.folderName ?? DEFAULT_COLLECTION, file.name, granteeUserId)
   }, [])
 
-  // ── Folders (UI-only — Vault collections are implicit) ───────────────────
-  const createFolder = useCallback((name: string, _parentId: string | null): string => {
+  // ── Folders — materialize a real Vault collection via a hidden marker ─────
+  const createFolder = useCallback(async (name: string, _parentId: string | null): Promise<string> => {
     const id = name.toLowerCase().replace(/\s+/g, '-')
+    // Drop a zero-byte marker so the collection persists even while empty.
+    try {
+      await vault.upload(id, KEEP_MARKER, new Uint8Array(0))
+    } catch (err) {
+      setError(err instanceof VaultError ? err.code : 'Failed to create folder')
+      throw err
+    }
     setFolders(prev =>
       prev.some(f => f.id === id)
         ? prev
@@ -275,6 +290,8 @@ export function useVaultStore() {
       await Promise.all(
         toDelete.map(f => vault.delete(f.folderName ?? DEFAULT_COLLECTION, f.name))
       )
+      // Remove the hidden marker too, or the empty collection would linger.
+      await vault.delete(id, KEEP_MARKER).catch(() => {})
       setFiles(prev    => prev.filter(f => f.folderName !== id))
       setFolders(prev  => prev.filter(f => f.id !== id))
     } catch (err) {

@@ -69,7 +69,7 @@ export default function App({ session }: { session: AuthSession }) {
 
   const handleCreateFolder = useCallback(() => {
     const name = window.prompt('Folder name:')
-    if (name?.trim()) store.createFolder(name.trim(), currentFolderId)
+    if (name?.trim()) void store.createFolder(name.trim(), currentFolderId).catch(() => {})
   }, [store, currentFolderId])
 
   const handleDeleteFolder = useCallback((id: string) => {
