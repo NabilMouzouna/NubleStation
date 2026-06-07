@@ -116,12 +116,28 @@ async function audit(
   );
 }
 
-/** Grants (or updates) an end-user's role on this app, looked up by email. */
+/** Search platform users by email prefix — for the grant access autocomplete. */
+export async function searchPlatformUsersAction(
+  query: string,
+): Promise<{ id: string; email: string; displayName: string | null }[]> {
+  if (!query || query.length < 2) return [];
+  const { rows } = await getPlatformPool().query<{ id: string; email: string; display_name: string | null }>(
+    `SELECT id, email, display_name FROM platform.users
+     WHERE email ILIKE $1 AND is_active = true
+     ORDER BY email LIMIT 10`,
+    [`${query}%`],
+  );
+  return rows.map((r) => ({ id: r.id, email: r.email, displayName: r.display_name }));
+}
+
+/** Grants (or updates) an end-user's role on this app. Pass userId directly when
+ *  selected from autocomplete to skip the email lookup. */
 export async function grantUserAccessAction(
   appId: string,
   appSlug: string,
   email: string,
   role: string,
+  knownUserId?: string,
 ): Promise<AccessResult> {
   const session = await validateSession();
   if (!session) return { ok: false, error: "Not authorized." };
@@ -130,11 +146,14 @@ export async function grantUserAccessAction(
   if (!normalizedEmail) return { ok: false, error: "Email is required." };
 
   const pool = getPlatformPool();
-  const { rows } = await pool.query<{ id: string }>(
-    `SELECT id FROM platform.users WHERE email = $1`,
-    [normalizedEmail],
-  );
-  const userId = rows[0]?.id;
+  let userId = knownUserId;
+  if (!userId) {
+    const { rows } = await pool.query<{ id: string }>(
+      `SELECT id FROM platform.users WHERE email = $1`,
+      [normalizedEmail],
+    );
+    userId = rows[0]?.id;
+  }
   if (!userId) return { ok: false, error: "No account exists with that email." };
 
   await pool.query(

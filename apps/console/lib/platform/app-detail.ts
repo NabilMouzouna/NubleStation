@@ -132,8 +132,26 @@ export interface AppUserRow {
   created_at: string;
 }
 
-/** End-users granted access to this app. Console admins are implicit admins on
- *  every app (ADR 014) and are intentionally not listed here. */
+export interface OrgAdminRow {
+  id: string;
+  email: string;
+  display_name: string | null;
+  avatar_url: string | null;
+  role: string;
+}
+
+/** Org-level admins — implicit admin on every app (ADR 014). */
+export async function getOrgAdmins(): Promise<OrgAdminRow[]> {
+  const { rows } = await getPlatformPool().query<OrgAdminRow>(
+    `SELECT id, email, display_name, avatar_url, role
+     FROM platform.users
+     WHERE role IN ('super_admin', 'admin') AND is_active = true
+     ORDER BY email`,
+  );
+  return rows;
+}
+
+/** End-users with explicit per-app grants. */
 export async function getAppUsers(appId: string): Promise<AppUserRow[]> {
   const pool = getPlatformPool();
   const { rows } = await pool.query<AppUserRow>(

@@ -10,8 +10,8 @@ import {
 } from "lucide-react";
 import { Button } from "@nublestation/ui/components/button";
 import { Badge } from "@nublestation/ui/components/badge";
-import type { AppDetail, DeploymentRow, ApiKeyRow, AppTableRow, StorageFileRow, VaultSettingsRow, AppUserRow } from "@/lib/platform/app-detail";
-import { revokeApiKeyAction, deleteAppAction, generateApiKeyAction, deleteFileAction, togglePublicAction, saveVaultSettingsAction, grantUserAccessAction, changeUserRoleAction, revokeUserAccessAction } from "./actions";
+import type { AppDetail, DeploymentRow, ApiKeyRow, AppTableRow, StorageFileRow, VaultSettingsRow, AppUserRow, OrgAdminRow } from "@/lib/platform/app-detail";
+import { revokeApiKeyAction, deleteAppAction, generateApiKeyAction, deleteFileAction, togglePublicAction, saveVaultSettingsAction, grantUserAccessAction, changeUserRoleAction, revokeUserAccessAction, searchPlatformUsersAction } from "./actions";
 import { copyToClipboard } from "@/lib/clipboard";
 
 // ---------------------------------------------------------------------------
@@ -410,23 +410,38 @@ function VaultTab({
 
 const APP_ROLES = ["end_user", "editor", "admin"];
 
-function UsersTab({ app, users }: { app: AppDetail; users: AppUserRow[] }) {
+type UserSuggestion = { id: string; email: string; displayName: string | null };
+
+function UsersTab({ app, users, orgAdmins, orgDomain }: { app: AppDetail; users: AppUserRow[]; orgAdmins: OrgAdminRow[]; orgDomain: string }) {
   const router = useRouter();
   const [, startTransition] = useTransition();
-  const [email, setEmail]       = useState("");
-  const [role, setRole]         = useState("end_user");
-  const [granting, setGranting] = useState(false);
-  const [error, setError]       = useState<string | null>(null);
-  const [busyId, setBusyId]     = useState<string | null>(null);
+  const [email, setEmail]           = useState("");
+  const [selectedUserId, setUserId] = useState<string | null>(null);
+  const [suggestions, setSuggestions] = useState<UserSuggestion[]>([]);
+  const [role, setRole]             = useState("end_user");
+  const [granting, setGranting]     = useState(false);
+  const [error, setError]           = useState<string | null>(null);
+  const [busyId, setBusyId]         = useState<string | null>(null);
+
+  async function handleEmailChange(val: string) {
+    setEmail(val);
+    setUserId(null);
+    if (val.length >= 2) {
+      const results = await searchPlatformUsersAction(val);
+      setSuggestions(results);
+    } else {
+      setSuggestions([]);
+    }
+  }
 
   async function handleGrant(e: React.FormEvent) {
     e.preventDefault();
     setGranting(true);
     setError(null);
-    const res = await grantUserAccessAction(app.id, app.name, email, role);
+    const res = await grantUserAccessAction(app.id, app.name, email, role, selectedUserId ?? undefined);
     setGranting(false);
     if (!res.ok) { setError(res.error ?? "Failed to grant access."); return; }
-    setEmail("");
+    setEmail(""); setUserId(null); setSuggestions([]);
     startTransition(() => router.refresh());
   }
 
@@ -451,7 +466,7 @@ function UsersTab({ app, users }: { app: AppDetail; users: AppUserRow[] }) {
         <h3 className="text-sm font-semibold text-foreground">Grant access</h3>
         <p className="text-xs text-muted-foreground">
           Give an existing NubleStation account a role on this app. Users register themselves at{" "}
-          <span className="font-mono">identity.{"{org}"}.local</span>; org admins already have full access to every app.
+          <span className="font-mono">identity.{orgDomain}.local</span>; org admins already have full access to every app.
         </p>
         {error && (
           <div className="rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-2.5 text-xs text-destructive">
@@ -459,11 +474,21 @@ function UsersTab({ app, users }: { app: AppDetail; users: AppUserRow[] }) {
           </div>
         )}
         <form onSubmit={handleGrant} className="flex flex-wrap items-center gap-2">
+          <datalist id="user-email-suggestions">
+            {suggestions.map((s) => (
+              <option key={s.id} value={s.email}>{s.displayName ? `${s.displayName} — ${s.email}` : s.email}</option>
+            ))}
+          </datalist>
           <input
             type="email"
             required
+            list="user-email-suggestions"
             value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            onChange={(e) => {
+              handleEmailChange(e.target.value);
+              const match = suggestions.find(s => s.email === e.target.value);
+              if (match) setUserId(match.id);
+            }}
             placeholder="user@email.com"
             className="h-9 flex-1 min-w-[200px] rounded-lg border border-input bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40"
           />
@@ -481,13 +506,57 @@ function UsersTab({ app, users }: { app: AppDetail; users: AppUserRow[] }) {
         </form>
       </section>
 
+      {/* Platform admins — implicit access (ADR 014) */}
+      {orgAdmins.length > 0 && (
+        <section className="space-y-3">
+          <div>
+            <h3 className="text-sm font-semibold text-foreground">
+              Platform admins <span className="text-muted-foreground">({orgAdmins.length})</span>
+            </h3>
+            <p className="text-xs text-muted-foreground mt-0.5">Full admin access on every app — no grant needed.</p>
+          </div>
+          <div className="overflow-hidden rounded-3xl border border-border">
+            <table className="w-full text-sm">
+              <TableHeader cols={["User", "Role"]} />
+              <tbody className="divide-y divide-border bg-card">
+                {orgAdmins.map((u) => (
+                  <tr key={u.id} className="transition-colors hover:bg-muted/40">
+                    <td className="px-5 py-3">
+                      <div className="flex items-center gap-3">
+                        {u.avatar_url ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={u.avatar_url} alt="" width={32} height={32} className="size-8 rounded-full object-cover" />
+                        ) : (
+                          <span className="flex size-8 items-center justify-center rounded-full bg-muted text-xs font-medium text-muted-foreground">
+                            {(u.display_name ?? u.email).slice(0, 1).toUpperCase()}
+                          </span>
+                        )}
+                        <div className="min-w-0">
+                          <p className="truncate text-foreground">{u.display_name ?? u.email}</p>
+                          {u.display_name && <p className="truncate text-xs text-muted-foreground">{u.email}</p>}
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-5 py-3">
+                      <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
+                        {u.role}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
+
       {/* Members */}
       <section className="space-y-3">
         <h3 className="text-sm font-semibold text-foreground">
           Members <span className="text-muted-foreground">({users.length})</span>
         </h3>
         {users.length === 0 ? (
-          <EmptyState message="No users granted access yet. Org admins can already use this app." />
+          <EmptyState message="No end-users granted access yet." />
         ) : (
           <div className="overflow-hidden rounded-3xl border border-border">
             <table className="w-full text-sm">
@@ -748,6 +817,7 @@ function ServiceTiles({
   tables,
   storageFiles,
   appUsers,
+  orgAdmins,
 }: {
   active: Tab;
   onSelect: (t: Tab) => void;
@@ -755,12 +825,16 @@ function ServiceTiles({
   tables: AppTableRow[];
   storageFiles: StorageFileRow[];
   appUsers: AppUserRow[];
+  orgAdmins: OrgAdminRow[];
 }) {
   function stat(slug: string) {
     if (slug === "orbit")     return `${deployments.length} deployment${deployments.length !== 1 ? "s" : ""}`;
     if (slug === "blazingdb") return `${tables.length} table${tables.length !== 1 ? "s" : ""}`;
     if (slug === "vault")     return `${storageFiles.length} file${storageFiles.length !== 1 ? "s" : ""}`;
-    if (slug === "identity")  return `${appUsers.length} user${appUsers.length !== 1 ? "s" : ""}`;
+    if (slug === "identity") {
+      const total = appUsers.length + orgAdmins.length;
+      return `${total} user${total !== 1 ? "s" : ""}`;
+    }
     return "0 items";
   }
 
@@ -803,6 +877,7 @@ export function AppDetailClient({
   storageFiles,
   vaultSettings,
   appUsers,
+  orgAdmins,
   orgDomain,
 }: {
   app: AppDetail;
@@ -812,6 +887,7 @@ export function AppDetailClient({
   storageFiles: StorageFileRow[];
   vaultSettings: VaultSettingsRow;
   appUsers: AppUserRow[];
+  orgAdmins: OrgAdminRow[];
   orgDomain: string;
 }) {
   const [activeTab, setActiveTab] = useState<Tab>("deployments");
@@ -852,7 +928,7 @@ export function AppDetailClient({
 
       {/* Service tiles */}
       <div className="mt-8">
-        <ServiceTiles active={activeTab} onSelect={setActiveTab} deployments={deployments} tables={tables} storageFiles={storageFiles} appUsers={appUsers} />
+        <ServiceTiles active={activeTab} onSelect={setActiveTab} deployments={deployments} tables={tables} storageFiles={storageFiles} appUsers={appUsers} orgAdmins={orgAdmins} />
       </div>
 
       {/* Tabs */}
@@ -878,7 +954,7 @@ export function AppDetailClient({
         {activeTab === "deployments" && <DeploymentsTab deployments={deployments} />}
         {activeTab === "database"    && <DatabaseTab tables={tables} />}
         {activeTab === "storage"     && <VaultTab app={app} files={storageFiles} settings={vaultSettings} orgDomain={orgDomain} />}
-        {activeTab === "users"       && <UsersTab app={app} users={appUsers} />}
+        {activeTab === "users"       && <UsersTab app={app} users={appUsers} orgAdmins={orgAdmins} orgDomain={orgDomain} />}
         {activeTab === "settings"    && <SettingsTab app={app} apiKeys={apiKeys} orgDomain={orgDomain} />}
       </div>
     </div>
