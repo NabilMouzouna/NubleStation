@@ -1,22 +1,25 @@
-import { defineConfig } from 'vite'
+import { defineConfig, loadEnv } from 'vite'
 import react, { reactCompilerPreset } from '@vitejs/plugin-react'
 import babel from '@rolldown/plugin-babel'
 import { resolve } from 'node:path'
 
-const NUBLE_URL      = process.env.VITE_NUBLESTATION_URL          ?? 'http://api.nuble.local'
-const NUBLE_KEY      = process.env.VITE_NUBLESTATION_API_KEY      ?? ''
-const IDENTITY_URL   = process.env.VITE_NUBLESTATION_IDENTITY_URL ?? 'http://identity.nuble.local'
-const APP_SLUG       = process.env.VITE_NUBLESTATION_APP          ?? 'bucket'
-
 // https://vite.dev/config/
-export default defineConfig({
+export default defineConfig(({ mode }) => {
+  // loadEnv reads .env files (with empty prefix → all keys, incl. shell vars)
+  // into a plain object. process.env alone misses .env files in config scope,
+  // which left VITE_NUBLESTATION_API_KEY empty and broke uploads.
+  const env = loadEnv(mode, process.cwd(), '')
+  const NUBLE_URL      = env.VITE_NUBLESTATION_URL          ?? 'http://api.nuble.local'
+  const NUBLE_KEY      = env.VITE_NUBLESTATION_API_KEY      ?? ''
+  const IDENTITY_URL   = env.VITE_NUBLESTATION_IDENTITY_URL ?? 'http://identity.nuble.local'
+  const APP_SLUG       = env.VITE_NUBLESTATION_APP          ?? 'bucket'
+
+  return {
   plugins: [
     react(),
     babel({ presets: [reactCompilerPreset()] })
   ],
   // Guarantee env vars are baked into the production bundle.
-  // Vite's .env loading happens after config evaluation, so process.env reads
-  // here only catch shell-exported vars. The define block bridges both cases.
   define: {
     'import.meta.env.VITE_NUBLESTATION_URL':          JSON.stringify(NUBLE_URL),
     'import.meta.env.VITE_NUBLESTATION_API_KEY':       JSON.stringify(NUBLE_KEY),
@@ -40,4 +43,5 @@ export default defineConfig({
       },
     },
   },
+  }
 })
