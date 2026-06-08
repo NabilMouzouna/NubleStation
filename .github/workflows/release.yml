@@ -242,13 +242,67 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      - name: Build vault SDK (dependency)
-        run: pnpm --filter @nublestation/vault run build
+      - name: Build SDK dependencies
+        run: pnpm --filter @nublestation/vault --filter @nublestation/blaze --filter @nublestation/identity run build
 
       - name: Build client SDK
         run: pnpm --filter @nublestation/client run build
 
       - name: Publish
         run: pnpm --filter @nublestation/client publish --no-git-checks --access public --tag latest
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  publish-blaze:
+    name: Publish @nublestation/blaze to npm
+    runs-on: ubuntu-latest
+    if: github.ref_name == 'main'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.0.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Build blaze SDK
+        run: pnpm --filter @nublestation/blaze run build
+
+      - name: Publish
+        run: pnpm --filter @nublestation/blaze publish --no-git-checks --access public --tag latest
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  publish-identity:
+    name: Publish @nublestation/identity to npm
+    runs-on: ubuntu-latest
+    if: github.ref_name == 'main'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.0.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Build identity SDK
+        run: pnpm --filter @nublestation/identity run build
+
+      - name: Publish
+        run: pnpm --filter @nublestation/identity publish --no-git-checks --access public --tag latest
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
