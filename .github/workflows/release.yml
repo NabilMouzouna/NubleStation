@@ -192,7 +192,13 @@ jobs:
           fi
 
       - name: Publish
-        run: pnpm --filter @nublestation/cli publish --no-git-checks --access public --tag ${{ steps.npm-tag.outputs.tag }}
+        run: |
+          VER=$(node -p "require('./packages/cli/package.json').version")
+          if npm view "@nublestation/cli@$VER" version >/dev/null 2>&1; then
+            echo "@nublestation/cli@$VER already published — skipping"
+          else
+            pnpm --filter @nublestation/cli publish --no-git-checks --access public --tag ${{ steps.npm-tag.outputs.tag }}
+          fi
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
@@ -219,7 +225,13 @@ jobs:
         run: pnpm --filter @nublestation/vault run build
 
       - name: Publish
-        run: pnpm --filter @nublestation/vault publish --no-git-checks --access public --tag latest
+        run: |
+          VER=$(node -p "require('./packages/vault/package.json').version")
+          if npm view "@nublestation/vault@$VER" version >/dev/null 2>&1; then
+            echo "@nublestation/vault@$VER already published — skipping"
+          else
+            pnpm --filter @nublestation/vault publish --no-git-checks --access public --tag latest
+          fi
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
@@ -249,7 +261,13 @@ jobs:
         run: pnpm --filter @nublestation/client run build
 
       - name: Publish
-        run: pnpm --filter @nublestation/client publish --no-git-checks --access public --tag latest
+        run: |
+          VER=$(node -p "require('./packages/client/package.json').version")
+          if npm view "@nublestation/client@$VER" version >/dev/null 2>&1; then
+            echo "@nublestation/client@$VER already published — skipping"
+          else
+            pnpm --filter @nublestation/client publish --no-git-checks --access public --tag latest
+          fi
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
@@ -276,7 +294,13 @@ jobs:
         run: pnpm --filter @nublestation/blaze run build
 
       - name: Publish
-        run: pnpm --filter @nublestation/blaze publish --no-git-checks --access public --tag latest
+        run: |
+          VER=$(node -p "require('./packages/blaze/package.json').version")
+          if npm view "@nublestation/blaze@$VER" version >/dev/null 2>&1; then
+            echo "@nublestation/blaze@$VER already published — skipping"
+          else
+            pnpm --filter @nublestation/blaze publish --no-git-checks --access public --tag latest
+          fi
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
@@ -303,6 +327,12 @@ jobs:
         run: pnpm --filter @nublestation/identity run build
 
       - name: Publish
-        run: pnpm --filter @nublestation/identity publish --no-git-checks --access public --tag latest
+        run: |
+          VER=$(node -p "require('./packages/identity/package.json').version")
+          if npm view "@nublestation/identity@$VER" version >/dev/null 2>&1; then
+            echo "@nublestation/identity@$VER already published — skipping"
+          else
+            pnpm --filter @nublestation/identity publish --no-git-checks --access public --tag latest
+          fi
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
