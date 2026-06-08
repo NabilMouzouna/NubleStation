@@ -56,6 +56,7 @@ export const sidebar: SidebarGroup[] = [
       { title: 'Docker Compose', slug: 'infrastructure/docker-compose' },
       { title: 'Caddy', slug: 'infrastructure/caddy' },
       { title: 'CoreDNS', slug: 'infrastructure/coredns' },
+      { title: 'DNS Doctor', slug: 'infrastructure/dns-doctor' },
     ],
   },
   {

@@ -3,7 +3,13 @@ title: "@nublestation/client"
 description: The unified NubleStation client — one import and one config for every service.
 ---
 
-`@nublestation/client` is the umbrella SDK: one factory, one config object, and a single client that exposes every NubleStation service your app uses. If you'd rather pull in just one service, the per-service packages ([`@nublestation/vault`](/sdk/storage/), [`@nublestation/identity`](/sdk/auth/)) work standalone — the unified client simply wraps them.
+`@nublestation/client` is the umbrella SDK: one factory call returns a single client
+that exposes **every** NubleStation service your app uses — Vault (storage), Identity
+(auth), and Blaze (database). If you'd rather pull in just one service, the per-service
+packages ([`@nublestation/vault`](/NubleStation/docs/sdk/storage),
+[`@nublestation/identity`](/NubleStation/docs/sdk/auth),
+[`@nublestation/blaze`](/NubleStation/docs/sdk/database)) work standalone — the unified
+client simply wraps them.
 
 ## Installation
 
@@ -16,64 +22,101 @@ pnpm add @nublestation/client
 ## Creating a client
 
 ```typescript
-import { createClient } from "@nublestation/client";
+import { nubleClient } from "@nublestation/client";
+import { schema } from "./schema";
 
-const nuble = createClient({
-  url:    "http://api.clinic.local",   // NubleStation gateway URL
-  apiKey: "nbl_<key_id>.<secret>",     // API key from the Console
-});
+const nuble = nubleClient(
+  "nbl_<key_id>.<secret>",        // API key from the Console
+  "http://api.clinic.local",      // NubleStation gateway URL
+  { app: "bucket", schema },      // options (all optional)
+);
+
+const { vault, identity, blaze } = nuble;
 ```
 
-| Field | Description |
+### Signature
+
+```typescript
+nubleClient(apiKey: string, url: string, opts?: NubleOptions)
+```
+
+| Argument | Description |
 |---|---|
-| `url` | Your gateway base URL, `api.{org}.local` |
 | `apiKey` | App-scoped API key from **Console → Apps → your app → Settings** |
+| `url` | Your gateway base URL, `api.{org}.local` |
+| `opts.app` | App slug — required for Identity session scoping |
+| `opts.schema` | Your `defineSchema()` export — enables typed `blaze.<table>` access |
+| `opts.identityUrl` | Direct Identity URL. Defaults to `url` with `api.` → `identity.` |
 
 ## Services
 
-You call each service as `nuble.<service>.*`:
+Destructure the three services from the returned instance:
 
 | Service | Accessor | Status |
 |---|---|---|
 | Vault — file storage | `nuble.vault` | **Live** |
-| Blaze — database | `nuble.blaze` | Coming soon |
+| Identity — auth | `nuble.identity` | **Live** |
+| Blaze — database | `nuble.blaze` | **Live** |
 
 ```typescript
-// Upload, list, and download files through Vault
-await nuble.vault.upload("reports", "q1.pdf", file);
-const files = await nuble.vault.list("reports");
-const bytes = await nuble.vault.download("reports", "q1.pdf");
-```
+// Vault — upload, list, and download files
+await vault.upload("reports", "q1.pdf", file);
+const files = await vault.listMine();
 
-The full Vault method set (`upload`, `download`, `list`, `listMine`, `listSharedWithMe`, `listPublic`, `setPublic`, `delete`, `share`, `unshare`, `listGrants`) is documented on the [`@nublestation/vault` page](/sdk/storage/) — every method is identical when reached through `nuble.vault`.
-
-## Auth is configured separately
-
-Authentication doesn't use an API key — it rides the organization's shared SSO session cookie, so it takes a different config (it needs your app slug and the Identity URL). For that reason auth lives in its own package, [`@nublestation/identity`](/sdk/auth/):
-
-```typescript
-import { createIdentityClient } from "@nublestation/identity";
-
-const identity = createIdentityClient({
-  url:         "http://api.clinic.local",
-  identityUrl: "http://identity.clinic.local",
-  app:         "bucket",
-});
-
+// Identity — who is the current user?
 const session = await identity.getSession();
+
+// Blaze — typed CRUD over your tables
+await blaze.file_comments.create({ file_id, body, author_id, author_name });
+const comments = await blaze.file_comments.list();
 ```
 
-A typical app uses both side by side — `identity` to know **who** the user is, and `nuble.vault` to read and write **their** files.
+- The full Vault method set is documented on the
+  [`@nublestation/vault` page](/NubleStation/docs/sdk/storage) — every method is
+  identical when reached through `nuble.vault`.
+- The Blaze table client (`list`, `get`, `create`, `update`, `delete`) is documented on
+  the [`@nublestation/blaze` page](/NubleStation/docs/sdk/database).
+- Identity is documented on the
+  [`@nublestation/identity` page](/NubleStation/docs/sdk/auth).
+
+<Aside type="note">
+  Identity rides the organization's shared SSO session cookie rather than the API key,
+  which is why it needs `opts.app` (and optionally `opts.identityUrl`). The unified client
+  wires all of that for you from the single `url` you pass.
+</Aside>
+
+## Typed database access
+
+Pass your schema to `opts.schema` and `blaze` becomes fully typed — table names,
+row shapes, and insert payloads all autocomplete:
+
+```typescript
+// schema.ts
+import { defineSchema, t } from "@nublestation/client";
+
+export const schema = defineSchema({
+  file_comments: t.model({
+    file_id:     t.string().required(),
+    body:        t.string().required(),
+    author_id:   t.string().required(),
+    author_name: t.string().required(),
+  }),
+});
+```
+
+`defineSchema` and `t` are re-exported from `@nublestation/client`, so you don't need a
+separate `@nublestation/blaze` install just to declare a schema.
 
 ## Error handling
 
-Service calls throw a typed error on any non-2xx response. The Vault error class is re-exported from the client for convenience:
+Service calls throw a typed error on any non-2xx response. The Vault error class is
+re-exported from the client for convenience:
 
 ```typescript
 import { VaultError } from "@nublestation/client";
 
 try {
-  await nuble.vault.upload("docs", "report.pdf", bytes);
+  await vault.upload("docs", "report.pdf", bytes);
 } catch (err) {
   if (err instanceof VaultError) {
     console.error(err.status, err.code); // e.g. 401 "unauthorized"
@@ -91,13 +134,26 @@ try {
 ## Exports
 
 ```typescript
-import { createClient, VaultError } from "@nublestation/client";
-import type { ClientConfig, NubleClient, FileResult } from "@nublestation/client";
+import { nubleClient, createClient, VaultError } from "@nublestation/client";
+import { defineSchema, t, serializeSchema } from "@nublestation/client";
+import type {
+  NubleOptions, NubleInstance,
+  VaultClient, IdentityClient, BlazeClient,
+  FileResult, Grant, GrantRole, IdentityUser, SerializedSchema,
+} from "@nublestation/client";
 ```
+
+<Aside type="tip">
+  `createClient({ url, apiKey, app })` is kept as a backward-compatible alias for
+  `nubleClient(apiKey, url, { app })`. New code should prefer `nubleClient`.
+</Aside>
 
 ## When to use which package
 
-- **`@nublestation/client`** — you use (or plan to use) more than one service and want a single dependency and config.
-- **`@nublestation/vault` / `@nublestation/identity`** — you need exactly one service and want the smallest install.
+- **`@nublestation/client`** — you use (or plan to use) more than one service and want a
+  single dependency and config.
+- **`@nublestation/vault` / `@nublestation/identity` / `@nublestation/blaze`** — you need
+  exactly one service and want the smallest install.
 
-Both approaches share the same method signatures and types, so moving between them is a one-line change.
+Both approaches share the same method signatures and types, so moving between them is a
+one-line change.

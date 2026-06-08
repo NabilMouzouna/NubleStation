@@ -17,6 +17,17 @@ The DB Service exposes a **REST API** over a multi-tenant PostgreSQL database. I
 
 App developers never write SQL, never get a database connection string, and never touch Postgres directly. They define a schema, push it, and query via the SDK.
 
+<Aside type="note">
+  **Implementation status.** Shipped today: schema-as-code, `nuble db push` with
+  advisory-locked migrations, auto-injected `app_id` + RLS, and the five auto-REST CRUD
+  endpoints (`list` / `get` / `create` / `update` / `delete`) consumed by the
+  [`@nublestation/blaze`](/NubleStation/docs/sdk/database) client. The richer query surface
+  described below — PostgREST-style filters, JSONB operators, relations, computed columns,
+  named queries, and built-in resource views — is the **design target**, not yet
+  implemented. For now, filter and sort client-side. Track progress on the
+  [roadmap](/NubleStation/docs/reference/roadmap).
+</Aside>
+
 ## Auto-generated REST endpoints
 
 For every table in `tenant_data`, the DB service exposes:
@@ -95,9 +106,9 @@ App developers define their schema in TypeScript:
 
 ```typescript
 // schema.ts
-import { defineSchema, t } from '@nublestation/sdk/schema';
+import { defineSchema, t } from '@nublestation/blaze';
 
-export default defineSchema({
+export const schema = defineSchema({
   tasks: {
     title: t.string().required(),
     status: t.enum(['pending', 'in_progress', 'done']).default('pending'),

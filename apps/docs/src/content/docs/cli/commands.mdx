@@ -3,11 +3,9 @@ title: CLI Commands
 description: Full reference for the nuble command-line tool.
 ---
 
-
-
-<Aside type="note">
-  The `nuble` CLI (`@nublestation/cli`) is under development. Commands listed here reflect the planned v1 surface.
-</Aside>
+`@nublestation/cli` provides the `nuble` command — the developer's tool for connecting
+to a NubleStation org, pushing database schemas, and deploying frontends. It also wraps
+the host's Docker stack (`nuble server …`) when run on the machine itself.
 
 ## Installation
 
@@ -17,183 +15,133 @@ npm install -g @nublestation/cli
 pnpm add -g @nublestation/cli
 ```
 
-## Global flags
-
-| Flag | Description |
-|---|---|
-| `--app <name>` | Target app name (overrides `NUBLE_APP` env var) |
-| `--url <url>` | NubleStation gateway URL (overrides `NUBLE_URL` env var) |
-| `--key <key>` | API key (overrides `NUBLE_API_KEY` env var) |
-| `--help` | Print command help |
-| `--version` | Print CLI version |
+Requires **Node 22+** (the CLI loads your TypeScript `schema.ts` with
+`--experimental-strip-types`).
 
 ## Configuration
 
-The CLI reads config from environment variables or a `.nuble` file in the project root:
+`nuble init` writes a TOML config to `~/.nuble/config`, organized into **profiles** so
+one machine can target several orgs:
+
+```toml
+[default]
+org_url = "http://api.clinic.local"
+api_key = "nbl_<key_id>.<secret>"
+app_slug = "tasks"
+```
+
+Every command accepts `--profile <name>` to select a profile (defaults to `default`).
+
+---
+
+## `nuble init`
+
+Connect to a NubleStation org and write a profile. Prompts interactively for anything not
+passed as a flag, then verifies the gateway is reachable before saving.
 
 ```bash
-# .nuble (project-level, commit this)
-NUBLE_URL=http://api.clinic.local
-NUBLE_APP=tasks
-
-# Shell environment (don't commit)
-export NUBLE_API_KEY=nbl_abc123.supersecret
+nuble init
+nuble init --url http://api.clinic.local --key nbl_abc.secret --slug tasks
 ```
+
+| Flag | Description |
+|---|---|
+| `--url <url>` | Gateway URL (e.g. `http://api.clinic.local`) |
+| `--key <key>` | API key (`nbl_…`) |
+| `--slug <slug>` | App slug |
+| `--profile <name>` | Profile name to write (default: `default`) |
+
+`--url` also falls back to the `NUBLE_GATEWAY_URL` environment variable.
 
 ---
 
 ## `nuble db push`
 
-Push `schema.ts` to NubleStation — runs migrations and generates types.
+Compile your `schema.ts` and apply it to Blaze.
 
 ```bash
-nuble db push --app tasks
+nuble db push
+nuble db push --schema src/schema.ts
 ```
 
 **What it does:**
 
-1. Reads `schema.ts` from the current directory
-2. Sends it to `POST /v1/db/schema`
-3. The DB service generates migration SQL, injects `app_id` and RLS, and runs it
-4. Writes generated types to `.nuble/types.ts`
+1. Loads your `schema.ts` and serializes it (`serializeSchema`).
+2. `POST`s the schema JSON to `/v1/blaze/admin/migrations` on the gateway.
+3. Blaze takes a per-app advisory lock, diffs against the previous schema, generates and
+   validates the migration SQL, applies the DDL, and enables Row-Level Security on any
+   new table — all in one transaction.
+4. Prints how many statements were applied (or `Schema unchanged` on a no-op).
 
 **Options:**
 
 | Flag | Description |
 |---|---|
-| `--dry-run` | Print the SQL that would run, without running it |
-| `--schema <path>` | Path to schema file (default: `./schema.ts`) |
+| `--schema <path>` | Path to your schema file (default: `schema.ts`) |
+| `--profile <name>` | Config profile to use (default: `default`) |
+
+Your schema module must export `schema` (or a default export). See
+[`@nublestation/blaze`](/NubleStation/docs/sdk/database) for the DSL.
 
 ---
 
 ## `nuble deploy`
 
-Upload a frontend bundle to NubleStation.
+Zip a built frontend directory and deploy it to Orbit via the gateway.
 
 ```bash
-nuble deploy --app tasks
-nuble deploy --app tasks --dir ./build
+nuble deploy
+nuble deploy --dist build
+nuble deploy --build           # run the project build first
 ```
 
 **What it does:**
 
-1. Zips the `dist/` directory (or `--dir`)
-2. Uploads to `POST /v1/deploy/{appname}`
-3. The Deploy Service extracts it to `/var/nuble/{appname}/`
-4. Caddy serves the new files immediately
+1. Optionally runs your project's build script (`--build`), loading `.env` automatically
+   so build-time vars (like `VITE_…`) are baked in.
+2. Zips the `dist/` directory (or `--dist`).
+3. Uploads it to Orbit; Caddy serves the new files immediately.
 
 **Options:**
 
 | Flag | Description |
 |---|---|
-| `--dir <path>` | Bundle directory (default: `./dist`) |
-| `--version <ver>` | Version label for deployment history (default: git SHA) |
-
----
-
-## `nuble push`
-
-Atomic schema + deploy: runs `db push` first, then `deploy`.
-
-```bash
-nuble push --app tasks
-```
-
-If the schema migration fails, the deploy does not run.
+| `--dist <path>` | Built frontend directory (default: `dist`) |
+| `--build` | Run the project build script before deploying |
+| `--profile <name>` | Config profile to use (default: `default`) |
 
 ---
 
 ## `nuble status`
 
-Show the status of all NubleStation services.
+Check gateway health for every configured profile.
 
 ```bash
 nuble status
 ```
 
-Output:
-
 ```
-NubleStation  api.clinic.local
-
-  gateway     ✔  healthy
-  db          ✔  healthy
-  auth        ✔  healthy
-  storage     ✔  healthy
-  deploy      ✔  healthy
-  console     ✔  healthy
-  postgres    ✔  healthy
-  redis       ✔  healthy
-  coredns     ✔  healthy
-  caddy       ✔  healthy
+[default] http://api.clinic.local — checking… ✓ online
 ```
 
 ---
 
-## `nuble apps`
+## `nuble server …`
 
-List all apps in the organization.
+Manage the NubleStation Docker stack **on the host machine**. These wrap Docker Compose
+and are meant to run where NubleStation is installed.
 
-```bash
-nuble apps
-```
-
----
-
-## `nuble apps create`
-
-Create a new app.
-
-```bash
-nuble apps create --name tasks
-```
-
----
-
-## `nuble keys list`
-
-List API keys for an app.
+| Command | Description |
+|---|---|
+| `nuble server start` | Start all services |
+| `nuble server stop` | Stop all services (data is preserved) |
+| `nuble server restart` | Restart all services |
+| `nuble server status` | Show container health |
+| `nuble server logs [service]` | Tail logs (omit service for all; `-f` to follow) |
 
 ```bash
-nuble keys list --app tasks
-```
-
----
-
-## `nuble keys create`
-
-Create a new API key for an app.
-
-```bash
-nuble keys create --app tasks --label "CI key"
-```
-
-Output:
-
-```
-API key created (shown once — save it now):
-
-  nbl_abc123.supersecret-value-here
-```
-
----
-
-## `nuble keys revoke`
-
-Revoke an API key.
-
-```bash
-nuble keys revoke <key-id>
-```
-
----
-
-## `nuble db migrations`
-
-List applied migrations for an app.
-
-```bash
-nuble db migrations --app tasks
+nuble server status
+nuble server logs blaze -f
 ```
 
 ---
@@ -202,6 +150,4 @@ nuble db migrations --app tasks
 
 | Variable | Description |
 |---|---|
-| `NUBLE_URL` | Gateway base URL (e.g., `http://api.clinic.local`) |
-| `NUBLE_APP` | Default app name |
-| `NUBLE_API_KEY` | API key (`nbl_<key_id>.<secret>`) |
+| `NUBLE_GATEWAY_URL` | Fallback gateway URL for `nuble init --url` |
