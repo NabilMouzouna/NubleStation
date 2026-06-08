@@ -107,6 +107,54 @@ nuble deploy
 
 ---
 
+## Build with the SDK
+
+Install one package and reach every service through a single client:
+
+```bash
+npm install @nublestation/client
+```
+
+```ts
+import { nubleClient } from "@nublestation/client";
+import { schema } from "./schema";
+
+const { vault, identity, blaze } = nubleClient(
+  "nbl_<keyId>.<secret>",
+  "http://api.clinic.local",
+  { app: "my-app", schema },
+);
+
+await vault.upload("reports", "q1.pdf", file);   // file storage
+const me = await identity.getSession();           // who is signed in
+await blaze.tasks.create({ title: "Review" });    // typed database
+```
+
+Define your database as code and push it — Blaze generates the migration, injects
+`app_id`, and enables row-level isolation automatically:
+
+```ts
+// schema.ts
+import { defineSchema, t } from "@nublestation/client";
+
+export const schema = defineSchema({
+  tasks: t.model({
+    title:  t.string().required(),
+    status: t.enum(["todo", "done"]).default("todo"),
+  }),
+});
+```
+
+```bash
+nuble db push --schema schema.ts
+```
+
+Prefer one service? `@nublestation/vault`, `@nublestation/identity`, and
+`@nublestation/blaze` all work standalone. Full reference →
+**[docs](https://nabilmouzouna.github.io/NubleStation)**.
+
+---
+
 ## Re-running the installer
 
 ```
@@ -137,22 +185,27 @@ curl install.sh | bash           nuble deploy
 ## Repository structure
 
 ```
-apps/
+apps/                          one process per container
   gateway/     API entry point — the only LAN-exposed service
   console/     Next.js admin dashboard
   orbit/       Frontend deploy service
-  blaze/       Database service (Postgres + RLS)
-  identity/    Auth service — coming soon
-  vault/       File storage — coming soon
-packages/
-  cli/         @nublestation/cli — nuble init · deploy · status
-  ui/          Shared component library
+  blaze/       Database service — auto-REST, RLS, migrations
+  identity/    Auth service — sessions, API keys, SSO
+  vault/       File storage service
+  docs/        Documentation site (Astro)
+packages/                      published to npm
+  client/      @nublestation/client — unified SDK (vault + identity + blaze)
+  vault/       @nublestation/vault — storage SDK
+  identity/    @nublestation/identity — auth SDK
+  blaze/       @nublestation/blaze — schema DSL + database client
+  cli/         @nublestation/cli — nuble init · db push · deploy · server
+  ui/ shared/  Internal shared code
 infra/
   docker-compose.yml
   caddy/Caddyfile
   coredns/Corefile.template
 scripts/
-  install.sh
+  install.sh · dns-doctor.sh
 docs/          Architecture decision records + documentation site
 ```
 
