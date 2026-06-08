@@ -1,17 +1,17 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   ChevronRight, Rocket, Database, HardDrive, Users, Settings,
   Copy, CheckCheck, ShieldOff, Trash2, ExternalLink, Clock,
-  Globe, Lock, Upload, X,
+  Globe, Lock, Upload, X, Folder, FolderOpen, ArrowLeft, Eye, UserPlus,
 } from "lucide-react";
 import { Button } from "@nublestation/ui/components/button";
 import { Badge } from "@nublestation/ui/components/badge";
-import type { AppDetail, DeploymentRow, ApiKeyRow, AppTableRow, StorageFileRow, VaultSettingsRow } from "@/lib/platform/app-detail";
-import { revokeApiKeyAction, deleteAppAction, generateApiKeyAction, deleteFileAction, togglePublicAction, saveVaultSettingsAction } from "./actions";
+import type { AppDetail, DeploymentRow, ApiKeyRow, AppTableRow, MigrationRow, StorageFileRow, VaultSettingsRow, AppUserRow, OrgAdminRow } from "@/lib/platform/app-detail";
+import { revokeApiKeyAction, deleteAppAction, generateApiKeyAction, deleteFileAction, togglePublicAction, saveVaultSettingsAction, grantUserAccessAction, changeUserRoleAction, revokeUserAccessAction, searchPlatformUsersAction } from "./actions";
 import { copyToClipboard } from "@/lib/clipboard";
 
 // ---------------------------------------------------------------------------
@@ -85,27 +85,78 @@ function DeploymentsTab({ deployments }: { deployments: DeploymentRow[] }) {
   );
 }
 
-function DatabaseTab({ tables }: { tables: AppTableRow[] }) {
-  if (tables.length === 0) return <EmptyState message="No tables yet. Use the BlazingDB API to create your first table." />;
+function DatabaseTab({ tables, migrations }: { tables: AppTableRow[]; migrations: MigrationRow[] }) {
+  if (tables.length === 0) {
+    return (
+      <EmptyState message="No tables yet. Run nuble db push from your project to apply your schema." />
+    );
+  }
+
+  // Deduplicate tables by name (all rows for the same app share schema_json).
+  const seen = new Set<string>();
+  const uniqueTables = tables.filter((t) => {
+    if (seen.has(t.table_name)) return false;
+    seen.add(t.table_name);
+    return true;
+  });
+
   return (
-    <div className="overflow-hidden rounded-3xl border border-border">
-      <table className="w-full text-sm">
-        <TableHeader cols={["Table name", "Created"]} />
-        <tbody className="divide-y divide-border bg-card">
-          {tables.map((t) => (
-            <tr key={t.id}>
-              <td className="px-5 py-3 font-mono text-xs text-foreground">{t.table_name}</td>
-              <td className="px-5 py-3 text-muted-foreground">{new Date(t.created_at).toLocaleDateString()}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+    <div className="space-y-6">
+      {/* Tables */}
+      <div className="overflow-hidden rounded-3xl border border-border">
+        <div className="border-b border-border bg-muted/40 px-5 py-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Tables</p>
+        </div>
+        <div className="divide-y divide-border bg-card">
+          {uniqueTables.map((t) => {
+            const fields = t.schema_json?.tables?.[t.table_name]?.fields ?? {};
+            const cols = ["id", "app_id", ...Object.keys(fields)];
+            return (
+              <div key={t.id} className="px-5 py-4">
+                <div className="flex items-center justify-between">
+                  <span className="font-mono text-sm font-semibold text-foreground">{t.table_name}</span>
+                  <span className="text-xs text-muted-foreground">{cols.length} col{cols.length !== 1 ? "s" : ""}</span>
+                </div>
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {cols.map((col) => {
+                    const field = fields[col];
+                    const colType = col === "id" || col === "app_id" ? "uuid" : (field?.type ?? "");
+                    return (
+                      <span key={col} className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-0.5 font-mono text-xs text-muted-foreground">
+                        <span className="text-foreground">{col}</span>
+                        {colType && <span className="opacity-60">{colType}</span>}
+                      </span>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Migration history */}
+      {migrations.length > 0 && (
+        <div className="overflow-hidden rounded-3xl border border-border">
+          <div className="border-b border-border bg-muted/40 px-5 py-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Migration history</p>
+          </div>
+          <table className="w-full text-sm">
+            <TableHeader cols={["Run", "Checksum", "Applied"]} />
+            <tbody className="divide-y divide-border bg-card">
+              {migrations.map((m) => (
+                <tr key={m.id}>
+                  <td className="px-5 py-3 font-mono text-xs text-foreground">{m.filename}</td>
+                  <td className="px-5 py-3 font-mono text-xs text-muted-foreground">{m.checksum.slice(0, 12)}…</td>
+                  <td className="px-5 py-3 text-muted-foreground">{new Date(m.applied_at).toLocaleString()}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
-}
-
-function PlaceholderTab({ service }: { service: string }) {
-  return <EmptyState message={`${service} data will appear here once the service is in use.`} />;
 }
 
 // ---------------------------------------------------------------------------
@@ -118,6 +169,8 @@ function formatBytes(n: number | null): string {
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
   return `${(n / (1024 * 1024)).toFixed(1)} MB`;
 }
+
+const MB_PRESETS = [10, 25, 50, 100, 200];
 
 function VaultTab({
   app,
@@ -132,11 +185,31 @@ function VaultTab({
 }) {
   const router = useRouter();
   const [, startTransition] = useTransition();
+  const [selectedCollection, setSelectedCollection] = useState<string | null>(null);
   const [deletingId, setDeletingId]   = useState<string | null>(null);
   const [togglingId, setTogglingId]   = useState<string | null>(null);
   const [savingSettings, setSaving]   = useState(false);
   const [extInput, setExtInput]       = useState(settings.allowed_extensions.join(", "));
   const [maxMb, setMaxMb]             = useState(Math.round(settings.max_file_bytes / (1024 * 1024)));
+
+  // Derive collection summaries from file list
+  const collections = useMemo(() => {
+    const map = new Map<string, { fileCount: number; totalBytes: number }>();
+    for (const f of files) {
+      const e = map.get(f.collection) ?? { fileCount: 0, totalBytes: 0 };
+      e.fileCount++;
+      e.totalBytes += f.size_bytes ?? 0;
+      map.set(f.collection, e);
+    }
+    return Array.from(map.entries()).map(([name, stats]) => ({ name, ...stats }));
+  }, [files]);
+
+  const collectionFiles = useMemo(
+    () => selectedCollection ? files.filter(f => f.collection === selectedCollection) : [],
+    [files, selectedCollection],
+  );
+
+  const totalBytes = useMemo(() => files.reduce((s, f) => s + (f.size_bytes ?? 0), 0), [files]);
 
   async function handleDelete(file: StorageFileRow) {
     setDeletingId(file.id);
@@ -165,76 +238,175 @@ function VaultTab({
     `http://api.${orgDomain}.local/vault/${app.name}/${file.collection}/${file.filename}`;
 
   return (
-    <div className="space-y-8 max-w-3xl">
+    <div className="space-y-8">
 
-      {/* File list */}
-      <section className="space-y-3">
-        <h3 className="text-sm font-semibold text-foreground">Files</h3>
-        {files.length === 0 ? (
-          <EmptyState message="No files uploaded yet. Use the SDK or CLI to upload files." />
-        ) : (
-          <div className="overflow-hidden rounded-3xl border border-border">
-            <table className="w-full text-sm">
-              <TableHeader cols={["Path", "Size", "Type", "Access", ""]} />
-              <tbody className="divide-y divide-border">
-                {files.map((f) => (
-                  <tr key={f.id} className="hover:bg-muted/40 transition-colors">
-                    <td className="px-5 py-3 font-mono text-foreground">
-                      {f.collection}/{f.filename}
-                    </td>
-                    <td className="px-5 py-3 text-muted-foreground">{formatBytes(f.size_bytes)}</td>
-                    <td className="px-5 py-3 text-muted-foreground">{f.mime_type ?? "—"}</td>
-                    <td className="px-5 py-3">
-                      {f.is_public ? (
-                        <a
-                          href={publicUrl(f)}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex items-center gap-1 text-xs text-brand-blue hover:underline"
-                        >
-                          <Globe className="h-3 w-3" /> Public
-                        </a>
-                      ) : (
-                        <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                          <Lock className="h-3 w-3" /> Private
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-5 py-3">
-                      <div className="flex items-center gap-2 justify-end">
-                        <button
-                          onClick={() => handleToggle(f)}
-                          disabled={togglingId === f.id}
-                          className="text-xs text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
-                        >
-                          {f.is_public ? "Make private" : "Make public"}
-                        </button>
-                        <button
-                          onClick={() => handleDelete(f)}
-                          disabled={deletingId === f.id}
-                          className="text-muted-foreground hover:text-destructive transition-colors disabled:opacity-50"
-                        >
-                          <X className="h-4 w-4" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+      {/* Collections overview OR collection drill-down */}
+      {selectedCollection === null ? (
+        <section className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-foreground">Collections</h3>
+            {files.length > 0 && (
+              <p className="text-xs text-muted-foreground">
+                {collections.length} collection{collections.length !== 1 ? "s" : ""} &middot;{" "}
+                {files.length} file{files.length !== 1 ? "s" : ""} &middot;{" "}
+                {formatBytes(totalBytes)}
+              </p>
+            )}
           </div>
-        )}
+
+          {collections.length === 0 ? (
+            <EmptyState message="No files yet. Use the SDK to upload files to a collection." />
+          ) : (
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {collections.map(col => (
+                <button
+                  key={col.name}
+                  onClick={() => setSelectedCollection(col.name)}
+                  className="group flex items-start gap-3 rounded-2xl border border-border bg-card p-4 text-left transition-all hover:border-primary/40 hover:shadow-sm"
+                >
+                  <div className="mt-0.5 rounded-xl bg-muted p-2 transition-colors group-hover:bg-primary/10">
+                    <Folder className="h-5 w-5 text-muted-foreground transition-colors group-hover:text-primary" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-mono text-sm font-semibold text-foreground">{col.name}</p>
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      {col.fileCount} file{col.fileCount !== 1 ? "s" : ""} &middot; {formatBytes(col.totalBytes)}
+                    </p>
+                  </div>
+                  <ChevronRight className="mt-1 h-4 w-4 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+                </button>
+              ))}
+            </div>
+          )}
+        </section>
+      ) : (
+        <section className="space-y-4">
+          {/* Breadcrumb + back */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setSelectedCollection(null)}
+              className="flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Collections
+            </button>
+            <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+            <span className="flex items-center gap-1.5 font-mono text-sm font-semibold text-foreground">
+              <FolderOpen className="h-4 w-4 text-primary" />
+              {selectedCollection}
+            </span>
+          </div>
+
+          {/* Collection stats */}
+          <div className="flex items-center gap-6 rounded-2xl border border-border bg-muted/30 px-5 py-3">
+            <div>
+              <p className="text-lg font-semibold text-foreground">{collectionFiles.length}</p>
+              <p className="text-xs text-muted-foreground">files</p>
+            </div>
+            <div className="h-8 w-px bg-border" />
+            <div>
+              <p className="text-lg font-semibold text-foreground">
+                {formatBytes(collectionFiles.reduce((s, f) => s + (f.size_bytes ?? 0), 0))}
+              </p>
+              <p className="text-xs text-muted-foreground">total size</p>
+            </div>
+            <div className="h-8 w-px bg-border" />
+            <div>
+              <p className="text-lg font-semibold text-foreground">
+                {collectionFiles.filter(f => f.is_public).length}
+              </p>
+              <p className="text-xs text-muted-foreground">public</p>
+            </div>
+          </div>
+
+          {/* File table */}
+          {collectionFiles.length === 0 ? (
+            <EmptyState message="No files in this collection." />
+          ) : (
+            <div className="overflow-hidden rounded-3xl border border-border">
+              <table className="w-full text-sm">
+                <TableHeader cols={["Filename", "Size", "Type", "Access", "Uploaded", ""]} />
+                <tbody className="divide-y divide-border bg-card">
+                  {collectionFiles.map((f) => (
+                    <tr key={f.id} className="transition-colors hover:bg-muted/40">
+                      <td className="px-5 py-3 font-mono text-xs text-foreground">{f.filename}</td>
+                      <td className="px-5 py-3 text-muted-foreground">{formatBytes(f.size_bytes)}</td>
+                      <td className="px-5 py-3 text-xs text-muted-foreground">{f.mime_type ?? "—"}</td>
+                      <td className="px-5 py-3">
+                        {f.is_public ? (
+                          <span className="flex items-center gap-1 text-xs text-success">
+                            <Globe className="h-3 w-3" /> Public
+                          </span>
+                        ) : (
+                          <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                            <Lock className="h-3 w-3" /> Private
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-5 py-3 text-xs text-muted-foreground">
+                        {new Date(f.created_at).toLocaleDateString()}
+                      </td>
+                      <td className="px-5 py-3">
+                        <div className="flex items-center justify-end gap-3">
+                          {/* Preview — only for public files */}
+                          {f.is_public && (
+                            <a
+                              href={publicUrl(f)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              title="Preview file"
+                              className="text-muted-foreground transition-colors hover:text-primary"
+                            >
+                              <Eye className="h-4 w-4" />
+                            </a>
+                          )}
+                          <button
+                            onClick={() => handleToggle(f)}
+                            disabled={togglingId === f.id}
+                            className="text-xs text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
+                          >
+                            {togglingId === f.id ? "…" : f.is_public ? "Make private" : "Make public"}
+                          </button>
+                          <button
+                            onClick={() => handleDelete(f)}
+                            disabled={deletingId === f.id}
+                            className="text-muted-foreground transition-colors hover:text-destructive disabled:opacity-50"
+                          >
+                            {deletingId === f.id ? <span className="text-xs">…</span> : <X className="h-4 w-4" />}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+      )}
+
+      {/* Upload hint */}
+      <section className="rounded-3xl border border-dashed border-border p-5">
+        <div className="flex items-center gap-3 text-muted-foreground">
+          <Upload className="h-5 w-5 shrink-0" />
+          <p className="text-sm">
+            Upload via SDK:{" "}
+            <span className="font-mono text-foreground">
+              vault.upload(&quot;{selectedCollection ?? "collection"}&quot;, &quot;filename&quot;, data)
+            </span>
+          </p>
+        </div>
       </section>
 
       {/* Settings */}
-      <section className="space-y-3">
+      <section className="max-w-2xl space-y-3">
         <h3 className="text-sm font-semibold text-foreground">Vault Settings</h3>
-        <form onSubmit={handleSaveSettings} className="space-y-4 rounded-3xl border border-border p-5">
+        <form onSubmit={handleSaveSettings} className="space-y-5 rounded-3xl border border-border p-5">
           <div className="space-y-1.5">
-            <label className="text-sm font-medium text-foreground">
-              Allowed extensions
-            </label>
-            <p className="text-xs text-muted-foreground">Comma-separated list (e.g. pdf, jpg, png). Leave blank to allow all.</p>
+            <label className="text-sm font-medium text-foreground">Allowed extensions</label>
+            <p className="text-xs text-muted-foreground">
+              Comma-separated (e.g. pdf, jpg, png). Leave blank to allow all.
+            </p>
             <input
               type="text"
               value={extInput}
@@ -243,35 +415,256 @@ function VaultTab({
               className="flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40"
             />
           </div>
-          <div className="space-y-1.5">
-            <label className="text-sm font-medium text-foreground">
-              Max file size (MB)
-            </label>
-            <input
-              type="number"
-              min={1}
-              max={500}
-              value={maxMb}
-              onChange={e => setMaxMb(Number(e.target.value))}
-              className="flex h-10 w-32 rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40"
-            />
+
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-foreground">Max file size</label>
+            {/* Preset buttons */}
+            <div className="flex flex-wrap gap-2">
+              {MB_PRESETS.map(mb => (
+                <button
+                  key={mb}
+                  type="button"
+                  onClick={() => setMaxMb(mb)}
+                  className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition-all ${
+                    maxMb === mb
+                      ? "border-primary bg-primary/10 text-primary"
+                      : "border-border bg-background text-muted-foreground hover:border-primary/40 hover:text-foreground"
+                  }`}
+                >
+                  {mb} MB
+                </button>
+              ))}
+            </div>
+            {/* Always-visible numeric input — presets set it, or type freely */}
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                min={1}
+                max={500}
+                value={maxMb}
+                onChange={e => setMaxMb(Number(e.target.value))}
+                className="flex h-9 w-24 rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40"
+              />
+              <span className="text-sm text-muted-foreground">MB per file</span>
+            </div>
           </div>
+
           <Button type="submit" disabled={savingSettings} className="h-9 px-5 text-sm rounded-full">
             {savingSettings ? "Saving…" : "Save settings"}
           </Button>
         </form>
       </section>
 
-      {/* Upload hint */}
-      <section className="rounded-3xl border border-dashed border-border p-5">
-        <div className="flex items-center gap-3 text-muted-foreground">
-          <Upload className="h-5 w-5 shrink-0" />
-          <p className="text-sm">
-            Upload files via the SDK: <span className="font-mono text-foreground">nuble.vault.upload(&quot;{app.name}&quot;, &quot;collection&quot;, file)</span>
-          </p>
-        </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// UsersTab — per-app access management (Identity, ADR 014)
+// ---------------------------------------------------------------------------
+
+const APP_ROLES = ["end_user", "editor", "admin"];
+
+type UserSuggestion = { id: string; email: string; displayName: string | null };
+
+function UsersTab({ app, users, orgAdmins, orgDomain }: { app: AppDetail; users: AppUserRow[]; orgAdmins: OrgAdminRow[]; orgDomain: string }) {
+  const router = useRouter();
+  const [, startTransition] = useTransition();
+  const [email, setEmail]           = useState("");
+  const [selectedUserId, setUserId] = useState<string | null>(null);
+  const [suggestions, setSuggestions] = useState<UserSuggestion[]>([]);
+  const [role, setRole]             = useState("end_user");
+  const [granting, setGranting]     = useState(false);
+  const [error, setError]           = useState<string | null>(null);
+  const [busyId, setBusyId]         = useState<string | null>(null);
+
+  async function handleEmailChange(val: string) {
+    setEmail(val);
+    setUserId(null);
+    if (val.length >= 2) {
+      const results = await searchPlatformUsersAction(val);
+      setSuggestions(results);
+    } else {
+      setSuggestions([]);
+    }
+  }
+
+  async function handleGrant(e: React.FormEvent) {
+    e.preventDefault();
+    setGranting(true);
+    setError(null);
+    const res = await grantUserAccessAction(app.id, app.name, email, role, selectedUserId ?? undefined);
+    setGranting(false);
+    if (!res.ok) { setError(res.error ?? "Failed to grant access."); return; }
+    setEmail(""); setUserId(null); setSuggestions([]);
+    startTransition(() => router.refresh());
+  }
+
+  async function handleChangeRole(userId: string, newRole: string) {
+    setBusyId(userId);
+    await changeUserRoleAction(app.id, app.name, userId, newRole);
+    setBusyId(null);
+    startTransition(() => router.refresh());
+  }
+
+  async function handleRevoke(userId: string) {
+    setBusyId(userId);
+    await revokeUserAccessAction(app.id, app.name, userId);
+    setBusyId(null);
+    startTransition(() => router.refresh());
+  }
+
+  return (
+    <div className="space-y-8">
+      {/* Grant access */}
+      <section className="space-y-3">
+        <h3 className="text-sm font-semibold text-foreground">Grant access</h3>
+        <p className="text-xs text-muted-foreground">
+          Give an existing NubleStation account a role on this app. Users register themselves at{" "}
+          <span className="font-mono">identity.{orgDomain}.local</span>; org admins already have full access to every app.
+        </p>
+        {error && (
+          <div className="rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-2.5 text-xs text-destructive">
+            {error}
+          </div>
+        )}
+        <form onSubmit={handleGrant} className="flex flex-wrap items-center gap-2">
+          <datalist id="user-email-suggestions">
+            {suggestions.map((s) => (
+              <option key={s.id} value={s.email}>{s.displayName ? `${s.displayName} — ${s.email}` : s.email}</option>
+            ))}
+          </datalist>
+          <input
+            type="email"
+            required
+            list="user-email-suggestions"
+            value={email}
+            onChange={(e) => {
+              handleEmailChange(e.target.value);
+              const match = suggestions.find(s => s.email === e.target.value);
+              if (match) setUserId(match.id);
+            }}
+            placeholder="user@email.com"
+            className="h-9 flex-1 min-w-[200px] rounded-lg border border-input bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40"
+          />
+          <select
+            value={role}
+            onChange={(e) => setRole(e.target.value)}
+            className="h-9 rounded-lg border border-input bg-background px-3 text-sm text-foreground focus-visible:outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40"
+          >
+            {APP_ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
+          </select>
+          <Button type="submit" disabled={granting} className="h-9 gap-1.5 rounded-full px-4 text-sm">
+            <UserPlus className="h-3.5 w-3.5" />
+            {granting ? "Granting…" : "Grant"}
+          </Button>
+        </form>
       </section>
 
+      {/* Platform admins — implicit access (ADR 014) */}
+      {orgAdmins.length > 0 && (
+        <section className="space-y-3">
+          <div>
+            <h3 className="text-sm font-semibold text-foreground">
+              Platform admins <span className="text-muted-foreground">({orgAdmins.length})</span>
+            </h3>
+            <p className="text-xs text-muted-foreground mt-0.5">Full admin access on every app — no grant needed.</p>
+          </div>
+          <div className="overflow-hidden rounded-3xl border border-border">
+            <table className="w-full text-sm">
+              <TableHeader cols={["User", "Role"]} />
+              <tbody className="divide-y divide-border bg-card">
+                {orgAdmins.map((u) => (
+                  <tr key={u.id} className="transition-colors hover:bg-muted/40">
+                    <td className="px-5 py-3">
+                      <div className="flex items-center gap-3">
+                        {u.avatar_url ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={u.avatar_url} alt="" width={32} height={32} className="size-8 rounded-full object-cover" />
+                        ) : (
+                          <span className="flex size-8 items-center justify-center rounded-full bg-muted text-xs font-medium text-muted-foreground">
+                            {(u.display_name ?? u.email).slice(0, 1).toUpperCase()}
+                          </span>
+                        )}
+                        <div className="min-w-0">
+                          <p className="truncate text-foreground">{u.display_name ?? u.email}</p>
+                          {u.display_name && <p className="truncate text-xs text-muted-foreground">{u.email}</p>}
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-5 py-3">
+                      <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
+                        {u.role}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
+
+      {/* Members */}
+      <section className="space-y-3">
+        <h3 className="text-sm font-semibold text-foreground">
+          Members <span className="text-muted-foreground">({users.length})</span>
+        </h3>
+        {users.length === 0 ? (
+          <EmptyState message="No end-users granted access yet." />
+        ) : (
+          <div className="overflow-hidden rounded-3xl border border-border">
+            <table className="w-full text-sm">
+              <TableHeader cols={["User", "Role", "Granted", ""]} />
+              <tbody className="divide-y divide-border bg-card">
+                {users.map((u) => (
+                  <tr key={u.id} className="transition-colors hover:bg-muted/40">
+                    <td className="px-5 py-3">
+                      <div className="flex items-center gap-3">
+                        {u.avatar_url ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={u.avatar_url} alt="" width={32} height={32} className="size-8 rounded-full object-cover" />
+                        ) : (
+                          <span className="flex size-8 items-center justify-center rounded-full bg-muted text-xs font-medium text-muted-foreground">
+                            {(u.display_name ?? u.email).slice(0, 1).toUpperCase()}
+                          </span>
+                        )}
+                        <div className="min-w-0">
+                          <p className="truncate text-foreground">{u.display_name ?? u.email}</p>
+                          {u.display_name && <p className="truncate text-xs text-muted-foreground">{u.email}</p>}
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-5 py-3">
+                      <select
+                        value={u.role}
+                        disabled={busyId === u.id}
+                        onChange={(e) => handleChangeRole(u.id, e.target.value)}
+                        className="h-8 rounded-lg border border-input bg-background px-2 text-xs text-foreground focus-visible:outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40 disabled:opacity-50"
+                      >
+                        {APP_ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
+                        {!APP_ROLES.includes(u.role) && <option value={u.role}>{u.role}</option>}
+                      </select>
+                    </td>
+                    <td className="px-5 py-3 text-xs text-muted-foreground">
+                      {new Date(u.created_at).toLocaleDateString()}
+                    </td>
+                    <td className="px-5 py-3 text-right">
+                      <button
+                        onClick={() => handleRevoke(u.id)}
+                        disabled={busyId === u.id}
+                        className="text-xs text-muted-foreground transition-colors hover:text-destructive disabled:opacity-50"
+                      >
+                        Revoke
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
     </div>
   );
 }
@@ -477,15 +870,26 @@ function ServiceTiles({
   onSelect,
   deployments,
   tables,
+  storageFiles,
+  appUsers,
+  orgAdmins,
 }: {
   active: Tab;
   onSelect: (t: Tab) => void;
   deployments: DeploymentRow[];
   tables: AppTableRow[];
+  storageFiles: StorageFileRow[];
+  appUsers: AppUserRow[];
+  orgAdmins: OrgAdminRow[];
 }) {
   function stat(slug: string) {
     if (slug === "orbit")     return `${deployments.length} deployment${deployments.length !== 1 ? "s" : ""}`;
     if (slug === "blazingdb") return `${tables.length} table${tables.length !== 1 ? "s" : ""}`;
+    if (slug === "vault")     return `${storageFiles.length} file${storageFiles.length !== 1 ? "s" : ""}`;
+    if (slug === "identity") {
+      const total = appUsers.length + orgAdmins.length;
+      return `${total} user${total !== 1 ? "s" : ""}`;
+    }
     return "0 items";
   }
 
@@ -525,16 +929,22 @@ export function AppDetailClient({
   deployments,
   apiKeys,
   tables,
+  migrations,
   storageFiles,
   vaultSettings,
+  appUsers,
+  orgAdmins,
   orgDomain,
 }: {
   app: AppDetail;
   deployments: DeploymentRow[];
   apiKeys: ApiKeyRow[];
   tables: AppTableRow[];
+  migrations: MigrationRow[];
   storageFiles: StorageFileRow[];
   vaultSettings: VaultSettingsRow;
+  appUsers: AppUserRow[];
+  orgAdmins: OrgAdminRow[];
   orgDomain: string;
 }) {
   const [activeTab, setActiveTab] = useState<Tab>("deployments");
@@ -575,7 +985,7 @@ export function AppDetailClient({
 
       {/* Service tiles */}
       <div className="mt-8">
-        <ServiceTiles active={activeTab} onSelect={setActiveTab} deployments={deployments} tables={tables} />
+        <ServiceTiles active={activeTab} onSelect={setActiveTab} deployments={deployments} tables={tables} storageFiles={storageFiles} appUsers={appUsers} orgAdmins={orgAdmins} />
       </div>
 
       {/* Tabs */}
@@ -599,9 +1009,9 @@ export function AppDetailClient({
       {/* Tab content */}
       <div className="mt-6">
         {activeTab === "deployments" && <DeploymentsTab deployments={deployments} />}
-        {activeTab === "database"    && <DatabaseTab tables={tables} />}
+        {activeTab === "database"    && <DatabaseTab tables={tables} migrations={migrations} />}
         {activeTab === "storage"     && <VaultTab app={app} files={storageFiles} settings={vaultSettings} orgDomain={orgDomain} />}
-        {activeTab === "users"       && <PlaceholderTab service="Identity" />}
+        {activeTab === "users"       && <UsersTab app={app} users={appUsers} orgAdmins={orgAdmins} orgDomain={orgDomain} />}
         {activeTab === "settings"    && <SettingsTab app={app} apiKeys={apiKeys} orgDomain={orgDomain} />}
       </div>
     </div>

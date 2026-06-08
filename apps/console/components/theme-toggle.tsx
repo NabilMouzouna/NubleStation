@@ -11,9 +11,9 @@ export function ThemeToggle() {
   function toggle() {
     const next = document.documentElement.classList.toggle("dark");
     setDark(next);
-    try {
-      localStorage.setItem("nuble-theme", next ? "dark" : "light");
-    } catch {}
+    // Cookie (not localStorage) so the server component in layout.tsx can read
+    // the preference and render the correct class — prevents React stripping it.
+    document.cookie = `nuble-theme=${next ? "dark" : "light"};path=/;max-age=31536000;SameSite=Lax`;
   }
 
   return (

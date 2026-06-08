@@ -2,7 +2,7 @@
 
 The `platform` PostgreSQL schema holds all NubleStation infrastructure tables. These are shared across tenants and managed exclusively by the platform layer — app developers never access them directly.
 
-Ten tables are defined under `pgSchema("platform")` in `apps/blaze/src/db/schema/platform.ts` and migrated via drizzle-kit on Blaze boot (see ADR 003 §11).
+These tables are defined under `pgSchema("platform")` in `apps/blaze/src/db/schema/platform.ts` and migrated via drizzle-kit on Blaze boot (see ADR 003 §11). The set has grown since the original ten: ADR 012 added `vault_settings` and `storage_files`; ADR 014 added `sessions` and the `users.avatar_url` column; ADR 016 added `storage_files.owner_id` and the `vault_grants` table for per-user file ownership and sharing.
 
 ```mermaid
 erDiagram
@@ -18,7 +18,18 @@ erDiagram
         uuid org_id FK
         string email
         string password_hash
+        string display_name
+        string avatar_url
         string role
+        boolean is_active
+        timestamptz created_at
+    }
+
+    SESSIONS {
+        uuid id PK
+        uuid user_id FK
+        string token_hash
+        timestamptz expires_at
         timestamptz created_at
     }
 
@@ -90,6 +101,30 @@ erDiagram
         timestamptz created_at
     }
 
+    STORAGE_FILES {
+        uuid id PK
+        uuid app_id FK
+        uuid owner_id FK
+        string collection
+        string filename
+        string storage_path
+        string mime_type
+        bigint size_bytes
+        boolean is_public
+        timestamptz created_at
+    }
+
+    VAULT_GRANTS {
+        uuid id PK
+        uuid app_id FK
+        uuid owner_id FK
+        uuid grantee_user_id FK
+        string collection
+        string filename
+        string role
+        timestamptz created_at
+    }
+
     ORGANIZATIONS ||--o{ USERS : "has"
     ORGANIZATIONS ||--o{ APPS : "owns"
     ORGANIZATIONS ||--o{ AUDIT_LOG : "records"
@@ -101,6 +136,12 @@ erDiagram
     APPS ||--o{ AUDIT_LOG : "scoped to"
     USERS ||--o{ USER_APP_ACCESS : "receives"
     USERS ||--o{ AUDIT_LOG : "performed by"
+    USERS ||--o{ SESSIONS : "authenticates"
+    APPS ||--o{ STORAGE_FILES : "stores"
+    USERS ||--o{ STORAGE_FILES : "owns"
+    APPS ||--o{ VAULT_GRANTS : "scoped to"
+    USERS ||--o{ VAULT_GRANTS : "grants/receives"
+    STORAGE_FILES ||--o{ VAULT_GRANTS : "shared via"
 ```
 
 ## Key Design Notes

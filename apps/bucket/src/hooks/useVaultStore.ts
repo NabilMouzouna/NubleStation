@@ -1,9 +1,56 @@
+/**
+ * useVaultStore — React hook powered by @nublestation/vault
+ *
+ * ── OWNERSHIP & SHARING (ADR 016) ────────────────────────────────────────────
+ *
+ *  Bucket is an S3-style app: every file is owned by the Identity user who
+ *  uploaded it and is private by default. The store exposes three views, each
+ *  backed by a dedicated SDK call:
+ *
+ *    view "mine"   → vault.listMine()           files I own (full folder tree)
+ *    view "shared" → vault.listSharedWithMe()   files others shared with me
+ *    view "public" → vault.listPublic()         public files across the app
+ *
+ *  Sharing is per-individual (viewer / editor):
+ *    vault.share(collection, filename, granteeUserId, role)
+ *    vault.unshare(collection, filename, granteeUserId)
+ *    vault.listGrants(collection, filename)
+ *
+ *  The session cookie identifies the user; the Gateway resolves it to a user_id
+ *  and Vault stamps/checks ownership. None of this is the developer's job beyond
+ *  picking the right list call and offering a share UI.
+ *
+ * ── THE SDK METHODS ──────────────────────────────────────────────────────────
+ *
+ *  vault.upload(collection, filename, data)   → POST  /v1/vault/files/{c}/{f}
+ *  vault.listMine(collection?)                → GET   /v1/vault/files/mine
+ *  vault.listSharedWithMe()                   → GET   /v1/vault/files/shared
+ *  vault.listPublic(collection?)              → GET   /v1/vault/files/public
+ *  vault.download(collection, filename)       → GET   /v1/vault/files/{c}/{f}
+ *  vault.setPublic(collection, filename, b)   → PATCH /v1/vault/files/{c}/{f}
+ *  vault.delete(collection, filename)         → DELETE/v1/vault/files/{c}/{f}
+ *  vault.share / unshare / listGrants         → /v1/vault/grants
+ *
+ * ── COLLECTIONS vs. FOLDERS ──────────────────────────────────────────────────
+ *
+ *  Collections are a flat namespace (not real directories). Uploading to
+ *  "reports/q1.pdf" implicitly creates the "reports" collection. The "mine"
+ *  view maps the unique collection names of my files → UI folders.
+ * ─────────────────────────────────────────────────────────────────────────────
+ */
+
 import { useState, useEffect, useCallback } from 'react'
-import { createClient, VaultError } from '@nublestation/client'
+
+import { createVaultClient, VaultError } from '@nublestation/vault'
+import type { FileResult, Grant, GrantRole } from '@nublestation/vault'
 
 // ---------------------------------------------------------------------------
-// Types — kept compatible with existing UI components
+// Types — local UI shape, separate from the SDK's FileResult
 // ---------------------------------------------------------------------------
+
+export type VaultView = 'mine' | 'shared' | 'public'
+
+export type FileRole = 'owner' | 'editor' | 'viewer' | 'public'
 
 export type FileItem = {
   id: string
@@ -11,35 +58,64 @@ export type FileItem = {
   size: number
   type: string
   isPublic: boolean
-  createdAt: number
+  createdAt: number      // milliseconds (JS Date.getTime()), not ISO string
   folderName: string | null  // maps to Vault collection name
-  dataUrl: string          // always '' — image preview falls back to type icon
+  dataUrl: string            // always '' — image preview falls back to type icon
+  ownerId: string | null     // Identity user id of the owner (ADR 016)
+  role?: FileRole            // the caller's relationship to this file
 }
 
 export type Folder = {
-  id: string      // same as collection name
+  id: string      // same as collection name (the stable key)
   name: string
   createdAt: number
 }
 
+export type { Grant, GrantRole } from '@nublestation/vault'
+
 // ---------------------------------------------------------------------------
-// Config
+// SDK client — created ONCE at module level (pure factory, no side effects).
 // ---------------------------------------------------------------------------
 
-const NUBLE_URL = import.meta.env.VITE_NUBLESTATION_URL as string
+const NUBLE_URL = (import.meta.env.VITE_NUBLESTATION_URL as string) || 'http://api.nuble.local'
 const NUBLE_KEY = import.meta.env.VITE_NUBLESTATION_API_KEY as string
-const DEFAULT_COLLECTION = 'files'
+const DEFAULT_COLLECTION = 'bucket'
 
-if (!NUBLE_URL) console.error('[Bucket] VITE_NUBLESTATION_URL is not set')
+// Vault collections are implicit — they exist only while a file lives in them.
+// To make an *empty* folder persist, we drop a hidden zero-byte marker file in
+// the collection. The marker is filtered out of the file list but still keeps
+// the collection alive across reloads.
+const KEEP_MARKER = '.keep'
+
 if (!NUBLE_KEY) console.error('[Bucket] VITE_NUBLESTATION_API_KEY is not set')
 
-const { vault } = createClient({ url: NUBLE_URL, apiKey: NUBLE_KEY })
+const vault = createVaultClient({ url: NUBLE_URL, apiKey: NUBLE_KEY })
+
+// ---------------------------------------------------------------------------
+// Helper — maps a SDK FileResult row → our local FileItem shape
+// ---------------------------------------------------------------------------
+
+function toFileItem(r: FileResult, fallbackSize = 0): FileItem {
+  return {
+    id:         r.id,
+    name:       r.filename,
+    size:       r.sizeBytes ?? fallbackSize,
+    type:       r.mimeType  ?? 'application/octet-stream',
+    isPublic:   r.isPublic,
+    createdAt:  new Date(r.createdAt).getTime(),  // ISO → ms
+    folderName: r.collection,
+    dataUrl:    '',
+    ownerId:    r.ownerId,
+    role:       r.role,
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Hook
 // ---------------------------------------------------------------------------
 
 export function useVaultStore() {
+  const [view, setViewState] = useState<VaultView>('mine')
   const [files, setFiles]     = useState<FileItem[]>([])
   const [folders, setFolders] = useState<Folder[]>([
     { id: DEFAULT_COLLECTION, name: DEFAULT_COLLECTION, createdAt: Date.now() },
@@ -49,77 +125,79 @@ export function useVaultStore() {
 
   const totalBytes = files.reduce((s, f) => s + f.size, 0)
 
-  // ── Load all files on mount ──────────────────────────────────────────────
-
+  // ── Load the active view ─────────────────────────────────────────────────
+  // "mine" derives folders from my collections; the other views are flat.
   useEffect(() => {
     let cancelled = false
     setLoading(true)
-    vault.list()
-      .then(rows => {
+
+    const load = async (): Promise<{ rows: FileResult[] }> => {
+      if (view === 'mine')   return { rows: await vault.listMine() }
+      if (view === 'shared') return { rows: await vault.listSharedWithMe() }
+      return { rows: await vault.listPublic() }
+    }
+
+    load()
+      .then(({ rows }) => {
         if (cancelled) return
+        // Marker files keep empty collections alive but must never be shown.
+        setFiles(rows.filter((r) => r.filename !== KEEP_MARKER).map((r) => toFileItem(r)))
 
-        const items: FileItem[] = rows.map(r => ({
-          id:        r.id,
-          name:      r.filename,
-          size:      r.sizeBytes ?? 0,
-          type:      r.mimeType ?? 'application/octet-stream',
-          isPublic:  r.isPublic,
-          createdAt: new Date(r.createdAt).getTime(),
-          folderName:  r.collection,
-          dataUrl:   '',
-        }))
-        setFiles(items)
-
-        // Derive folders from unique collection names
-        const seen = new Set<string>()
-        const derived: Folder[] = []
-        for (const r of rows) {
-          if (!seen.has(r.collection)) {
-            seen.add(r.collection)
-            derived.push({ id: r.collection, name: r.collection, createdAt: Date.now() })
+        if (view === 'mine') {
+          const seen = new Set<string>()
+          const derived: Folder[] = []
+          // Derive folders from ALL rows (incl. markers) so empty folders show.
+          for (const r of rows) {
+            if (!seen.has(r.collection)) {
+              seen.add(r.collection)
+              derived.push({ id: r.collection, name: r.collection, createdAt: Date.now() })
+            }
           }
+          if (!seen.has(DEFAULT_COLLECTION)) {
+            derived.unshift({ id: DEFAULT_COLLECTION, name: DEFAULT_COLLECTION, createdAt: Date.now() })
+          }
+          setFolders(derived)
+        } else {
+          setFolders([])
         }
-        if (!seen.has(DEFAULT_COLLECTION)) {
-          derived.unshift({ id: DEFAULT_COLLECTION, name: DEFAULT_COLLECTION, createdAt: Date.now() })
-        }
-        setFolders(derived)
       })
-      .catch(err => {
-        if (!cancelled) setError(err instanceof VaultError ? err.code : 'Failed to load files')
+      .catch((err) => {
+        if (cancelled) return
+        console.warn('[Vault] list failed:', err instanceof VaultError ? err.code : err)
+        setFiles([])
       })
       .finally(() => { if (!cancelled) setLoading(false) })
 
     return () => { cancelled = true }
+  }, [view])
+
+  const setView = useCallback((v: VaultView) => {
+    setError(null)
+    setViewState(v)
   }, [])
 
-  // ── Upload ───────────────────────────────────────────────────────────────
-
+  // ── vault.upload() — add files to the current collection (owner = me) ─────
   const addFiles = useCallback(async (
     pending: { file: File; isPublic: boolean; folderName: string | null }[]
   ): Promise<boolean> => {
     try {
       const uploaded: FileItem[] = []
+
       for (const { file, isPublic, folderName } of pending) {
         const collection = folderName ?? DEFAULT_COLLECTION
         const bytes  = new Uint8Array(await file.arrayBuffer())
         const result = await vault.upload(collection, file.name, bytes)
         if (isPublic) await vault.setPublic(collection, file.name, true)
-        uploaded.push({
-          id:        result.id,
-          name:      result.filename,
-          size:      result.sizeBytes ?? file.size,
-          type:      result.mimeType ?? file.type,
-          isPublic,
-          createdAt: new Date(result.createdAt).getTime(),
-          folderName:  collection,
-          dataUrl:   '',
-        })
+
+        uploaded.push({ ...toFileItem(result, file.size), isPublic, role: 'owner' })
+
         setFolders(prev =>
           prev.some(f => f.id === collection)
             ? prev
-            : [...prev, { id: collection, name: collection, parentId: null, createdAt: Date.now() }]
+            : [...prev, { id: collection, name: collection, createdAt: Date.now() }]
         )
       }
+
       setFiles(prev => [...prev, ...uploaded])
       return true
     } catch (err) {
@@ -128,8 +206,7 @@ export function useVaultStore() {
     }
   }, [])
 
-  // ── Delete file ──────────────────────────────────────────────────────────
-
+  // ── vault.delete() — remove a single file ───────────────────────────────
   const deleteFile = useCallback(async (id: string) => {
     const file = files.find(f => f.id === id)
     if (!file) return
@@ -141,15 +218,7 @@ export function useVaultStore() {
     }
   }, [files])
 
-  // ── Rename — not supported by Vault ─────────────────────────────────────
-
-  const renameFile = useCallback((_id: string, _name: string) => {
-    setError('Rename is not supported — delete and re-upload with the new name.')
-    setTimeout(() => setError(null), 3000)
-  }, [])
-
-  // ── Toggle visibility ────────────────────────────────────────────────────
-
+  // ── vault.setPublic() — toggle file visibility (owner only) ──────────────
   const toggleFileVisibility = useCallback(async (id: string) => {
     const file = files.find(f => f.id === id)
     if (!file) return
@@ -161,13 +230,12 @@ export function useVaultStore() {
     }
   }, [files])
 
-  // ── Download ─────────────────────────────────────────────────────────────
-
+  // ── vault.download() — get raw bytes ─────────────────────────────────────
   const downloadFile = useCallback(async (file: FileItem) => {
     try {
-      const bytes = await vault.download(file.folderName ?? DEFAULT_COLLECTION, file.name)
-      const url   = URL.createObjectURL(new Blob([bytes], { type: file.type }))
-      const a     = document.createElement('a')
+      const buffer = await vault.download(file.folderName ?? DEFAULT_COLLECTION, file.name)
+      const url    = URL.createObjectURL(new Blob([buffer], { type: file.type }))
+      const a      = document.createElement('a')
       a.href = url; a.download = file.name; a.click()
       URL.revokeObjectURL(url)
     } catch (err) {
@@ -175,14 +243,39 @@ export function useVaultStore() {
     }
   }, [])
 
-  // ── Folders (UI-only — Vault collections are flat) ───────────────────────
+  // ── Preview — fetch bytes and return a blob URL the caller must revoke ────
+  const getPreviewUrl = useCallback(async (file: FileItem): Promise<string> => {
+    const buffer = await vault.download(file.folderName ?? DEFAULT_COLLECTION, file.name)
+    return URL.createObjectURL(new Blob([buffer], { type: file.type }))
+  }, [])
 
-  const createFolder = useCallback((name: string, _parentId: string | null): string => {
+  // ── Sharing (ADR 016) ────────────────────────────────────────────────────
+  const getGrants = useCallback(async (file: FileItem): Promise<Grant[]> => {
+    return vault.listGrants(file.folderName ?? DEFAULT_COLLECTION, file.name)
+  }, [])
+
+  const shareFile = useCallback(async (file: FileItem, granteeUserId: string, role: GrantRole) => {
+    await vault.share(file.folderName ?? DEFAULT_COLLECTION, file.name, granteeUserId, role)
+  }, [])
+
+  const unshareFile = useCallback(async (file: FileItem, granteeUserId: string) => {
+    await vault.unshare(file.folderName ?? DEFAULT_COLLECTION, file.name, granteeUserId)
+  }, [])
+
+  // ── Folders — materialize a real Vault collection via a hidden marker ─────
+  const createFolder = useCallback(async (name: string, _parentId: string | null): Promise<string> => {
     const id = name.toLowerCase().replace(/\s+/g, '-')
+    // Drop a zero-byte marker so the collection persists even while empty.
+    try {
+      await vault.upload(id, KEEP_MARKER, new Uint8Array(0))
+    } catch (err) {
+      setError(err instanceof VaultError ? err.code : 'Failed to create folder')
+      throw err
+    }
     setFolders(prev =>
       prev.some(f => f.id === id)
         ? prev
-        : [...prev, { id, name, parentId: null, createdAt: Date.now() }]
+        : [...prev, { id, name, createdAt: Date.now() }]
     )
     return id
   }, [])
@@ -194,17 +287,21 @@ export function useVaultStore() {
   const deleteFolder = useCallback(async (id: string) => {
     const toDelete = files.filter(f => f.folderName === id)
     try {
-      await Promise.all(toDelete.map(f =>
-        vault.delete(f.folderName ?? DEFAULT_COLLECTION, f.name)
-      ))
-      setFiles(prev => prev.filter(f => f.folderName !== id))
-      setFolders(prev => prev.filter(f => f.id !== id))
+      await Promise.all(
+        toDelete.map(f => vault.delete(f.folderName ?? DEFAULT_COLLECTION, f.name))
+      )
+      // Remove the hidden marker too, or the empty collection would linger.
+      await vault.delete(id, KEEP_MARKER).catch(() => {})
+      setFiles(prev    => prev.filter(f => f.folderName !== id))
+      setFolders(prev  => prev.filter(f => f.id !== id))
     } catch (err) {
       setError(err instanceof VaultError ? err.code : 'Failed to delete folder')
     }
   }, [files])
 
   return {
+    view,
+    setView,
     files,
     folders,
     totalBytes,
@@ -212,9 +309,12 @@ export function useVaultStore() {
     error,
     addFiles,
     deleteFile,
-    renameFile,
     toggleFileVisibility,
     downloadFile,
+    getPreviewUrl,
+    getGrants,
+    shareFile,
+    unshareFile,
     createFolder,
     renameFolder,
     deleteFolder,

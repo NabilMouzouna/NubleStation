@@ -39,6 +39,11 @@ COPY --from=builder --chown=nextjs:nodejs /app/apps/console/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/apps/console/.next/static ./apps/console/.next/static
 COPY --from=builder --chown=nextjs:nodejs /app/apps/console/public ./apps/console/public
 
+# pnpm hoists native packages under .pnpm/ but doesn't create the top-level
+# @node-rs symlink that Node.js require() needs. Create it here so the
+# standalone server can load @node-rs/argon2 at runtime.
+RUN ln -s /app/node_modules/.pnpm/node_modules/@node-rs /app/node_modules/@node-rs
+
 USER nextjs
 EXPOSE 3000
 

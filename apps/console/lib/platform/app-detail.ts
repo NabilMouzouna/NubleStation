@@ -26,7 +26,15 @@ export interface ApiKeyRow {
 export interface AppTableRow {
   id: string;
   table_name: string;
+  schema_json: { version: 1; tables: Record<string, { fields: Record<string, { type: string; required: boolean }> }> } | null;
   created_at: string;
+}
+
+export interface MigrationRow {
+  id: string;
+  filename: string;
+  checksum: string;
+  applied_at: string;
 }
 
 export async function getAppBySlug(slug: string): Promise<AppDetail | null> {
@@ -100,13 +108,91 @@ export async function getVaultSettings(appId: string): Promise<VaultSettingsRow>
   return rows[0] ?? { allowed_extensions: [], max_file_bytes: 52_428_800 };
 }
 
+export interface StorageStatRow {
+  id: string;
+  name: string;
+  display_name: string;
+  file_count: number;
+  total_bytes: number;
+}
+
+export async function getStorageStats(): Promise<StorageStatRow[]> {
+  const pool = getPlatformPool();
+  const { rows } = await pool.query<StorageStatRow>(
+    `SELECT a.id, a.name, a.display_name,
+            COUNT(sf.id)::int            AS file_count,
+            COALESCE(SUM(sf.size_bytes), 0)::bigint AS total_bytes
+     FROM platform.apps a
+     LEFT JOIN platform.storage_files sf ON sf.app_id = a.id
+     WHERE a.name <> 'identity-system'
+     GROUP BY a.id, a.name, a.display_name
+     ORDER BY total_bytes DESC`,
+  );
+  return rows;
+}
+
+export interface AppUserRow {
+  id: string;
+  email: string;
+  display_name: string | null;
+  avatar_url: string | null;
+  role: string;
+  created_at: string;
+}
+
+export interface OrgAdminRow {
+  id: string;
+  email: string;
+  display_name: string | null;
+  avatar_url: string | null;
+  role: string;
+}
+
+/** Org-level admins — implicit admin on every app (ADR 014). */
+export async function getOrgAdmins(): Promise<OrgAdminRow[]> {
+  const { rows } = await getPlatformPool().query<OrgAdminRow>(
+    `SELECT id, email, display_name, avatar_url, role
+     FROM platform.users
+     WHERE role IN ('super_admin', 'admin') AND is_active = true
+     ORDER BY email`,
+  );
+  return rows;
+}
+
+/** End-users with explicit per-app grants. */
+export async function getAppUsers(appId: string): Promise<AppUserRow[]> {
+  const pool = getPlatformPool();
+  const { rows } = await pool.query<AppUserRow>(
+    `SELECT u.id, u.email, u.display_name, u.avatar_url, ua.role, ua.created_at
+     FROM platform.user_app_access ua
+     JOIN platform.users u ON u.id = ua.user_id
+     WHERE ua.app_id = $1
+     ORDER BY u.email`,
+    [appId],
+  );
+  return rows;
+}
+
 export async function getAppTables(appId: string): Promise<AppTableRow[]> {
   const pool = getPlatformPool();
   const { rows } = await pool.query<AppTableRow>(
-    `SELECT id, table_name, created_at
+    `SELECT id, table_name, schema_json, created_at
      FROM platform.app_tables
      WHERE app_id = $1
      ORDER BY created_at ASC`,
+    [appId],
+  );
+  return rows;
+}
+
+export async function getMigrations(appId: string): Promise<MigrationRow[]> {
+  const pool = getPlatformPool();
+  const { rows } = await pool.query<MigrationRow>(
+    `SELECT id, filename, checksum, applied_at
+     FROM platform.migrations
+     WHERE app_id = $1
+     ORDER BY applied_at DESC
+     LIMIT 20`,
     [appId],
   );
   return rows;

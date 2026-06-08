@@ -2,6 +2,10 @@ import { randomBytes } from "node:crypto";
 import { hash } from "@node-rs/argon2";
 import { getPlatformPool } from "./db";
 
+// Reserved internal app that owns the Identity avatar bucket (ADR 014).
+// Hidden from all user-facing app listings.
+export const SYSTEM_APP_SLUG = "identity-system";
+
 export interface AppRow {
   id: string;
   name: string;
@@ -16,7 +20,9 @@ export async function listApps(): Promise<AppRow[]> {
     `SELECT a.id, a.name, a.display_name, a.created_at,
             (EXISTS (SELECT 1 FROM platform.deployments d WHERE d.app_id = a.id)) AS has_deployment
      FROM platform.apps a
+     WHERE a.name <> $1
      ORDER BY a.created_at DESC`,
+    [SYSTEM_APP_SLUG],
   );
   return rows;
 }

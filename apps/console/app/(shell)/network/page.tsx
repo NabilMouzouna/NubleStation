@@ -3,6 +3,7 @@ import { ArrowUpRight } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@nublestation/ui/components/card";
 import { checkServices, type ServiceHealth } from "@/lib/platform/health";
 import { listApps } from "@/lib/platform/apps";
+import { BandwidthCard } from "./_bandwidth-card";
 
 const DOCS = "https://nabilmouzouna.github.io/NubleStation/docs";
 
@@ -104,6 +105,10 @@ export default async function NetworkPage() {
             </div>
           </CardContent>
         </Card>
+      </div>
+
+      <div className="mt-6">
+        <BandwidthCard domain={domain} />
       </div>
 
       <div className="mt-6 overflow-hidden rounded-3xl border border-border">

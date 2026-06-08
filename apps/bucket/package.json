@@ -12,7 +12,9 @@
   "dependencies": {
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
-    "@nublestation/client": "workspace:*"
+    "@nublestation/vault": "workspace:*",
+    "@nublestation/identity": "workspace:*",
+    "@nublestation/blaze": "workspace:*"
   },
   "devDependencies": {
     "@babel/core": "^7.29.0",

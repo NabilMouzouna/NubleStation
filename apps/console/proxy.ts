@@ -12,7 +12,7 @@ export function proxy(request: NextRequest) {
 
   // Cookie presence check only — Edge runtime cannot run SQLite.
   // Full expiry + DB validation is the second layer inside the shell layout.
-  const session = request.cookies.get("nuble_session");
+  const session = request.cookies.get("nuble_console");
   if (!session?.value) {
     return NextResponse.redirect(new URL("/auth", request.url));
   }

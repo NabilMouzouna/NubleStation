@@ -29,7 +29,7 @@ pub.get("/vault/:appSlug/:collection/:filename", async (c) => {
       "content-type":        row.mime_type ?? "application/octet-stream",
       "content-length":      String(data.byteLength),
       "content-disposition": `inline; filename="${filename}"`,
-      "cache-control":       "public, max-age=3600",
+      "cache-control":       "no-store",
     },
   });
 });

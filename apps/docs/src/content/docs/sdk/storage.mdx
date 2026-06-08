@@ -82,10 +82,10 @@ const result = await vault.upload("reports", "q1.pdf", bytes);
 
 ### `vault.list(collection?)`
 
-List files. Omit `collection` to list all files for the app.
+List every file the caller can access — own ∪ shared ∪ public ∪ communal (app-admins see all). Omit `collection` to span all collections.
 
 ```typescript
-// All files
+// Everything I can see
 const all = await vault.list();
 
 // Only files in a collection
@@ -98,6 +98,38 @@ for (const file of records) {
 ```
 
 **Returns:** `Promise<FileResult[]>`
+
+---
+
+### Ownership & sharing (ADR 016)
+
+When your app wires in [Identity](/docs/services/auth), every file is **owned** by the user who uploaded it and is private by default. These methods give the Drive-style views and per-user sharing. They require a session cookie (sent automatically) — see [Vault — Access Control](/docs/services/storage-access) for the full model.
+
+```typescript
+// Scoped listings
+const mine   = await vault.listMine();          // files I own
+const shared = await vault.listSharedWithMe();  // shared with me — each FileResult.role is "viewer"|"editor"
+const open   = await vault.listPublic();        // the public space
+
+// Share a file (or a whole collection when filename is null) with one user
+await vault.share("reports", "q1.pdf", granteeUserId, "editor"); // "viewer" | "editor"
+await vault.unshare("reports", "q1.pdf", granteeUserId);
+
+// Who is a resource I own shared with?
+const grants = await vault.listGrants("reports", "q1.pdf");
+// → [{ granteeUserId, granteeEmail, granteeName, collection, filename, role, createdAt }]
+```
+
+Get the list of users you can share with from `@nublestation/identity`:
+
+```typescript
+import { createIdentityClient } from "@nublestation/identity";
+const identity = createIdentityClient({ url, identityUrl, app: "bucket" });
+
+const people = await identity.listAppUsers(); // everyone with access to this app, minus you
+```
+
+All of this is enforced **server-side**. A `viewer` calling `delete()`, or reading a private file they weren't granted, gets `403` no matter what the client does.
 
 ---
 
@@ -179,12 +211,14 @@ All methods that return file metadata use this shape:
 ```typescript
 interface FileResult {
   id:         string;       // UUID assigned by the platform
+  ownerId:    string | null; // Identity user id of the owner (null = communal)
   collection: string;       // collection name
   filename:   string;       // filename as uploaded
   mimeType:   string | null; // detected from file bytes, not the client header
   sizeBytes:  number | null; // file size in bytes
   isPublic:   boolean;      // whether the file is publicly accessible
   createdAt:  string;       // ISO 8601 timestamp
+  role?:      "owner" | "editor" | "viewer" | "public"; // your access, on scoped lists
 }
 ```
 

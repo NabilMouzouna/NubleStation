@@ -1,10 +1,31 @@
 import { Hono } from "hono";
+import { cors } from "hono/cors";
 import { logger as pinoLogger } from "./logger.js";
 import { health } from "./routes/health.js";
 import { proxy } from "./routes/proxy.js";
 
+// Allow any *.local origin (LAN-deployed apps) and localhost (any port) for dev.
+// Returns the origin itself to echo the actual value in the ACAO header, which
+// is required when credentials are involved or the port varies.
+const LAN_ORIGIN_RE = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$|^https?:\/\/[^/]+\.local(:\d+)?$/;
+
 export function buildServer() {
   const app = new Hono();
+
+  app.use(
+    "*",
+    cors({
+      origin: (origin) => (LAN_ORIGIN_RE.test(origin) ? origin : ""),
+      allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+      allowHeaders: ["Authorization", "Content-Type"],
+      exposeHeaders: ["Content-Type", "Content-Length"],
+      // Lets app frontends call /v1/auth/me with credentials:'include' so the
+      // session cookie is honored cross-subdomain (Identity SSO). Safe because
+      // the origin is reflected from the LAN allow-list above, never "*".
+      credentials: true,
+      maxAge: 86400,
+    }),
+  );
 
   app.use("*", async (c, next) => {
     const start = Date.now();

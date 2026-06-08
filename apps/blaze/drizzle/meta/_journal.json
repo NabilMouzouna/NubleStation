@@ -15,6 +15,20 @@
       "when": 1780168785929,
       "tag": "0001_lowly_marauders",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1780579674847,
+      "tag": "0002_harsh_brood",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1780767738343,
+      "tag": "0003_rich_ricochet",
+      "breakpoints": true
     }
   ]
 }

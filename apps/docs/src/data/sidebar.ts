@@ -11,6 +11,12 @@ export interface SidebarGroup {
 
 export const sidebar: SidebarGroup[] = [
   {
+    title: 'AI Agents',
+    items: [
+      { title: 'AGENT.md', slug: 'agent', badge: { text: 'AI', color: '#7c3aed' } },
+    ],
+  },
+  {
     title: 'Getting Started',
     items: [
       { title: 'Introduction', slug: 'getting-started/introduction' },
@@ -25,7 +31,8 @@ export const sidebar: SidebarGroup[] = [
       { title: 'Orbit — Deploy', slug: 'services/deploy', badge: { text: 'Live', color: '#059669' } },
       { title: 'Blaze — Database', slug: 'services/database' },
       { title: 'Vault — Storage', slug: 'services/storage', badge: { text: 'Live', color: '#059669' } },
-      { title: 'Identity — Auth', slug: 'services/auth', badge: { text: 'Soon', color: '#d97706' } },
+      { title: 'Vault — Access Control', slug: 'services/storage-access', badge: { text: 'Live', color: '#059669' } },
+      { title: 'Identity — Auth', slug: 'services/auth', badge: { text: 'Live', color: '#059669' } },
     ],
   },
   {
@@ -49,6 +56,7 @@ export const sidebar: SidebarGroup[] = [
       { title: 'Docker Compose', slug: 'infrastructure/docker-compose' },
       { title: 'Caddy', slug: 'infrastructure/caddy' },
       { title: 'CoreDNS', slug: 'infrastructure/coredns' },
+      { title: 'DNS Doctor', slug: 'infrastructure/dns-doctor' },
     ],
   },
   {
@@ -62,8 +70,10 @@ export const sidebar: SidebarGroup[] = [
     title: 'SDK',
     items: [
       { title: 'Overview', slug: 'sdk/overview' },
+      { title: '@nublestation/client', slug: 'sdk/client', badge: { text: 'Live', color: '#059669' } },
       { title: '@nublestation/vault', slug: 'sdk/storage', badge: { text: 'Live', color: '#059669' } },
-      { title: '@nublestation/blaze', slug: 'sdk/database', badge: { text: 'Soon', color: '#d97706' } },
+      { title: '@nublestation/identity', slug: 'sdk/auth', badge: { text: 'Live', color: '#059669' } },
+      { title: '@nublestation/blaze', slug: 'sdk/database', badge: { text: 'Live', color: '#059669' } },
     ],
   },
   {

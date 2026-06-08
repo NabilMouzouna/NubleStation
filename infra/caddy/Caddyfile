@@ -19,11 +19,27 @@ api.{$ORG_DOMAIN}.local:80 {
     }
 }
 
+# Identity — user-facing auth pages + form posts (login/register/authorize)
+identity.{$ORG_DOMAIN}.local:80 {
+    reverse_proxy identity:3004
+    log {
+        output stdout
+    }
+}
+
+# Speedtest — OpenSpeedTest LAN diagnostics UI (browser-based, offline)
+speedtest.{$ORG_DOMAIN}.local:80 {
+    reverse_proxy openspeedtest:3000
+    log {
+        output stdout
+    }
+}
+
 # Deployed app frontends — served from /var/nuble/apps/{appname}/current/
 # {labels.1} extracts the first subdomain label (e.g. "tasks" from tasks.nuble.local)
 *.{$ORG_DOMAIN}.local:80 {
     @notReserved {
-        not host console.{$ORG_DOMAIN}.local api.{$ORG_DOMAIN}.local
+        not host console.{$ORG_DOMAIN}.local api.{$ORG_DOMAIN}.local identity.{$ORG_DOMAIN}.local speedtest.{$ORG_DOMAIN}.local
     }
     handle @notReserved {
         root * /var/nuble/apps/{labels.2}/current

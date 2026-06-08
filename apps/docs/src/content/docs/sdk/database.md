@@ -1,170 +1,139 @@
 ---
-title: Database Queries
-description: Full reference for nuble.db.* — CRUD, filters, relations, aggregations, and escape hatches.
+title: "@nublestation/blaze"
+description: Schema-as-code plus a typed auto-REST client for your app's tables.
 ---
 
-## CRUD
+`@nublestation/blaze` is two things in one package:
 
-### findMany
+1. A **schema DSL** (`defineSchema`, `t`) you use to declare your tables in TypeScript.
+2. A **typed table client** (`createBlazeClient`) that gives every table `list` / `get` /
+   `create` / `update` / `delete` methods, fully typed from your schema.
+
+You can also reach the same table client through the unified
+[`@nublestation/client`](/NubleStation/docs/sdk/client) as `nuble.blaze`.
+
+## Installation
+
+```bash
+npm install @nublestation/blaze
+# or
+pnpm add @nublestation/blaze
+```
+
+## 1. Declare your schema
 
 ```typescript
-const tasks = await nuble.db.tasks.findMany({
-  where: { status: 'pending' },
-  orderBy: { createdAt: 'desc' },
-  limit: 20,
-  offset: 0,
-  select: ['id', 'title', 'status', 'priority'],
+// schema.ts
+import { defineSchema, t } from "@nublestation/blaze";
+
+export const schema = defineSchema({
+  file_comments: t.model({
+    file_id:     t.string().required(),
+    body:        t.string().required(),
+    author_id:   t.string().required(),
+    author_name: t.string().required(),
+  }),
 });
 ```
 
-### findOne
+Field builders: `t.string()`, `t.number()`, `t.boolean()`, `t.uuid()`, `t.timestamp()`,
+`t.json()`, `t.enum([...])`, `t.ref("table")`. Modifiers: `.required()`, `.unique()`,
+`.default(value)`, `.index()`. Every table automatically gets an `id` (uuid, primary key)
+and an `app_id` (uuid) column — you never declare those.
+
+Push the schema with the CLI — see [`nuble db push`](/NubleStation/docs/cli/commands).
+
+## 2. Create a client
 
 ```typescript
-const task = await nuble.db.tasks.findOne({
-  where: { id: taskId },
-});
-// returns Task | null
+import { createBlazeClient } from "@nublestation/blaze";
+import { schema } from "./schema";
+
+const blaze = createBlazeClient({
+  baseUrl: "http://api.clinic.local",
+  apiKey:  "nbl_<key_id>.<secret>",
+  schema,
+}).db;
+```
+
+`schema` is optional, but passing it makes table names and row shapes type-safe.
+
+## 3. CRUD
+
+Every table exposes five methods. They map 1:1 to the auto-generated REST endpoints
+([Blaze service](/NubleStation/docs/services/database)).
+
+### list
+
+```typescript
+const comments = await blaze.file_comments.list();
+const page2    = await blaze.file_comments.list({ limit: 20, offset: 20 });
+```
+
+`list(opts?)` returns every row for your app (subject to RLS), with optional `limit` and
+`offset` for pagination.
+
+### get
+
+```typescript
+const comment = await blaze.file_comments.get(commentId);
+// returns the row, or throws if not found
 ```
 
 ### create
 
 ```typescript
-const task = await nuble.db.tasks.create({
-  title: 'Review chart — John Doe',
-  priority: 'high',
-  status: 'pending',
+const comment = await blaze.file_comments.create({
+  file_id:     fileId,
+  body:        "Looks good to me",
+  author_id:   user.id,
+  author_name: user.name,
 });
-// returns Task (with server-generated id and createdAt)
+// returns the created row, with server-generated id
 ```
 
 ### update
 
 ```typescript
-const updated = await nuble.db.tasks.update(taskId, {
-  status: 'in_progress',
+const updated = await blaze.file_comments.update(commentId, {
+  body: "Edited comment",
 });
 ```
+
+`update` accepts a partial — unknown fields are dropped silently by the server.
 
 ### delete
 
 ```typescript
-await nuble.db.tasks.delete(taskId);
+await blaze.file_comments.delete(commentId);
 ```
 
-## Filter operators
+## Current limitations
 
-| Operator | Meaning | Example |
-|---|---|---|
-| `eq` | equals | `{ status: { eq: 'pending' } }` or shorthand `{ status: 'pending' }` |
-| `neq` | not equals | `{ status: { neq: 'done' } }` |
-| `in` | in array | `{ priority: { in: ['high', 'medium'] } }` |
-| `nin` | not in array | `{ priority: { nin: ['low'] } }` |
-| `gt` | greater than | `{ createdAt: { gt: '2026-01-01' } }` |
-| `gte` | greater or equal | `{ createdAt: { gte: '2026-01-01' } }` |
-| `lt` | less than | `{ createdAt: { lt: '2026-12-31' } }` |
-| `lte` | less or equal | `{ createdAt: { lte: '2026-12-31' } }` |
-| `like` | SQL LIKE | `{ title: { like: '%urgent%' } }` |
-| `ilike` | case-insensitive LIKE | `{ title: { ilike: '%urgent%' } }` |
-| `is` | IS NULL / IS NOT NULL | `{ assigneeId: { is: null } }` |
-| `contains` | JSONB contains (`@>`) | `{ metadata: { contains: { tag: 'vip' } } }` |
-| `hasKey` | JSONB key exists | `{ metadata: { hasKey: 'assignee' } }` |
+<Aside type="caution">
+  The shipped auto-REST surface is intentionally minimal. `list()` has **no server-side
+  WHERE/filter, sort, or join support yet** — it returns all of your app's rows. Filter,
+  sort, and paginate **client-side** for now:
 
-## Relations
+  ```typescript
+  const all = await blaze.file_comments.list();
+  const forFile = all.filter((c) => c.file_id === fileId);
+  ```
 
-Use `include` to fetch related rows in a single request:
+  Richer querying (filters, relations, aggregations) is on the
+  [roadmap](/NubleStation/docs/reference/roadmap).
+</Aside>
+
+## Isolation
+
+Every query runs inside a tenant-scoped transaction. Postgres Row-Level Security adds
+`app_id = current_setting('app.current_tenant')` to every statement, so one app can never
+read or write another app's rows — even though they share one physical table. See
+[Row-Level Security](/NubleStation/docs/security/row-level-security).
+
+## Exports
 
 ```typescript
-const task = await nuble.db.tasks.findOne({
-  where: { id: taskId },
-  include: {
-    assignee: true,               // t.ref('users') → joins users view
-    comments: {
-      include: { author: true },  // nested include
-      orderBy: { createdAt: 'asc' },
-    },
-  },
-});
+import { defineSchema, t, serializeSchema, createBlazeClient } from "@nublestation/blaze";
+import type { Schema, SerializedSchema, BlazeClient } from "@nublestation/blaze";
 ```
-
-This compiles to a single SQL query with JOINs — not N+1 requests.
-
-## Aggregations
-
-```typescript
-const stats = await nuble.db.tasks.aggregate({
-  count: true,
-  where: { status: 'done' },
-});
-// { count: 42 }
-
-const grouped = await nuble.db.tasks.aggregate({
-  groupBy: 'status',
-  count: true,
-});
-// [{ status: 'pending', count: 10 }, { status: 'done', count: 32 }, ...]
-```
-
-## Pagination
-
-```typescript
-// Offset-based
-const page1 = await nuble.db.tasks.findMany({ limit: 20, offset: 0 });
-const page2 = await nuble.db.tasks.findMany({ limit: 20, offset: 20 });
-```
-
-The SDK returns metadata alongside results:
-
-```typescript
-const { data, count, hasMore } = await nuble.db.tasks.findMany({
-  limit: 20,
-  paginate: true,
-});
-```
-
-## Selecting specific columns
-
-```typescript
-const titles = await nuble.db.tasks.findMany({
-  select: ['id', 'title'],
-  where: { status: 'pending' },
-});
-// [{ id: '...', title: '...' }, ...]
-```
-
-## Named queries (Level 2 escape)
-
-For complex SQL the builder can't express:
-
-```typescript
-const top = await nuble.db.query('topAssignees', { limit: 5 });
-// [{ userId: '...', taskCount: 12 }, ...]
-```
-
-Named queries are defined in `schema.ts` with `defineQuery()`, validated at push time, and logged to `audit_log` on every execution.
-
-## Built-in users
-
-```typescript
-// Find a user by email
-const user = await nuble.users.findBy({ email: 'dr.smith@clinic.local' });
-
-// Create a user (grants access to the calling app automatically)
-const newUser = await nuble.users.create({
-  email: 'nurse.jones@clinic.local',
-  password: 'secure-password',
-  role: 'nurse',
-});
-
-// List users with access to the calling app
-const users = await nuble.users.list();
-```
-
-## Limits enforced by the server
-
-| Limit | Default |
-|---|---|
-| Max rows per request | 1000 |
-| Max request body size | 100 KB |
-| Max query execution time | 30 s |
-
-Exceeding these returns a structured error with code `quota_exceeded` or `timeout`.

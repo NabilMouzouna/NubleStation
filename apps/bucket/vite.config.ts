@@ -1,21 +1,47 @@
-import { defineConfig } from 'vite'
+import { defineConfig, loadEnv } from 'vite'
 import react, { reactCompilerPreset } from '@vitejs/plugin-react'
 import babel from '@rolldown/plugin-babel'
 import { resolve } from 'node:path'
 
 // https://vite.dev/config/
-export default defineConfig({
+export default defineConfig(({ mode }) => {
+  // loadEnv reads .env files (with empty prefix → all keys, incl. shell vars)
+  // into a plain object. process.env alone misses .env files in config scope,
+  // which left VITE_NUBLESTATION_API_KEY empty and broke uploads.
+  const env = loadEnv(mode, process.cwd(), '')
+  const NUBLE_URL      = env.VITE_NUBLESTATION_URL          ?? 'http://api.nuble.local'
+  const NUBLE_KEY      = env.VITE_NUBLESTATION_API_KEY      ?? ''
+  const IDENTITY_URL   = env.VITE_NUBLESTATION_IDENTITY_URL ?? 'http://identity.nuble.local'
+  const APP_SLUG       = env.VITE_NUBLESTATION_APP          ?? 'bucket'
+
+  return {
   plugins: [
     react(),
     babel({ presets: [reactCompilerPreset()] })
   ],
+  // Guarantee env vars are baked into the production bundle.
+  define: {
+    'import.meta.env.VITE_NUBLESTATION_URL':          JSON.stringify(NUBLE_URL),
+    'import.meta.env.VITE_NUBLESTATION_API_KEY':       JSON.stringify(NUBLE_KEY),
+    'import.meta.env.VITE_NUBLESTATION_IDENTITY_URL':  JSON.stringify(IDENTITY_URL),
+    'import.meta.env.VITE_NUBLESTATION_APP':           JSON.stringify(APP_SLUG),
+  },
   resolve: {
     alias: {
-      // Point Vite at the pre-built dist so it doesn't need to resolve .ts sources.
-      // Run `pnpm --filter @nublestation/vault build` and
-      //     `pnpm --filter @nublestation/client build` after any SDK changes.
-      '@nublestation/vault':  resolve(__dirname, '../../packages/vault/dist/index.js'),
-      '@nublestation/client': resolve(__dirname, '../../packages/client/dist/index.js'),
+      '@nublestation/vault':    resolve(__dirname, '../../packages/vault/dist/index.js'),
+      '@nublestation/identity': resolve(__dirname, '../../packages/identity/dist/index.js'),
+      '@nublestation/client':   resolve(__dirname, '../../packages/client/dist/index.js'),
     },
   },
+  server: {
+    // Proxy all /v1/* requests to the NubleStation gateway so the browser
+    // never crosses origins — CORS is a browser constraint, not a server one.
+    proxy: {
+      '/v1': {
+        target: NUBLE_URL,
+        changeOrigin: true,
+      },
+    },
+  },
+  }
 })

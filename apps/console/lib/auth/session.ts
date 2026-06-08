@@ -1,7 +1,7 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { cookies } from "next/headers";
 
-const COOKIE_NAME = "nuble_session";
+const COOKIE_NAME = "nuble_console";
 const SESSION_TTL_MS = 8 * 60 * 60 * 1000; // 8 hours
 
 export interface AdminSession {
