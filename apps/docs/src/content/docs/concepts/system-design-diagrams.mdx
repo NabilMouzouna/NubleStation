@@ -1,0 +1,447 @@
+---
+title: System Design Diagrams
+description: Visual reference for NubleStation's architecture — components, request lifecycle, auth flows, and database schema. All diagrams are Mermaid-compatible and can be pasted directly into Eraser.io.
+---
+
+Four diagrams covering every layer of the system. Paste any block into [Eraser.io](https://eraser.io) (select the **Mermaid** renderer) or any Mermaid-compatible viewer.
+
+---
+
+## Diagram 1 — Full System Architecture
+
+The complete topology: LAN clients, DNS, reverse proxy, all services, data layer, volumes, and the npm packages that developers use.
+
+```mermaid
+graph TB
+    classDef client  fill:#4A90D9,stroke:#2C5F8A,color:#fff,rx:6
+    classDef exposed fill:#E07B39,stroke:#A85A1E,color:#fff,rx:6
+    classDef service fill:#3A7D44,stroke:#245C2F,color:#fff,rx:6
+    classDef admin   fill:#6B4C9A,stroke:#4A2F77,color:#fff,rx:6
+    classDef data    fill:#7B5EA7,stroke:#593D84,color:#fff,rx:6
+    classDef vol     fill:#8A6B3C,stroke:#5C4527,color:#fff,rx:6
+    classDef pkg     fill:#2A7FA5,stroke:#1A5A7A,color:#fff,rx:6
+
+    subgraph LAN["Local Area Network  ·  *.{org}.local"]
+        subgraph Clients["Client Devices"]
+            Browser["Browser\nNurse / end-user"]:::client
+            Dev["Developer machine\nnuble CLI  ·  @nublestation/sdk"]:::client
+        end
+
+        subgraph Host["Single Host Machine  (Ubuntu)"]
+            subgraph Compose["Docker Compose Stack  —  bridge network: nuble"]
+
+                subgraph Edge["── LAN Edge  (reachable on host IP) ──"]
+                    CoreDNS["CoreDNS :53\n*.{org}.local → host IP\nforwards other queries upstream"]:::exposed
+                    Caddy["Caddy :80/:443\nReverse proxy · subdomain routing\ntry_files SPA fallback"]:::exposed
+                end
+
+                subgraph Svcs["── Internal Services  (Docker network only) ──"]
+                    GW["Gateway :3000\n━━━━━━━━━━━━━━━━━━━━━━\n① Parse Bearer nbl_keyId.secret\n② Argon2id verify → (appId, appSlug)\n③ Resolve session cookie → userId\n④ HMAC-sign + forward\n─ Only LAN-exposed API service ─"]:::service
+                    ID["Identity :3004\n━━━━━━━━━━━━━━━━━━\nLogin · Register · Authorize\nArgon2id passwords\nServer-side sessions\nShared-cookie SSO\n(ADR 014)"]:::service
+                    BL["Blaze :3001\n━━━━━━━━━━━━━━\nAuto-REST (Phase 3)\nRLS tenant isolation\nSET LOCAL app.current_tenant\nDrizzle ORM · pg-query-parser"]:::service
+                    VT["Vault :3003\n━━━━━━━━━━━━━━━━━━━\nFile CRUD + streaming\nOwnership · sharing grants\nMagic-byte MIME detection\npublic / private / shared\n(ADR 016)"]:::service
+                    OR["Orbit :3002\n━━━━━━━━━━━━━━━━━━\nMultipart zip upload\nAtomic bundle swap\ncurrent/ ↔ .previous/\nrecord in deployments\n(ADR 007)"]:::service
+                    CS["Console :3000\n━━━━━━━━━━━━━━━━━\nNext.js 14 App Router\nAdmin dashboard\nDirect SQL + HMAC\nno Gateway hop"]:::admin
+                end
+
+                subgraph Data["── Shared Infrastructure ──"]
+                    PG["PostgreSQL 16\nschema: platform\n  organizations · users · sessions\n  apps · api_keys · user_app_access\n  storage_files · vault_grants\n  deployments · audit_log\nschema: tenant_data  (RLS ON)\n  custom app tables"]:::data
+                    RD["Redis 7\nAPI-key hot cache\n(planned — sub-ms lookup)"]:::data
+                end
+
+                subgraph Vols["── Named Volumes ──"]
+                    AppVol["/var/nuble/apps\n{slug}/current/\n{slug}/.previous/"]:::vol
+                    StgVol["/var/nuble/storage\n{slug}/{collection}/{file}"]:::vol
+                end
+            end
+        end
+    end
+
+    subgraph Pkgs["npm packages  (@nublestation/*)"]
+        SDK["sdk\napp-developer client\nauth · db · storage · deploy"]:::pkg
+        CLI["cli  (nuble)\ninit · deploy · status · server"]:::pkg
+        SH["shared\nhmac.ts · headers.ts\napi-key.ts"]:::pkg
+    end
+
+    %% DNS + HTTP entry
+    Browser  -->|"DNS :53"| CoreDNS
+    Browser  -->|"HTTP :80  (app UI, Console login)"| Caddy
+    Dev      -->|"DNS :53"| CoreDNS
+    Dev      -->|"nuble deploy  POST api.{org}.local"| Caddy
+    Dev      -. "SDK runtime calls  Bearer nbl_*" .-> Caddy
+
+    %% Caddy routing
+    Caddy -->|"api.{org}.local"| GW
+    Caddy -->|"console.{org}.local"| CS
+    Caddy -->|"identity.{org}.local  (login page)"| ID
+    Caddy -->|"{app}.{org}.local\nfile_server + try_files"| AppVol
+
+    %% Gateway → internal (HMAC signed)
+    GW -->|"HMAC  x-nuble-{app-id,user-id,timestamp,sig}"| BL
+    GW -->|"HMAC  + x-nuble-app-slug"| OR
+    GW -->|"HMAC  + x-nuble-app-slug"| VT
+    GW -->|"cookie forward  (no HMAC)"| ID
+
+    %% Console admin path (direct, bypasses Gateway)
+    CS -->|"HMAC direct  (userId=console-admin)"| VT
+    CS -->|"HMAC direct  (userId=console-admin)"| OR
+    CS -->|"direct SQL  PLATFORM_DB_URL"| PG
+
+    %% Services → data
+    GW  -. "api_key lookup\n(direct DB, bypass pool)" .-> PG
+    GW  -.->|planned| RD
+    BL  --> PG
+    VT  --> PG
+    ID  --> PG
+    OR  --> PG
+
+    %% Services → volumes
+    VT --> StgVol
+    OR --> AppVol
+
+    %% Packages
+    SDK -. "app developer uses" .-> Dev
+    CLI -. "app developer uses" .-> Dev
+    SH  -. "imported by all services" .-> GW
+    SH  -. "imported by all services" .-> BL
+    SH  -. "imported by all services" .-> VT
+    SH  -. "imported by all services" .-> OR
+```
+
+---
+
+## Diagram 2 — End-to-End Request Lifecycle
+
+A single SDK or CLI call, traced from DNS resolution through Gateway auth, HMAC signing, and the tenant-isolated database transaction.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Dev  as Developer App<br/>(SDK / nuble CLI)
+    participant DNS  as CoreDNS :53
+    participant Cad  as Caddy :80
+    participant GW   as Gateway :3000
+    participant DB   as PostgreSQL<br/>platform schema
+    participant Svc  as Internal Service<br/>(Blaze / Vault / Orbit)
+
+    Note over Dev,DNS: Phase 0 — DNS resolution (once per device)
+    Dev  ->> DNS: A record?  api.clinic.local
+    DNS  -->> Dev: 192.168.1.100  (host IP)
+
+    Note over Dev,GW: Phase 1 — API key auth (every request)
+    Dev  ->> Cad: POST /v1/vault/files/docs/report.pdf<br/>Authorization: Bearer nbl_keyId.secret
+    Cad  ->> GW:  forward to Gateway container
+
+    GW   ->> DB:  SELECT key_id, app_id, secret_hash, expires_at, revoked_at<br/>FROM platform.api_keys WHERE key_id = $1
+    DB   -->> GW: row  (O(1) index scan on key_id)
+    GW   ->> GW:  argon2Verify(secret, row.secret_hash)
+    GW   ->> GW:  check revoked_at IS NULL  AND  expires_at > now()
+
+    alt Key invalid / expired / revoked
+        GW -->> Dev: 401  { code: "unauthorized" }
+    end
+
+    Note over GW,Svc: Phase 2 — HMAC signing (Gateway → Service)
+    GW   ->> GW:  bodyHash = sha256Hex(requestBody)
+    GW   ->> GW:  canonical =<br/>  "POST\n/v1/vault/files/docs/report.pdf\n{bodyHash}\n{timestamp}\n"<br/>  + "x-nuble-app-id:{appId}\n"<br/>  + "x-nuble-app-slug:{slug}\n"<br/>  + "x-nuble-user-id:{userId}\n"
+    GW   ->> GW:  sig = HMAC-SHA256(INTERNAL_HMAC_SECRET, canonical)
+    GW   ->> Svc: POST /v1/vault/files/docs/report.pdf<br/>x-nuble-app-id: uuid<br/>x-nuble-app-slug: tasks<br/>x-nuble-user-id: uuid<br/>x-nuble-timestamp: 1716134400000<br/>x-nuble-sig: hex
+
+    Note over Svc: Phase 3 — HMAC verification (service middleware)
+    Svc  ->> Svc:  |Δt| = |now - timestamp| ≤ 30 s ?
+    Svc  ->> Svc:  rebuild canonical from incoming headers
+    Svc  ->> Svc:  expected = HMAC-SHA256(INTERNAL_HMAC_SECRET, canonical)
+    Svc  ->> Svc:  timingSafeEqual(expected, presented sig)  ✓
+    Svc  ->> Svc:  c.var.appId = header value  (routes never read raw headers)
+    Svc  ->> Svc:  c.var.userId = header value
+
+    Note over Svc,DB: Phase 4 — Tenant-isolated DB query (Blaze only)
+    Svc  ->> DB:  BEGIN
+    Svc  ->> DB:  SET LOCAL ROLE blaze_app  (drop superuser → RLS enforced)
+    Svc  ->> DB:  SELECT set_config('app.current_tenant', 'appId', true)
+    Svc  ->> DB:  SELECT * FROM tenant_data.tasks<br/>  RLS silently adds: WHERE app_id = current_setting(...)
+    DB   -->> Svc: rows
+    Svc  ->> DB:  COMMIT  (local variable auto-cleared — pool-safe)
+
+    Svc  -->> GW:  200  { data: [...] }
+    GW   -->> Cad: relay response
+    Cad  -->> Dev: 200  { data: [...] }
+```
+
+---
+
+## Diagram 3 — Auth Flows
+
+Three distinct authentication paths: end-user session login (SSO), developer API key, and Console admin direct access.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant App   as Browser / App
+    participant Cad   as Caddy
+    participant GW    as Gateway
+    participant ID    as Identity :3004
+    participant Redis as Redis (planned)
+    participant DB    as PostgreSQL
+    participant CS    as Console
+
+    rect rgb(30, 60, 90)
+        Note over App,DB: Path A — End-user session login (SSO)
+        App  ->> Cad:  GET identity.{org}.local/login
+        Cad  ->> ID:   forward
+        ID   -->> App: HTML login form
+
+        App  ->> ID:   POST /login  { email, password }
+        ID   ->> DB:   SELECT * FROM platform.users WHERE email = $1
+        DB   -->> ID:  user row  (password_hash argon2id)
+        ID   ->> ID:   argon2Verify(password, hash)  ✓
+        ID   ->> DB:   INSERT INTO platform.sessions (id, user_id, token_hash, expires_at)
+        ID   -->> App: Set-Cookie: nuble_session=token<br/>Domain=.{org}.local; HttpOnly; SameSite=Lax
+        Note over App: Cookie auto-sent to ALL *.{org}.local subdomains (SSO)
+
+        App  ->> Cad:  GET tasks.{org}.local  (subsequent request)
+        Cad  ->> GW:   forward  Cookie: nuble_session=token
+        GW   ->> DB:   SELECT user_id FROM platform.sessions<br/>WHERE token_hash = sha256(token) AND expires_at > now()
+        DB   -->> GW:  { userId }
+        GW   ->> GW:   proceed to HMAC-sign and forward
+    end
+
+    rect rgb(20, 70, 40)
+        Note over App,DB: Path B — API key auth (SDK / CLI)
+        App  ->> GW:   any request<br/>Authorization: Bearer nbl_keyId.secret
+        GW   ->> Redis: GET key:keyId  (planned hot-path)
+        Redis -->> GW:  MISS
+        GW   ->> DB:   SELECT id, app_id, secret_hash, expires_at, revoked_at<br/>FROM platform.api_keys JOIN platform.apps WHERE key_id = $1
+        DB   -->> GW:  row
+        GW   ->> GW:   argon2Verify(secret, row.secret_hash)  ✓
+        GW   ->> Redis: SET key:keyId {appId,appSlug}  EX 300  (planned)
+        GW   ->> GW:   proceed to HMAC-sign and forward
+    end
+
+    rect rgb(70, 35, 15)
+        Note over CS,DB: Path C — Console admin (direct HMAC, no Gateway hop)
+        CS   ->> DB:   SELECT * FROM platform.storage_files  (direct SQL)
+        CS   ->> VT:   POST /v1/vault/grants<br/>x-nuble-app-id: uuid<br/>x-nuble-user-id: console-admin<br/>x-nuble-sig: HMAC(INTERNAL_HMAC_SECRET, canonical)
+        Note over CS: Console signs with the same INTERNAL_HMAC_SECRET.<br/>Services cannot distinguish Console from Gateway requests.
+    end
+```
+
+---
+
+## Diagram 4 — Platform Database Schema
+
+All tables in the `platform` schema and their relationships. The `tenant_data` schema holds developer-defined tables (with RLS ON) and is not shown here — every table in it gets an `app_id` column and an auto-generated RLS policy.
+
+```mermaid
+erDiagram
+    organizations {
+        uuid   id              PK
+        string name
+        string subdomain_root
+        string admin_email
+        ts     created_at
+    }
+
+    users {
+        uuid   id              PK
+        string email           UK
+        string password_hash
+        string display_name
+        string avatar_url
+        enum   role            "super_admin | admin | end_user"
+        bool   is_active
+        ts     created_at
+    }
+
+    sessions {
+        uuid   id              PK
+        uuid   user_id         FK
+        string token_hash      UK
+        ts     expires_at
+        ts     created_at
+    }
+
+    apps {
+        uuid   id              PK
+        string name            UK "slug — kebab-case"
+        string display_name
+        uuid   owner_id        FK
+        ts     created_at
+    }
+
+    api_keys {
+        uuid   id              PK
+        uuid   app_id          FK
+        string key_id          UK "O(1) index — never secret"
+        string secret_hash        "Argon2id"
+        string label
+        ts     expires_at
+        ts     revoked_at
+        ts     created_at
+    }
+
+    user_app_access {
+        uuid   id              PK
+        uuid   user_id         FK
+        uuid   app_id          FK
+        enum   role            "admin | end_user"
+        ts     created_at
+    }
+
+    app_tables {
+        uuid   id              PK
+        uuid   app_id          FK
+        string table_name      UK "org-wide unique"
+        json   schema_json        "DSL definition"
+        ts     created_at
+    }
+
+    deployments {
+        uuid   id              PK
+        uuid   app_id          FK
+        string version            "timestamp-based"
+        string file_path          "/var/nuble/apps/{slug}/current"
+        uuid   deployed_by     FK
+        ts     deployed_at
+    }
+
+    storage_files {
+        uuid   id              PK
+        uuid   app_id          FK
+        uuid   owner_id        FK
+        string collection
+        string filename
+        string storage_path
+        string mime_type
+        int    size_bytes
+        bool   is_public
+        ts     created_at
+    }
+
+    vault_grants {
+        uuid   id              PK
+        uuid   app_id          FK
+        uuid   owner_id        FK
+        uuid   grantee_user_id FK
+        string collection
+        string filename           "null = entire collection"
+        enum   role            "viewer | editor"
+        ts     created_at
+    }
+
+    vault_settings {
+        uuid     app_id        PK "FK apps"
+        string[] allowed_ext
+        int      max_file_bytes
+    }
+
+    audit_log {
+        uuid   id              PK
+        uuid   actor_user_id   FK
+        uuid   app_id          FK
+        string action
+        json   payload
+        ts     created_at
+    }
+
+    users            ||--o{ sessions          : "has"
+    users            ||--o{ apps              : "owns"
+    users            ||--o{ user_app_access   : "granted to"
+    apps             ||--o{ user_app_access   : "grants access"
+    apps             ||--o{ api_keys          : "has"
+    apps             ||--o{ app_tables        : "defines"
+    apps             ||--o{ deployments       : "tracks"
+    apps             ||--|| vault_settings    : "configures"
+    apps             ||--o{ storage_files     : "contains"
+    users            ||--o{ storage_files     : "owns"
+    storage_files    ||--o{ vault_grants      : "shared via"
+    users            ||--o{ vault_grants      : "grants (owner)"
+    users            ||--o{ vault_grants      : "receives (grantee)"
+    users            ||--o{ audit_log         : "actor"
+    apps             ||--o{ audit_log         : "context"
+```
+
+---
+
+## HMAC canonical request format
+
+All four services (Blaze, Vault, Orbit, Identity) use the same signing contract defined in `packages/shared/src/hmac.ts`.
+
+```
+METHOD\n
+PATH\n
+BODY_SHA256_HEX\n
+TIMESTAMP_MS\n
+x-nuble-app-id:uuid\n
+x-nuble-app-slug:slug\n       ← Orbit and Vault only
+x-nuble-user-id:uuid\n
+```
+
+Context headers are sorted **lexicographically** before signing. Timestamp skew tolerance is **±30 seconds** (`HMAC_MAX_SKEW_MS = 30_000`).
+
+## Eraser.io native DSL (flowchart)
+
+If you prefer Eraser's own diagram language over Mermaid import, paste the block below into a new **Flowchart** diagram on Eraser.io:
+
+```
+direction right
+title NubleStation — System Architecture
+
+// LAN edge
+CoreDNS [icon: dns, color: orange, label: "CoreDNS :53\n*.{org}.local → host IP"]
+Caddy [icon: server, color: orange, label: "Caddy :80/443\nReverse proxy"]
+
+// Internal services
+Gateway [icon: api-gateway, color: green, label: "Gateway :3000\nKey auth · HMAC sign · Route"]
+Identity [icon: shield, color: blue, label: "Identity :3004\nSSO · Sessions · Login"]
+Blaze [icon: database, color: green, label: "Blaze :3001\nPostgres + RLS tenant isolation"]
+Vault [icon: folder, color: green, label: "Vault :3003\nFile storage · Ownership · Sharing"]
+Orbit [icon: rocket, color: green, label: "Orbit :3002\nAtomic bundle deploy"]
+Console [icon: monitor, color: purple, label: "Console :3000\nNext.js admin dashboard"]
+
+// Data
+PostgreSQL [icon: postgresql, color: purple, label: "PostgreSQL 16\nplatform + tenant_data schemas"]
+Redis [icon: redis, color: red, label: "Redis (planned)\nAPI-key hot cache"]
+
+// Volumes
+AppVol [icon: hard-drive, label: "/var/nuble/apps\n{slug}/current/"]
+StgVol [icon: hard-drive, label: "/var/nuble/storage\n{slug}/{collection}/{file}"]
+
+// Clients
+Browser [icon: globe, label: "Browser\nNurse / end-user"]
+Developer [icon: user, label: "Developer\nCLI + SDK"]
+
+// DNS + HTTP
+Browser -> CoreDNS: DNS :53
+Browser -> Caddy: HTTP :80
+Developer -> CoreDNS: DNS :53
+Developer -> Caddy: nuble deploy
+
+// Caddy routing
+Caddy -> Gateway: api.{org}.local
+Caddy -> Console: console.{org}.local
+Caddy -> Identity: identity.{org}.local
+Caddy -> AppVol: {app}.{org}.local (static SPA)
+
+// Gateway → internal (HMAC signed)
+Gateway -> Blaze: HMAC x-nuble-*
+Gateway -> Vault: HMAC + x-nuble-app-slug
+Gateway -> Orbit: HMAC + x-nuble-app-slug
+Gateway -> Identity: cookie forward (no HMAC)
+
+// Console admin (direct, no Gateway)
+Console -> Vault: direct HMAC (userId=console-admin)
+Console -> Orbit: direct HMAC (userId=console-admin)
+Console -> PostgreSQL: direct SQL (PLATFORM_DB_URL)
+
+// Services → data
+Blaze -> PostgreSQL
+Vault -> PostgreSQL
+Identity -> PostgreSQL
+Orbit -> PostgreSQL
+Gateway ..> Redis: planned hot-path
+
+// Services → volumes
+Vault -> StgVol
+Orbit -> AppVol
+```
