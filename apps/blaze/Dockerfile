@@ -21,6 +21,10 @@ RUN pnpm install --frozen-lockfile
 FROM installer AS deployer
 WORKDIR /app
 COPY --from=pruner /app/out/full/ .
+# blaze-service imports runtime values from the @nublestation/blaze package
+# (SchemaError, compileToDrizzle, canonicalChecksum) — build its dist before
+# deploy, otherwise `files: ["dist"]` ships an empty package.
+RUN pnpm --filter @nublestation/blaze build
 RUN pnpm --filter @nublestation/blaze-service deploy --prod /deploy
 
 # ── Stage 4: Runner ───────────────────────────────────────────────────────────
