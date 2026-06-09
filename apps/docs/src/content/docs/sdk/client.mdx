@@ -19,6 +19,11 @@ npm install @nublestation/client
 pnpm add @nublestation/client
 ```
 
+This is the **only** package you install. `@nublestation/vault`,
+`@nublestation/identity`, and `@nublestation/blaze` are dependencies of the client and
+come down automatically — you never install them yourself unless you want exactly one
+service on its own (see [below](#when-to-use-which-package)).
+
 ## Creating a client
 
 ```typescript
@@ -150,10 +155,12 @@ import type {
 
 ## When to use which package
 
-- **`@nublestation/client`** — you use (or plan to use) more than one service and want a
-  single dependency and config.
-- **`@nublestation/vault` / `@nublestation/identity` / `@nublestation/blaze`** — you need
-  exactly one service and want the smallest install.
+- **`@nublestation/client`** (recommended) — installs once and brings vault, identity, and
+  blaze with it. Use it whenever you touch more than one service, or just to keep a single
+  dependency and config. You do **not** add the per-service packages on top of it.
+- **`@nublestation/vault` / `@nublestation/identity` / `@nublestation/blaze`** — install one
+  of these *instead of* the client when your app needs exactly one service and you want the
+  smallest possible install.
 
 Both approaches share the same method signatures and types, so moving between them is a
 one-line change.

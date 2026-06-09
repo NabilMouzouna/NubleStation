@@ -109,7 +109,8 @@ nuble deploy
 
 ## Build with the SDK
 
-Install one package and reach every service through a single client:
+Install one package and reach every service through a single client — `@nublestation/client`
+pulls in vault, identity, and blaze for you, so there's nothing else to add:
 
 ```bash
 npm install @nublestation/client
@@ -150,8 +151,8 @@ nuble db push --schema schema.ts
 ```
 
 Prefer one service? `@nublestation/vault`, `@nublestation/identity`, and
-`@nublestation/blaze` all work standalone. Full reference →
-**[docs](https://nabilmouzouna.github.io/NubleStation)**.
+`@nublestation/blaze` can each be installed standalone *instead of* the client when you
+only need one. Full reference → **[docs](https://nabilmouzouna.github.io/NubleStation)**.
 
 ---
 
