@@ -23,6 +23,10 @@ client simply wraps them.</p>
 <pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8;overflow-x:auto" tabindex="0" data-language="bash"><code><span class="line"><span style="color:#B392F0">npm</span><span style="color:#9ECBFF"> install</span><span style="color:#9ECBFF"> @nublestation/client</span></span>
 <span class="line"><span style="color:#6A737D"># or</span></span>
 <span class="line"><span style="color:#B392F0">pnpm</span><span style="color:#9ECBFF"> add</span><span style="color:#9ECBFF"> @nublestation/client</span></span></code></pre>
+<p>This is the <strong>only</strong> package you install. <code>@nublestation/vault</code>,
+<code>@nublestation/identity</code>, and <code>@nublestation/blaze</code> are dependencies of the client and
+come down automatically — you never install them yourself unless you want exactly one
+service on its own (see <a href="#when-to-use-which-package">below</a>).</p>
 <h2 id="creating-a-client">Creating a client</h2>
 <pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8;overflow-x:auto" tabindex="0" data-language="typescript"><code><span class="line"><span style="color:#F97583">import</span><span style="color:#E1E4E8"> { nubleClient } </span><span style="color:#F97583">from</span><span style="color:#9ECBFF"> &quot;@nublestation/client&quot;</span><span style="color:#E1E4E8">;</span></span>
 <span class="line"><span style="color:#F97583">import</span><span style="color:#E1E4E8"> { schema } </span><span style="color:#F97583">from</span><span style="color:#9ECBFF"> &quot;./schema&quot;</span><span style="color:#E1E4E8">;</span></span>
@@ -187,10 +191,12 @@ re-exported from the client for convenience:</p>
 <code>nubleClient(apiKey, url, { app })</code>. New code should prefer <code>nubleClient</code>.</p></div> </div>
 <h2 id="when-to-use-which-package">When to use which package</h2>
 <ul>
-<li><strong><code>@nublestation/client</code></strong> — you use (or plan to use) more than one service and want a
-single dependency and config.</li>
-<li><strong><code>@nublestation/vault</code> / <code>@nublestation/identity</code> / <code>@nublestation/blaze</code></strong> — you need
-exactly one service and want the smallest install.</li>
+<li><strong><code>@nublestation/client</code></strong> (recommended) — installs once and brings vault, identity, and
+blaze with it. Use it whenever you touch more than one service, or just to keep a single
+dependency and config. You do <strong>not</strong> add the per-service packages on top of it.</li>
+<li><strong><code>@nublestation/vault</code> / <code>@nublestation/identity</code> / <code>@nublestation/blaze</code></strong> — install one
+of these <em>instead of</em> the client when your app needs exactly one service and you want the
+smallest possible install.</li>
 </ul>
 <p>Both approaches share the same method signatures and types, so moving between them is a
 one-line change.</p>  </div> <!-- Footer link --> <div class="mt-16 pt-6 flex justify-between gap-4 text-sm max-w-3xl mx-auto" style="border-top:1px solid var(--border)"> <span></span> <a href="https://github.com/NabilMouzouna/NubleStation/issues" target="_blank" rel="noopener" class="flex items-center gap-1.5 transition-colors" style="color:var(--text-muted)" onmouseover="this.style.color='var(--text)'" onmouseout="this.style.color='var(--text-muted)'">
