@@ -85,5 +85,24 @@ const { title, description, headings = [] } = Astro.props;
     btn?.addEventListener('click', () => overlay?.classList.toggle('hidden'));
     closeBtn?.addEventListener('click', () => overlay?.classList.add('hidden'));
     overlay?.addEventListener('click', (e) => { if (e.target === overlay) overlay.classList.add('hidden'); });
+
+    // Inject copy buttons into every code block
+    document.querySelectorAll('.prose pre').forEach((pre) => {
+      const copyBtn = document.createElement('button');
+      copyBtn.className = 'copy-btn';
+      copyBtn.textContent = 'Copy';
+      pre.appendChild(copyBtn);
+      copyBtn.addEventListener('click', async () => {
+        const text = (pre.querySelector('code') as HTMLElement)?.innerText ?? (pre as HTMLElement).innerText;
+        try {
+          await navigator.clipboard.writeText(text);
+          copyBtn.textContent = 'Copied!';
+          copyBtn.classList.add('copied');
+        } catch {
+          copyBtn.textContent = 'Failed';
+        }
+        setTimeout(() => { copyBtn.textContent = 'Copy'; copyBtn.classList.remove('copied'); }, 2000);
+      });
+    });
   </script>
 </Base>

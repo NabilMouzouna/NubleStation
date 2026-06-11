@@ -88,6 +88,20 @@ To roll back, Orbit swaps the two directories. This is a filesystem rename — i
 nuble deploy --dist ./path/to/previous-dist
 ```
 
+## Client SDK
+
+Orbit is a **CLI-driven service** — there is no JavaScript SDK. Developers interact with it exclusively through `nuble deploy`:
+
+```bash
+# Build your app first, then deploy the output directory
+nuble deploy              # deploys ./dist by default
+nuble deploy --dist ./out # custom output path
+```
+
+The CLI handles authentication (API key), zipping the bundle, uploading to the Gateway, and reporting the result. See [CLI Commands](/NubleStation/docs/cli/commands) for the full reference.
+
+---
+
 ## Limitations
 
 - **Single previous version only.** Orbit does not keep a full deployment history. Only one prior version is retained for rollback.
