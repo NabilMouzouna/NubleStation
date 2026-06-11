@@ -15,12 +15,18 @@ interface MeResponse {
 
 /** Low-level call to GET /v1/auth/me. Returns the parsed body + status without
  *  throwing for the expected auth outcomes (200/401/403); throws otherwise. */
-async function fetchMe(config: IdentityConfig, app?: string): Promise<{ status: number; body: MeResponse }> {
+async function fetchMe(
+  config: IdentityConfig,
+  app?: string,
+  bearerToken?: string,
+): Promise<{ status: number; body: MeResponse }> {
   const qs = app ? `?app=${encodeURIComponent(app)}` : "";
+  const headers: Record<string, string> = { accept: "application/json" };
+  if (bearerToken) headers["authorization"] = `Bearer ${bearerToken}`;
   const res = await fetch(`${config.url}/v1/auth/me${qs}`, {
     method: "GET",
-    credentials: "include", // send the .{org}.local session cookie cross-subdomain
-    headers: { accept: "application/json" },
+    credentials: "include",
+    headers,
   });
 
   if (res.status === 200 || res.status === 401 || res.status === 403) {
@@ -59,6 +65,39 @@ function navigate(url: string): void {
  * ```
  */
 export function createIdentityClient(config: IdentityConfig) {
+  // ── Bearer-token fallback for mobile Safari ────────────────────────────────
+  // Safari on iOS does not send SameSite=Lax cookies in cross-subdomain fetches
+  // when the TLD (.local) is absent from the Public Suffix List. Identity's
+  // /authorize redirect appends a one-time `nuble_token` query param; we drain
+  // it here, store it in sessionStorage, and send it as Authorization: Bearer
+  // on every API call so the cookie path and the header path both work.
+  const TOKEN_KEY = `__nuble_token_${config.app}`;
+
+  function drainUrlToken(): void {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get("nuble_token");
+    if (!token) return;
+    try { sessionStorage.setItem(TOKEN_KEY, token); } catch { /* ignore */ }
+    params.delete("nuble_token");
+    const q = params.toString();
+    window.history.replaceState(
+      null, "",
+      window.location.pathname + (q ? `?${q}` : "") + window.location.hash,
+    );
+  }
+
+  function getBearer(): string | undefined {
+    try { return sessionStorage.getItem(TOKEN_KEY) ?? undefined; } catch { return undefined; }
+  }
+
+  function clearBearer(): void {
+    try { sessionStorage.removeItem(TOKEN_KEY); } catch { /* ignore */ }
+  }
+
+  // Drain on creation (module-level singleton means this runs once on import).
+  drainUrlToken();
+
   const client = {
     // ── Reading the user ────────────────────────────────────────────────────
 
@@ -68,7 +107,7 @@ export function createIdentityClient(config: IdentityConfig) {
      * Use this for "who is logged in" UI on pages that don't gate on access.
      */
     async getUser(): Promise<IdentityUser | null> {
-      const { status, body } = await fetchMe(config);
+      const { status, body } = await fetchMe(config, undefined, getBearer());
       if (status === 200 && body.user) return body.user;
       return null; // 401
     },
@@ -80,7 +119,8 @@ export function createIdentityClient(config: IdentityConfig) {
      * object for the `forbidden` case (the 403 body carries no user).
      */
     async getSession(): Promise<SessionState> {
-      const { status, body } = await fetchMe(config, config.app);
+      const bearer = getBearer();
+      const { status, body } = await fetchMe(config, config.app, bearer);
       if (status === 200 && body.user) return { status: "authenticated", user: body.user };
       if (status === 401) return { status: "unauthenticated" };
       // 403 forbidden — fetch the bare identity so callers can greet the user.
@@ -134,9 +174,12 @@ export function createIdentityClient(config: IdentityConfig) {
      * `IdentityError` otherwise. Feeds a "share with" picker.
      */
     async listAppUsers(): Promise<AppUser[]> {
+      const bearer = getBearer();
+      const headers: Record<string, string> = { accept: "application/json" };
+      if (bearer) headers["authorization"] = `Bearer ${bearer}`;
       const res = await fetch(
         `${config.url}/v1/auth/app-users?app=${encodeURIComponent(config.app)}`,
-        { method: "GET", credentials: "include", headers: { accept: "application/json" } },
+        { method: "GET", credentials: "include", headers },
       );
       if (!res.ok) {
         let code = "request_failed";
@@ -169,6 +212,7 @@ export function createIdentityClient(config: IdentityConfig) {
      * (defaults to the Identity sign-in page).
      */
     async logout(redirectTo?: string): Promise<void> {
+      clearBearer();
       try {
         await fetch(`${config.url}/v1/auth/logout`, {
           method: "POST",
