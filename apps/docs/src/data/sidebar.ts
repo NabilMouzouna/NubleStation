@@ -29,7 +29,7 @@ export const sidebar: SidebarGroup[] = [
     items: [
       { title: 'Gateway', slug: 'services/gateway' },
       { title: 'Orbit — Deploy', slug: 'services/deploy', badge: { text: 'Live', color: '#059669' } },
-      { title: 'Blaze — Database', slug: 'services/database' },
+      { title: 'Blaze — Database', slug: 'services/database', badge: { text: 'Live', color: '#059669' } },
       { title: 'Vault — Storage', slug: 'services/storage', badge: { text: 'Live', color: '#059669' } },
       { title: 'Vault — Access Control', slug: 'services/storage-access', badge: { text: 'Live', color: '#059669' } },
       { title: 'Identity — Auth', slug: 'services/auth', badge: { text: 'Live', color: '#059669' } },

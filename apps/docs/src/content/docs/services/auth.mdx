@@ -116,9 +116,100 @@ http://api.{org}.local/vault/identity-system/avatars/{userId}.{ext}
 | `SECURE_COOKIES` | | `false` | Set `true` once HTTPS is available |
 | `PORT` | | `3004` | HTTP port |
 
-## See also
+## Client SDK — `@nublestation/identity`
+
+`@nublestation/identity` is the browser-side auth client. It answers "who is signed in?" and "do they have access to this app?", and drives the sign-in / sign-out redirect flow.
+
+### Install
+
+```bash
+npm install @nublestation/identity
+# or
+pnpm add @nublestation/identity
+```
+
+### Create a client
+
+```typescript
+import { createIdentityClient } from "@nublestation/identity";
+
+const auth = createIdentityClient({
+  url:         "http://api.clinic.local",       // Gateway — reaches /v1/auth/*
+  identityUrl: "http://identity.clinic.local",  // Identity pages — /authorize, /login
+  app:         "tasks",                          // this app's slug from the Console
+});
+```
+
+### Check the session
+
+```typescript
+const session = await auth.getSession();
+
+switch (session.status) {
+  case "authenticated":
+    console.log(`Signed in as ${session.user.email} with role ${session.user.role}`);
+    break;
+  case "forbidden":
+    // Signed in but no role on this app — show "ask an admin"
+    break;
+  case "unauthenticated":
+    auth.login(); // redirect to identity.clinic.local/authorize
+    break;
+}
+```
+
+### Sign in / sign out
+
+```typescript
+// Redirect to the SSO login page, returning to the current URL after
+auth.login();
+
+// Revoke session server-side then navigate to the identity login page
+await auth.logout();
+```
+
+### React: the `useIdentity` hook
+
+The SDK is framework-agnostic. For React, copy the canonical hook and gate into your app (they are not bundled to keep the package dependency-free):
+
+```typescript
+import { useCallback, useEffect, useState } from "react";
+import { createIdentityClient } from "@nublestation/identity";
+
+export const identity = createIdentityClient({
+  url:         import.meta.env.VITE_NUBLESTATION_URL,
+  identityUrl: import.meta.env.VITE_NUBLESTATION_IDENTITY_URL,
+  app:         import.meta.env.VITE_NUBLESTATION_APP,
+});
+
+export function useIdentity() {
+  const [status, setStatus] = useState("loading");
+  const [user,   setUser]   = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    identity.getSession().then((s) => {
+      if (cancelled) return;
+      setStatus(s.status);
+      setUser(s.status !== "unauthenticated" ? s.user : null);
+    }).catch(() => { if (!cancelled) setStatus("unauthenticated"); });
+    return () => { cancelled = true; };
+  }, []);
+
+  return {
+    status,
+    user,
+    login:  useCallback(() => identity.login(), []),
+    logout: useCallback(() => void identity.logout(), []),
+  };
+}
+```
+
+<Aside type="caution" title="Requires a deployed origin">
+  Auth only works when your app runs on `{app}.{org}.local` — the cookie is scoped to `.{org}.local` and is never sent to `localhost`. Develop UI locally with mocked state; test the real SSO flow on the deployed app.
+</Aside>
 
 <CardGrid>
-  <LinkCard title="@nublestation/identity SDK" href="/docs/sdk/auth" description="Client library — getUser, getSession, requireUser, and the React gate." />
+  <LinkCard title="Full SDK reference" href="/docs/sdk/auth" description="All methods, the IdentityUser type, error codes, the React gate component." />
   <LinkCard title="Row-Level Security" href="/docs/security/row-level-security" description="How resolved identity flows into per-tenant data access." />
 </CardGrid>

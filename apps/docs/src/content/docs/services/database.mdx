@@ -3,7 +3,9 @@ title: "Blaze — Database Service"
 description: Multi-tenant REST database with auto-generated CRUD, schema-as-code, and RLS-enforced isolation.
 ---
 
-
+<Aside type="tip" title="Shipped">
+  Blaze is live. For the client library, see [`@nublestation/blaze`](/NubleStation/docs/sdk/database).
+</Aside>
 
 ## What it does
 
@@ -235,6 +237,81 @@ The migration runner:
 A resource name like `tasks` maps to **one physical table** `tenant_data.tasks`. Every app's rows coexist there, separated by `app_id` and RLS. The first app to push a `tasks` schema defines its columns. A second app pushing a compatible `tasks` schema reuses the table. An incompatible definition is rejected at push time.
 
 This is recorded in `platform.app_tables`. It avoids table-count explosion on a clinic mini-PC while preserving isolation through RLS.
+
+## Client SDK — `@nublestation/blaze`
+
+The `@nublestation/blaze` package ships two things: the **schema DSL** for declaring tables, and a **typed table client** for CRUD operations. Install it in your frontend or Node.js app.
+
+### Install
+
+```bash
+npm install @nublestation/blaze
+# or
+pnpm add @nublestation/blaze
+```
+
+### Declare your schema
+
+```typescript
+// schema.ts
+import { defineSchema, t } from "@nublestation/blaze";
+
+export const schema = defineSchema({
+  tasks: {
+    title:    t.string().required(),
+    status:   t.enum(["pending", "in_progress", "done"]).default("pending"),
+    priority: t.enum(["low", "medium", "high"]).default("medium"),
+  },
+});
+```
+
+Push schema changes with `nuble db push --app <slug>`. The platform generates the migration, injects RLS, and writes TypeScript types to `.nuble/types.ts`.
+
+### Create a client
+
+```typescript
+import { createBlazeClient } from "@nublestation/blaze";
+import { schema } from "./schema";
+
+const { db } = createBlazeClient({
+  baseUrl: "http://api.clinic.local",  // Gateway base URL
+  apiKey:  "nbl_<key_id>.<secret>",    // API key from the Console
+  schema,                               // enables type-safe table names + row shapes
+});
+```
+
+### CRUD operations
+
+```typescript
+// List all rows for your app
+const tasks = await db.tasks.list();
+const page2  = await db.tasks.list({ limit: 20, offset: 20 });
+
+// Read one row
+const task = await db.tasks.get(taskId);
+
+// Create a row — returns the persisted row with server-generated id
+const newTask = await db.tasks.create({ title: "Review X-ray", status: "pending" });
+
+// Update (partial — only supplied fields are written)
+const updated = await db.tasks.update(taskId, { status: "done" });
+
+// Delete
+await db.tasks.delete(taskId);
+```
+
+Every query is automatically scoped to your app via Row-Level Security — one app can never read or write another app's rows.
+
+<Aside type="caution" title="Filter client-side for now">
+  `list()` returns all rows. Server-side `WHERE` filters, sort, and joins are on the roadmap but not yet shipped. Filter in JavaScript after fetching.
+</Aside>
+
+<CardGrid>
+  <LinkCard title="Full SDK reference" href="/NubleStation/docs/sdk/database" description="All methods, field builders, error codes, and the complete type reference." />
+  <LinkCard title="Row-Level Security" href="/NubleStation/docs/security/row-level-security" description="How app_id isolation is enforced at the database layer." />
+</CardGrid>
+
+---
 
 ## Environment variables
 

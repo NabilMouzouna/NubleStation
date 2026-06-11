@@ -1,6 +1,6 @@
 {
   "name": "@nublestation/identity",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "NubleStation Identity — SSO auth client",
   "type": "module",
   "main": "./dist/index.js",

@@ -124,29 +124,86 @@ No API key required. The Gateway forwards these requests to Vault, which checks 
 
 ---
 
-## SDK usage
+## Client SDK — `@nublestation/vault`
+
+`@nublestation/vault` is the file storage client for NubleStation apps. Works in the browser and Node.js.
+
+### Install
+
+```bash
+npm install @nublestation/vault
+# or
+pnpm add @nublestation/vault
+```
+
+### Create a client
 
 ```typescript
-import { createClient } from "@nublestation/sdk";
+import { createVaultClient } from "@nublestation/vault";
 
-const nuble = createClient({ url: "http://api.clinic.local", apiKey: "nbl_..." });
-
-// Upload
-const file = await nuble.vault.upload("patient-records", "john-doe-xray.jpg", blob);
-
-// List a collection
-const files = await nuble.vault.list("patient-records");
-
-// Make public and get URL
-await nuble.vault.setPublic("patient-records", "john-doe-xray.jpg", true);
-// → http://api.clinic.local/vault/tasks/patient-records/john-doe-xray.jpg
-
-// Download
-const bytes = await nuble.vault.download("patient-records", "john-doe-xray.jpg");
-
-// Delete
-await nuble.vault.delete("patient-records", "john-doe-xray.jpg");
+const vault = createVaultClient({
+  url:    "http://api.clinic.local",  // Gateway base URL
+  apiKey: "nbl_<key_id>.<secret>",    // API key from the Console
+});
 ```
+
+All calls are automatically scoped to the app that issued the API key.
+
+### Key operations
+
+```typescript
+// Upload — from a browser file input or a Buffer/Uint8Array
+const result = await vault.upload("patient-records", "xray.jpg", file);
+
+// List a collection (or omit for all files)
+const files = await vault.list("patient-records");
+
+// Download as ArrayBuffer
+const bytes = await vault.download("patient-records", "xray.jpg");
+
+// Make public (returns stable URL) / private
+const updated = await vault.setPublic("patient-records", "xray.jpg", true);
+// Public URL: http://api.clinic.local/vault/{appSlug}/patient-records/xray.jpg
+
+// Delete permanently
+await vault.delete("patient-records", "xray.jpg");
+```
+
+### Ownership & sharing (ADR 016)
+
+When combined with `@nublestation/identity`, every file is owned by the uploading user and can be shared per-user with `viewer` or `editor` roles:
+
+```typescript
+// Scoped listings
+const mine   = await vault.listMine();
+const shared = await vault.listSharedWithMe();
+
+// Share with a specific user
+await vault.share("reports", "q1.pdf", granteeUserId, "viewer");
+await vault.unshare("reports", "q1.pdf", granteeUserId);
+```
+
+Access is enforced server-side — a `viewer` calling `delete()` receives `403`.
+
+### Error handling
+
+```typescript
+import { VaultError } from "@nublestation/vault";
+
+try {
+  await vault.upload("docs", "report.pdf", bytes);
+} catch (err) {
+  if (err instanceof VaultError) {
+    // err.status (HTTP code), err.code (machine string)
+    if (err.status === 409) console.warn("File already exists");
+  }
+}
+```
+
+<CardGrid>
+  <LinkCard title="Full SDK reference" href="/NubleStation/docs/sdk/storage" description="All methods, FileResult type, error codes, and sharing model." />
+  <LinkCard title="Vault — Access Control" href="/NubleStation/docs/services/storage-access" description="Ownership, sharing, and visibility rules in detail." />
+</CardGrid>
 
 ---
 

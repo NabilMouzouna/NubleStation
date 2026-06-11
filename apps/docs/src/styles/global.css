@@ -94,6 +94,34 @@ body {
 .prose hr { border: none; border-top: 1px solid var(--border); margin: 2.5rem 0; }
 .prose blockquote { border-left: 3px solid var(--accent); padding-left: 1rem; margin: 1.25rem 0; color: var(--text-muted); font-style: italic; }
 
+/* Copy button on code blocks */
+.copy-btn {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 0.6875rem;
+  font-weight: 500;
+  line-height: 1;
+  padding: 0.25rem 0.625rem;
+  border-radius: 5px;
+  border: 1px solid var(--border);
+  background: var(--surface-raised);
+  color: var(--text-muted);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s, background 0.15s, color 0.15s, border-color 0.15s;
+  z-index: 1;
+}
+.prose pre:hover .copy-btn,
+.copy-btn:focus { opacity: 1; }
+.copy-btn.copied {
+  background: rgba(5, 150, 105, 0.1);
+  border-color: #059669;
+  color: #059669;
+  opacity: 1;
+}
+
 /* Scrollbar */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
