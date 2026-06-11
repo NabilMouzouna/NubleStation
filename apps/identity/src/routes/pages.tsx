@@ -182,7 +182,13 @@ pages.get("/authorize", async (c) => {
     );
   }
 
-  return c.redirect(redirectUri);
+  // Append the session token as a one-time URL param so apps on mobile browsers
+  // (Safari/iOS) can use it as a Bearer token. Safari does not send SameSite=Lax
+  // cookies in cross-subdomain fetches when the TLD isn't in the Public Suffix
+  // List (e.g. .local), so the cookie alone is unreliable cross-subdomain.
+  const rawToken = getSessionToken(c);
+  const sep = redirectUri.includes("?") ? "&" : "?";
+  return c.redirect(rawToken ? `${redirectUri}${sep}nuble_token=${encodeURIComponent(rawToken)}` : redirectUri);
 });
 
 // ── Account / profile (default post-login landing) ──────────────────────────

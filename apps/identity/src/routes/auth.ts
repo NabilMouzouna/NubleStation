@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import type { Context } from "hono";
 import {
   deleteSession,
   resolveSession,
@@ -8,6 +9,18 @@ import {
 import { getUserAppRole, listAppUsers, resolveAppIdBySlug } from "../services/access.js";
 import { getById } from "../services/users.js";
 import type { HonoVariables } from "../types.js";
+
+// Extracts the session token from either the session cookie or an
+// Authorization: Bearer header. The Bearer fallback exists for mobile Safari,
+// which does not reliably send SameSite=Lax cookies in cross-subdomain fetches
+// when the TLD (.local) is absent from the Public Suffix List.
+function extractToken(c: Context): string | undefined {
+  const cookie = getSessionToken(c);
+  if (cookie) return cookie;
+  const auth = c.req.header("authorization") ?? "";
+  if (auth.startsWith("Bearer ")) return auth.slice(7).trim() || undefined;
+  return undefined;
+}
 
 // JSON API reached programmatically via the Gateway at api.{org}.local/v1/auth/*.
 // Cookie-based (no API key); the Gateway passes the Cookie header through.
@@ -20,7 +33,7 @@ export const auth = new Hono<{ Variables: HonoVariables }>();
  * cookie is sent automatically because it's scoped to the parent domain.
  */
 auth.get("/v1/auth/me", async (c) => {
-  const userId = await resolveSession(getSessionToken(c));
+  const userId = await resolveSession(extractToken(c));
   if (!userId) return c.json({ ok: false, error: "unauthenticated" }, 401);
 
   const user = await getById(userId);
@@ -54,7 +67,7 @@ auth.get("/v1/auth/me", async (c) => {
  * result. Used by app frontends to populate a "share with" picker.
  */
 auth.get("/v1/auth/app-users", async (c) => {
-  const userId = await resolveSession(getSessionToken(c));
+  const userId = await resolveSession(extractToken(c));
   if (!userId) return c.json({ ok: false, error: "unauthenticated" }, 401);
 
   const app = c.req.query("app");
