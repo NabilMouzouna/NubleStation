@@ -29,7 +29,9 @@ pub.get("/vault/:appSlug/:collection/:filename", async (c) => {
       "content-type":        row.mime_type ?? "application/octet-stream",
       "content-length":      String(data.byteLength),
       "content-disposition": `inline; filename="${filename}"`,
-      "cache-control":       "no-store",
+      // Public files live at stable URLs but can be deleted or made private,
+      // so allow caching only briefly.
+      "cache-control":       "public, max-age=300",
     },
   });
 });
