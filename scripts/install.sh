@@ -495,6 +495,9 @@ EOF
   printf '  On any developer machine: npm i -g @nublestation/cli\n\n'
   printf '    %snuble init --url http://api.%s.local --slug <app> --key <key>%s\n' "$DIM" "$ORG_DOMAIN" "$NC"
   printf '    %snuble deploy%s\n\n' "$DIM" "$NC"
+  printf '%s  ── Documentation ───────────────────────────────────%s\n\n' "$DIM" "$NC"
+  printf '  Guides, SDK reference, troubleshooting:\n'
+  printf '    %shttps://nabilmouzouna.github.io/NubleStation%s\n\n' "$G" "$NC"
 }
 
 main "$@"
