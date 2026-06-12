@@ -35,13 +35,24 @@ const ALLOWED_ALTER_SUBTYPES = new Set([
   "AT_DropConstraint",
 ]);
 
+// Minimal structural view of the libpg-query AST — only the nodes we inspect.
+interface StmtNode {
+  AlterTableStmt?: {
+    cmds?: Array<{ AlterTableCmd?: { subtype?: string } }>;
+    relation?: { schemaname?: string };
+  };
+  CreateStmt?: { relation?: { schemaname?: string } };
+  [nodeType: string]: unknown;
+}
+
 export function validateMigrationSQL(statements: string[]): void {
   for (const sql of statements) {
-    let parsed: any;
+    let parsed: { stmts?: Array<{ stmt: StmtNode }> };
     try {
-      parsed = parseSync(sql);
-    } catch (e: any) {
-      throw new SchemaError(`SQL parse error: ${e.message}\nStatement: ${sql}`);
+      parsed = parseSync(sql) as typeof parsed;
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      throw new SchemaError(`SQL parse error: ${message}\nStatement: ${sql}`);
     }
 
     for (const { stmt } of parsed.stmts ?? []) {
@@ -55,7 +66,7 @@ export function validateMigrationSQL(statements: string[]): void {
 
       if (nodeType === "AlterTableStmt") {
         for (const cmd of stmt.AlterTableStmt?.cmds ?? []) {
-          const subtype = cmd.AlterTableCmd?.subtype as string | undefined;
+          const subtype = cmd.AlterTableCmd?.subtype;
           if (subtype && !ALLOWED_ALTER_SUBTYPES.has(subtype)) {
             throw new SchemaError(
               `Disallowed ALTER TABLE subtype "${subtype}". Statement: ${sql}`,
@@ -71,7 +82,7 @@ export function validateMigrationSQL(statements: string[]): void {
   }
 }
 
-function assertTenantDataSchema(nodeType: string, stmt: any, sql: string): void {
+function assertTenantDataSchema(nodeType: string, stmt: StmtNode, sql: string): void {
   const rel =
     nodeType === "CreateStmt"
       ? stmt.CreateStmt?.relation
@@ -79,7 +90,7 @@ function assertTenantDataSchema(nodeType: string, stmt: any, sql: string): void 
 
   if (!rel) return;
 
-  const schema = rel.schemaname as string | undefined;
+  const schema = rel.schemaname;
   if (schema && schema !== "tenant_data") {
     throw new SchemaError(
       `Migration references disallowed schema "${schema}". Only tenant_data is allowed. Statement: ${sql}`,

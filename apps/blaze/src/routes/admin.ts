@@ -1,12 +1,15 @@
 import { SchemaError } from "@nublestation/blaze";
 import type { SerializedSchema } from "@nublestation/blaze";
 import { Hono } from "hono";
+import type { Context } from "hono";
 import { applyMigration } from "../migrations/apply.js";
 import type { HonoVariables } from "../types.js";
 
 export const admin = new Hono<{ Variables: HonoVariables }>();
 
-async function handleMigrationPush(c: any): Promise<Response> {
+async function handleMigrationPush(
+  c: Context<{ Variables: HonoVariables }>,
+): Promise<Response> {
   const callerAppId: string = c.var.appId;
 
   let body: unknown;
@@ -16,11 +19,12 @@ async function handleMigrationPush(c: any): Promise<Response> {
     return c.json({ error: "Invalid JSON body" }, 400);
   }
 
+  const candidate = body as Partial<SerializedSchema> | null;
   if (
-    typeof body !== "object" ||
-    body === null ||
-    (body as any).version !== 1 ||
-    typeof (body as any).tables !== "object"
+    typeof candidate !== "object" ||
+    candidate === null ||
+    candidate.version !== 1 ||
+    typeof candidate.tables !== "object"
   ) {
     return c.json({ error: "Body must be a SerializedSchema (version: 1)" }, 422);
   }
