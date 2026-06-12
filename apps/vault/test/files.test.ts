@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { resetConfigCache } from "../src/config.js";
 import { buildServer } from "../src/server.js";
-import { TEST_APP_ID, TEST_HMAC_SECRET, TEST_USER_ID, makeSignedHeaders } from "./helpers/sign.js";
+import { TEST_APP_ID, TEST_HMAC_SECRET, makeSignedHeaders } from "./helpers/sign.js";
 import { makeFileUploadRequest } from "./helpers/multipart.js";
 
 // ---------------------------------------------------------------------------

@@ -12,7 +12,6 @@ import {
   createGrant,
   deleteFileMeta,
   deleteGrant,
-  fileExistsInDb,
   getFile,
   getSettings,
   insertFile,

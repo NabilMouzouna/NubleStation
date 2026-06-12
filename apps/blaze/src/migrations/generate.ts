@@ -4,8 +4,8 @@ import type { SerializedSchema } from "@nublestation/blaze";
 
 // Load the CJS build of drizzle-kit/api to avoid its ESM bundle's broken require shim.
 const { generateDrizzleJson, generateMigration } = createRequire(import.meta.url)("drizzle-kit/api") as {
-  generateDrizzleJson: (imports: Record<string, unknown>) => any;
-  generateMigration: (prev: any, cur: any) => Promise<string[]>;
+  generateDrizzleJson: (imports: Record<string, unknown>) => unknown;
+  generateMigration: (prev: unknown, cur: unknown) => Promise<string[]>;
 };
 
 export async function generateMigrationSQL(

@@ -1,5 +1,6 @@
 import type { SerializedTable } from "@nublestation/blaze";
 import { Hono } from "hono";
+import type { Context } from "hono";
 import { withTenant } from "../db/connection-manager.js";
 import {
   buildDelete,
@@ -21,7 +22,7 @@ const RESERVED = new Set(["id", "app_id"]);
 
 /** Resolves and validates the table from the app's schema. Returns 404 if absent. */
 async function resolveTable(
-  c: any,
+  c: Context<{ Variables: HonoVariables }>,
   appId: string,
   tableName: string,
 ): Promise<{ schema: Awaited<ReturnType<typeof getAppSchema>>; table: SerializedTable } | Response> {
