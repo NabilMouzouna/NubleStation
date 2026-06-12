@@ -3,239 +3,161 @@ title: "Vault — Storage Service"
 description: Path-based file storage on the local filesystem with per-file public/private access control.
 ---
 
-Vault stores arbitrary files for your apps — documents, images, reports — scoped per app and accessible through the standard API gateway.
+Vault stores files for your app — documents, images, reports — on the NubleStation host, scoped to your app. Files live in **collections**, which are just strings in the path (think folders, no setup required). Every file is **private by default**; you opt individual files into public access or share them per user.
 
-## Core concepts
+## Get up and running
 
-### Collections
+1. **Get an API key.** In the Console, open your app and copy its API key (`nbl_<key_id>.<secret>`).
 
-Files are organised into **collections** — developer-defined namespaces within an app (think folders). A collection is just a string in the path; no setup required.
+2. **Install the SDK.**
 
-```
-/patient-records/john-doe-xray.jpg
-/invoices/2026-01.pdf
-/avatars/user-42.png
- ↑         ↑
- collection filename
-```
+   ```bash
+   npm install @nublestation/vault
+   # or
+   pnpm add @nublestation/vault
+   ```
 
-### Public vs private
+3. **Create a client and move some files.**
 
-Every file has an `is_public` flag (default: `false`). Private files require an API key. Public files are accessible by anyone at a stable URL with no credentials.
+   ```typescript
+   import { createVaultClient } from "@nublestation/vault";
 
----
+   const vault = createVaultClient({
+     url:    "http://api.clinic.local",  // your Gateway
+     apiKey: "nbl_<key_id>.<secret>",    // from the Console
+   });
 
-## API
+   // Upload (Blob, Uint8Array, or ArrayBuffer)
+   const uploaded = await vault.upload("reports", "q1.pdf", file);
 
-All authenticated requests go through the Gateway at `api.{org}.local`. Include your API key:
+   // List a collection
+   const files = await vault.list("reports");
 
-```
-Authorization: Bearer nbl_<key_id>.<secret>
-```
+   // Download as ArrayBuffer
+   const bytes = await vault.download("reports", "q1.pdf");
+   ```
 
-### Upload a file
+That's it. Every call is scoped to the app that issued the API key — one app can never touch another app's files.
 
-```
-POST /v1/vault/files/{collection}/{filename}
-Content-Type: multipart/form-data
+## Everyday usage
 
-file=<binary>
-```
+### Upload
 
-- Returns `409 Conflict` if a file already exists at that path. Delete it first or use a different name.
-- Returns `413` if the file exceeds the app's size limit (default 50 MB).
-- Returns `415` if the file extension is not in the app's allowed list.
-
-**Response:**
-```json
-{
-  "ok": true,
-  "fileId": "d4e5f6a7-...",
-  "path": "/patient-records/john-doe-xray.jpg",
-  "isPublic": false,
-  "publicUrl": null
-}
-```
-
-### List files
-
-```
-GET /v1/vault/files                    # all files for the app
-GET /v1/vault/files/{collection}       # files in a specific collection
-```
-
-**Response:**
-```json
-{
-  "ok": true,
-  "files": [
-    {
-      "id": "d4e5f6a7-...",
-      "collection": "patient-records",
-      "filename": "john-doe-xray.jpg",
-      "mimeType": "image/jpeg",
-      "sizeBytes": 204800,
-      "isPublic": false,
-      "publicUrl": null,
-      "createdAt": "2026-05-30T10:00:00Z"
-    }
-  ]
-}
-```
-
-### Download a file
-
-```
-GET /v1/vault/files/{collection}/{filename}
-```
-
-Returns the raw file bytes with the correct `Content-Type` header. Private files require a valid API key; public files can be fetched from the public URL instead.
-
-### Toggle public access
-
-```
-PATCH /v1/vault/files/{collection}/{filename}
-Content-Type: application/json
-
-{ "isPublic": true }
-```
-
-Once a file is public its URL is stable and permanent until you make it private again.
-
-### Delete a file
-
-```
-DELETE /v1/vault/files/{collection}/{filename}
-```
-
-Permanently removes the file from disk and its metadata from the database. This cannot be undone.
-
----
-
-## Public URLs
-
-When `isPublic` is `true`, the file is accessible at:
-
-```
-http://api.{org}.local/vault/{app_slug}/{collection}/{filename}
-```
-
-No API key required. The Gateway forwards these requests to Vault, which checks the `is_public` flag before serving. If the flag is `false`, the response is `403 Forbidden` regardless of the URL.
-
----
-
-## Client SDK — `@nublestation/vault`
-
-`@nublestation/vault` is the file storage client for NubleStation apps. Works in the browser and Node.js.
-
-### Install
-
-```bash
-npm install @nublestation/vault
-# or
-pnpm add @nublestation/vault
-```
-
-### Create a client
-
-```typescript
-import { createVaultClient } from "@nublestation/vault";
-
-const vault = createVaultClient({
-  url:    "http://api.clinic.local",  // Gateway base URL
-  apiKey: "nbl_<key_id>.<secret>",    // API key from the Console
-});
-```
-
-All calls are automatically scoped to the app that issued the API key.
-
-### Key operations
-
-```typescript
-// Upload — from a browser file input or a Buffer/Uint8Array
-const result = await vault.upload("patient-records", "xray.jpg", file);
-
-// List a collection (or omit for all files)
-const files = await vault.list("patient-records");
-
-// Download as ArrayBuffer
-const bytes = await vault.download("patient-records", "xray.jpg");
-
-// Make public (returns stable URL) / private
-const updated = await vault.setPublic("patient-records", "xray.jpg", true);
-// Public URL: http://api.clinic.local/vault/{appSlug}/patient-records/xray.jpg
-
-// Delete permanently
-await vault.delete("patient-records", "xray.jpg");
-```
-
-### Ownership & sharing (ADR 016)
-
-When combined with `@nublestation/identity`, every file is owned by the uploading user and can be shared per-user with `viewer` or `editor` roles:
-
-```typescript
-// Scoped listings
-const mine   = await vault.listMine();
-const shared = await vault.listSharedWithMe();
-
-// Share with a specific user
-await vault.share("reports", "q1.pdf", granteeUserId, "viewer");
-await vault.unshare("reports", "q1.pdf", granteeUserId);
-```
-
-Access is enforced server-side — a `viewer` calling `delete()` receives `403`.
-
-### Error handling
+`upload` never overwrites. If a file already exists at that path you get a `409` — delete and re-upload:
 
 ```typescript
 import { VaultError } from "@nublestation/vault";
 
 try {
-  await vault.upload("docs", "report.pdf", bytes);
+  await vault.upload("reports", "q1.pdf", file);
 } catch (err) {
-  if (err instanceof VaultError) {
-    // err.status (HTTP code), err.code (machine string)
-    if (err.status === 409) console.warn("File already exists");
+  if (err instanceof VaultError && err.status === 409) {
+    await vault.delete("reports", "q1.pdf");
+    await vault.upload("reports", "q1.pdf", file);
+  } else {
+    throw err;
   }
 }
 ```
 
-<CardGrid>
-  <LinkCard title="Full SDK reference" href="/NubleStation/docs/sdk/storage" description="All methods, FileResult type, error codes, and sharing model." />
-  <LinkCard title="Vault — Access Control" href="/NubleStation/docs/services/storage-access" description="Ownership, sharing, and visibility rules in detail." />
-</CardGrid>
+### List
 
----
+```typescript
+const all     = await vault.list();              // everything you can access
+const reports = await vault.list("reports");     // one collection
 
-## App settings
+// Scoped views — these need Identity wired in (signed-in user):
+const mine    = await vault.listMine();          // files you own
+const shared  = await vault.listSharedWithMe();  // shared with you (with your role)
+const open    = await vault.listPublic();        // the public space
+```
 
-In the Console under **App → Vault Settings**, admins can configure:
+`listMine` / `listSharedWithMe` / `listPublic` rely on the session cookie from [Identity](/NubleStation/docs/services/auth). Without it, `listMine` returns `[]`.
 
-| Setting | Default | Description |
+### Download
+
+```typescript
+const bytes = await vault.download("reports", "q1.pdf"); // ArrayBuffer
+
+// Browser: display it
+const url = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
+```
+
+### Make a file public
+
+```typescript
+const f = await vault.setPublic("avatars", "user-42.png", true);
+```
+
+Public files are served — no API key, no login — at a stable URL:
+
+```
+http://api.{org}.local/vault/{app_slug}/{collection}/{filename}
+```
+
+Flip it back with `setPublic(..., false)` and the URL returns `403`.
+
+### Share with a user
+
+Owners can share a file (or a whole collection, by passing `null` as the filename) with one user at a time, as `viewer` (read/download) or `editor` (read/download/delete):
+
+```typescript
+await vault.share("reports", "q1.pdf", granteeUserId, "viewer");
+await vault.unshare("reports", "q1.pdf", granteeUserId);
+
+const grants = await vault.listGrants("reports", "q1.pdf"); // who has access
+```
+
+Sharing requires Identity. Get shareable users from `identity.listAppUsers()`. The rules — who counts as an owner, what each role can do, why recipients must already have app access — are enforced server-side; see [Vault — Access Control](/NubleStation/docs/services/storage-access).
+
+### Delete
+
+```typescript
+await vault.delete("reports", "q1.pdf");
+```
+
+Removes the bytes from disk and the metadata. **This cannot be undone.**
+
+## Reference
+
+### Methods
+
+| Method | Returns | Notes |
 |---|---|---|
-| Allowed extensions | _(all)_ | Whitelist of file extensions (e.g. `pdf, jpg, png`). Empty = allow all. |
-| Max file size | 50 MB | Per-file upload limit. |
+| `upload(collection, filename, data)` | `FileResult` | `409` if path exists |
+| `list(collection?)` | `FileResult[]` | everything you can access |
+| `listMine(collection?)` | `FileResult[]` | needs Identity session |
+| `listSharedWithMe()` | `FileResult[]` | needs Identity session |
+| `listPublic(collection?)` | `FileResult[]` | the public space |
+| `download(collection, filename)` | `ArrayBuffer` | raw bytes |
+| `setPublic(collection, filename, isPublic)` | `FileResult` | toggles the public URL |
+| `share(collection, filename \| null, userId, role)` | `void` | role: `"viewer"` \| `"editor"` |
+| `unshare(collection, filename \| null, userId)` | `void` | revokes a grant |
+| `listGrants(collection, filename \| null)` | `Grant[]` | owner only |
+| `delete(collection, filename)` | `void` | permanent |
 
----
+### Errors
 
-## Storage layout on disk
+All methods throw `VaultError` with `.status` (HTTP code) and `.code` (machine string):
 
-Files are stored on the NubleStation host at:
+| Code | Status | Meaning |
+|---|---|---|
+| `file_already_exists` | 409 | A file already exists at this path |
+| `file_too_large` | 413 | Exceeds the app's max file size |
+| `extension_not_allowed` | 415 | Extension blocked by the app's allowlist |
+| `not_found` | 404 | File does not exist |
 
-```
-/var/nuble/storage/
-  {app_slug}/
-    {collection}/
-      {filename}
-```
+## Limits & gotchas
 
-Paths are validated server-side — path traversal attempts are rejected before any filesystem operation.
+- **No overwrite, no rename.** A path is write-once — delete and re-upload (see the 409 pattern above).
+- **50 MB per file** by default. Configurable per app in **Console → App → Vault Settings**.
+- **Extension allowlist.** If the admin sets one, anything else is rejected with `415`. Empty list = allow all.
+- **No versioning.** One file per path, one version. Keep history yourself if you need it.
+- **LAN only.** Files — including "public" ones — are only reachable inside the organisation's network.
 
----
+## Go deeper
 
-## Limits
-
-- **No versioning.** A file at a given path is a single version. To update a file, delete it and re-upload.
-- **No total quota** per app. Disk management is the host administrator's responsibility.
-- **50 MB per file** by default, configurable per app in Console.
-- **LAN only.** Files are not accessible from outside the organisation's network.
+<CardGrid>
+  <LinkCard title="Vault — Access Control" href="/NubleStation/docs/services/storage-access" description="The full model: ownership, viewer/editor roles, the two access gates, communal vs personal apps." />
+  <LinkCard title="Full SDK reference" href="/NubleStation/docs/sdk/storage" description="All methods, the FileResult type, error codes, and path rules." />
+</CardGrid>

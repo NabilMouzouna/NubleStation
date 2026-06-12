@@ -1,126 +1,24 @@
 ---
 title: "Identity — Auth Service"
-description: Cross-app user accounts with shared-cookie single sign-on and per-app, default-deny authorization.
+description: Add org-wide login to your app — install the SDK, gate your routes, and ship SSO in minutes.
 ---
 
-Identity gives a NubleStation org **cross-platform user accounts** — one identity per human, usable across every app — with **per-app authorization**. A user registers once at `identity.{org}.local`, and a session cookie scoped to the parent domain logs them in everywhere. App access is **default-deny**: a Console admin grants a role per app.
+Identity gives every user in your org **one account that works on every app**. They sign in once at `identity.{org}.local`; your app just asks "who is this, and what's their role here?". This page gets you from zero to a gated app — for the *why* behind it, see [Sessions & SSO](/NubleStation/docs/concepts/sessions-and-sso).
 
-<Aside type="tip" title="Shipped">
-  Identity is live. For the client library, see [`@nublestation/identity`](/docs/sdk/auth).
-</Aside>
+## What works today
 
-## The model in one line
+| Capability | Status |
+|---|---|
+| Server-side sessions (revocable, 8h TTL) | ✅ Live |
+| SSO across all `*.{org}.local` apps | ✅ Live |
+| Per-app roles, default-deny | ✅ Live |
+| User self-registration at `identity.{org}.local` | ✅ Live — but new users have **zero app access** until an admin grants a role in the Console |
+| Mobile Safari support (Bearer fallback) | ✅ Live — automatic in SDK ≥ 0.1.1 |
+| OIDC / external identity providers | ⏳ Not yet — shared-cookie SSO only |
 
-> Register once at `identity.{org}.local`; a session cookie scoped to `.{org}.local` signs you in across every app; an admin grants you a role per app (default-deny).
+## Get up and running
 
-There are **no browser-side tokens**. Authentication is a server-side, revocable session referenced by an `HttpOnly` cookie. This is shared-cookie SSO, chosen over full OIDC because every app is first-party under one parent domain — it delivers SSO while eliminating OAuth's browser-token attack surface (open redirects, code interception, `localStorage` token theft).
-
-## The two reach paths
-
-```
-identity.{org}.local/*       →  Caddy  →  identity:3004                 (pages + form posts; sets the cookie)
-api.{org}.local/v1/auth/*    →  Caddy  →  gateway  →  identity:3004     (JSON; cookie passed through)
-```
-
-The Gateway forwards `/v1/auth/*` **without** requiring an API key — it passes the `Cookie` header through and relays `Set-Cookie` back.
-
-## The SSO "login button" flow
-
-```
-tasks.{org}.local  ──"Login"──▶  identity.{org}.local/authorize?app=tasks&redirect_uri=http://tasks.{org}.local/
-                                       │
-                       session cookie on .{org}.local?
-                        ├─ no  ▶ render login/register ▶ on success ▼
-                        └─ yes ▼
-                       role for (user, tasks)?
-                        │   admin if user is super_admin/admin, else user_app_access lookup
-                        ├─ has role ▶ 302 redirect_uri   (validated: host ends with .{org}.local)
-                        └─ none     ▶ "No access" page (default-deny)
-                                       │
-tasks.{org}.local  ◀──redirect──  app calls GET api.{org}.local/v1/auth/me?app=tasks
-                                   ▶ { id, email, displayName, avatarUrl, role }   (403 if no access)
-```
-
-`redirect_uri` is **allow-listed**: its host must be `{org}.local` or a `*.{org}.local` subdomain, blocking open redirects.
-
-## Routes
-
-### User-facing pages (direct via `identity.{org}.local`)
-
-| Method | Path | Description |
-|---|---|---|
-| `GET`  | `/login` | Sign-in page (carries `?app` & `?redirect_uri` through the flow) |
-| `POST` | `/login` | Verify credentials, create session, set cookie, continue |
-| `GET`  | `/register` | Registration page (full name, email, password, optional avatar) |
-| `POST` | `/register` | Create account (default-deny), upload avatar, sign in |
-| `POST` | `/logout` | Revoke session, clear cookie, back to `/login` |
-| `GET`  | `/authorize` | SSO grant flow (the login-button target) |
-| `GET`  | `/account` | Signed-in landing (avatar, name, sign out) |
-
-### JSON API (via Gateway `api.{org}.local/v1/auth/*`)
-
-| Method | Path | Status | Description |
-|---|---|---|---|
-| `GET`  | `/v1/auth/me?app={slug}` | 200, 401, 403, 404 | Current user; with `app`, resolves role (403 if none) |
-| `POST` | `/v1/auth/logout` | 200 | Revoke session, clear cookie |
-
-## Sessions (revocable, server-side)
-
-Backed by `platform.sessions` (`id`, `user_id`, `token_hash`, `expires_at`, `created_at`).
-
-- The cookie carries a **32-byte CSPRNG token**; the DB stores only its **sha256** (`token_hash`). A DB read cannot reconstruct a usable cookie.
-- **Revocable** — logout deletes the row; an admin can force-log-out a user everywhere by deleting their rows.
-- **Token rotation on login** — every login mints a fresh token, so a pre-set (fixated) token is never elevated.
-- TTL: `SESSION_TTL_HOURS` (default 8).
-
-### Cookie attributes (HTTP-only deployment)
-
-| Attribute | Value | Why |
-|---|---|---|
-| `HttpOnly` | on | Blocks JS/XSS theft (works over HTTP) |
-| `SameSite` | `Lax` | CSRF backstop; `Lax` so the authorize redirect carries the cookie |
-| `Domain` | `.{org}.local` | Sent to every app subdomain — the SSO backbone |
-| `Secure` | **off for now** | Requires HTTPS; flip via `SECURE_COOKIES=true` once TLS lands |
-
-<Aside type="caution" title="HTTP-era limitation">
-  Without TLS, a same-LAN sniffer could capture the session cookie. This is the one accepted trade-off; it's resolved the moment Caddy HTTPS (internal CA) is enabled — only `SECURE_COOKIES` changes. Every other control stays at maximum.
-</Aside>
-
-## Authorization
-
-`getUserAppRole(userId, appId)`:
-
-1. If the user's `platform.users.role` is `super_admin` or `admin` → **`admin`** (implicit on every app; no `user_app_access` row needed).
-2. Otherwise → their `platform.user_app_access` role for that app, or **`null`** (default-deny).
-
-Admins are the **grantors**. Console → App → **Users** tab grants, revokes, and changes end-user roles (writing `platform.audit_log`). A freshly registered user has **zero** app access until an admin acts.
-
-## Avatars
-
-Profile photos live in a **reserved system Vault bucket** (app slug `identity-system`, seeded idempotently at boot). On registration Identity HMAC-signs an upload to [Vault](/docs/services/storage) as the system app, makes the file public, and stores the URL in `platform.users.avatar_url`. Avatars are therefore cross-app, not scoped to the app a user registered from.
-
-```
-http://api.{org}.local/vault/identity-system/avatars/{userId}.{ext}
-```
-
-## Environment variables
-
-| Variable | Required | Default | Description |
-|---|---|---|---|
-| `DATABASE_URL` | ✅ | — | Postgres connection string |
-| `INTERNAL_HMAC_SECRET` | ✅ | — | Shared HMAC secret (≥32 chars); signs Vault calls |
-| `ORG_DOMAIN` | | `nuble` | Org domain root; cookie domain is `.{ORG_DOMAIN}.local` |
-| `VAULT_INTERNAL_URL` | | `http://vault:3003` | Vault base URL for avatar uploads |
-| `IDENTITY_SYSTEM_APP_SLUG` | | `identity-system` | Reserved app owning the avatar bucket |
-| `SESSION_TTL_HOURS` | | `8` | Session lifetime |
-| `SECURE_COOKIES` | | `false` | Set `true` once HTTPS is available |
-| `PORT` | | `3004` | HTTP port |
-
-## Client SDK — `@nublestation/identity`
-
-`@nublestation/identity` is the browser-side auth client. It answers "who is signed in?" and "do they have access to this app?", and drives the sign-in / sign-out redirect flow.
-
-### Install
+### 1. Install the SDK
 
 ```bash
 npm install @nublestation/identity
@@ -128,88 +26,134 @@ npm install @nublestation/identity
 pnpm add @nublestation/identity
 ```
 
-### Create a client
+### 2. Create the client
+
+Create it once at module level and reuse it everywhere:
 
 ```typescript
 import { createIdentityClient } from "@nublestation/identity";
 
-const auth = createIdentityClient({
-  url:         "http://api.clinic.local",       // Gateway — reaches /v1/auth/*
-  identityUrl: "http://identity.clinic.local",  // Identity pages — /authorize, /login
-  app:         "tasks",                          // this app's slug from the Console
+export const auth = createIdentityClient({
+  url:         import.meta.env.VITE_NUBLESTATION_URL,          // Gateway — http://api.{org}.local
+  identityUrl: import.meta.env.VITE_NUBLESTATION_IDENTITY_URL, // Identity pages — http://identity.{org}.local
+  app:         import.meta.env.VITE_NUBLESTATION_APP,          // your app's slug from the Console
 });
 ```
 
-### Check the session
+Set the three env vars in your `.env` (Vite bakes them in at build time):
+
+| Variable | Example |
+|---|---|
+| `VITE_NUBLESTATION_URL` | `http://api.clinic.local` |
+| `VITE_NUBLESTATION_IDENTITY_URL` | `http://identity.clinic.local` |
+| `VITE_NUBLESTATION_APP` | `tasks` |
+
+Two URLs because programmatic calls (`/v1/auth/*`) go through the **Gateway**, while sign-in is a full-page navigation to the **Identity pages**.
+
+### 3. Check the session
+
+`getSession()` returns one of **three states** — handle all of them:
 
 ```typescript
 const session = await auth.getSession();
 
 switch (session.status) {
   case "authenticated":
-    console.log(`Signed in as ${session.user.email} with role ${session.user.role}`);
+    // session.user.role is set — render the app
+    console.log(`Hi ${session.user.email}, role: ${session.user.role}`);
     break;
   case "forbidden":
-    // Signed in but no role on this app — show "ask an admin"
+    // Signed in, but no role on THIS app — show "ask an admin", don't loop to login
     break;
   case "unauthenticated":
-    auth.login(); // redirect to identity.clinic.local/authorize
+    auth.login(); // redirect to the SSO sign-in, returns to the current URL after
     break;
 }
 ```
 
-### Sign in / sign out
+### 4. Wire sign-in and sign-out
 
 ```typescript
-// Redirect to the SSO login page, returning to the current URL after
-auth.login();
-
-// Revoke session server-side then navigate to the identity login page
-await auth.logout();
+auth.login();        // navigate to identity.{org}.local/authorize for this app
+await auth.logout(); // revoke the session server-side, then go to the Identity login page
 ```
 
-### React: the `useIdentity` hook
+That's it — your app is gated. Using React? Copy the canonical `useIdentity` hook and `AuthGate` component from the [SDK reference](/NubleStation/docs/sdk/auth).
 
-The SDK is framework-agnostic. For React, copy the canonical hook and gate into your app (they are not bundled to keep the package dependency-free):
+## Everyday usage
+
+### Guard a route imperatively
+
+`requireUser()` resolves with the user when signed in *and* allowed on this app; otherwise it redirects to sign-in for you:
 
 ```typescript
-import { useCallback, useEffect, useState } from "react";
-import { createIdentityClient } from "@nublestation/identity";
+const user = await auth.requireUser();
+// code below only runs for an authorized user
 
-export const identity = createIdentityClient({
-  url:         import.meta.env.VITE_NUBLESTATION_URL,
-  identityUrl: import.meta.env.VITE_NUBLESTATION_IDENTITY_URL,
-  app:         import.meta.env.VITE_NUBLESTATION_APP,
-});
-
-export function useIdentity() {
-  const [status, setStatus] = useState("loading");
-  const [user,   setUser]   = useState(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    identity.getSession().then((s) => {
-      if (cancelled) return;
-      setStatus(s.status);
-      setUser(s.status !== "unauthenticated" ? s.user : null);
-    }).catch(() => { if (!cancelled) setStatus("unauthenticated"); });
-    return () => { cancelled = true; };
-  }, []);
-
-  return {
-    status,
-    user,
-    login:  useCallback(() => identity.login(), []),
-    logout: useCallback(() => void identity.logout(), []),
-  };
-}
+// Custom handling for signed-in-but-no-access:
+await auth.requireUser({ onForbidden: (u) => showNoAccessScreen(u) });
 ```
 
-<Aside type="caution" title="Requires a deployed origin">
-  Auth only works when your app runs on `{app}.{org}.local` — the cookie is scoped to `.{org}.local` and is never sent to `localhost`. Develop UI locally with mocked state; test the real SSO flow on the deployed app.
-</Aside>
+### Check a role
+
+```typescript
+await auth.hasAccess();         // any role on this app
+await auth.hasAccess("admin");  // require this exact role
+```
+
+### Build a "share with…" picker
+
+`listAppUsers()` returns everyone with access to this app, minus the caller — exactly the set you can share with:
+
+```typescript
+const users = await auth.listAppUsers();
+// [{ id, email, displayName, avatarUrl, role }, ...]
+```
+
+### Handle the `forbidden` state
+
+A user can be **signed in yet denied**: access is default-deny per app. Show them "ask an admin to grant you access" — an admin then grants a role in the Console under App → **Users**. Don't redirect them to login; they're already logged in.
+
+## Reference
+
+### SDK methods
+
+| Method | Returns | Use for |
+|---|---|---|
+| `getUser()` | `IdentityUser \| null` | "Who is signed in" UI, ignoring app access |
+| `getSession()` | `{ status, user? }` — `authenticated` / `forbidden` / `unauthenticated` | Gating your app (primary call) |
+| `isAuthenticated()` | `boolean` | Quick "any session?" check |
+| `hasAccess(role?)` | `boolean` | Signed in + has access (optionally an exact role) |
+| `requireUser(opts?)` | `IdentityUser` (or redirects) | Imperative route guard |
+| `listAppUsers()` | `AppUser[]` | Share pickers, member lists |
+| `loginUrl(redirectUri?)` | `string` | Sign-in URL for an `href` |
+| `login(redirectUri?)` | `void` (navigates) | Sign-in button |
+| `logout(redirectTo?)` | `Promise<void>` (navigates) | Sign-out button |
+
+### HTTP endpoints
+
+All JSON calls go through the Gateway at `api.{org}.local`. The session rides the cookie (or the Bearer fallback) — no API key needed on `/v1/auth/*`.
+
+| Method | Path | Statuses | Description |
+|---|---|---|---|
+| `GET` | `/v1/auth/me` | 200, 401 | Current user, no app context (`role` is `null`) |
+| `GET` | `/v1/auth/me?app={slug}` | 200, 401, 403, 404 | Current user + role on that app; `403 forbidden` if no role, `404 unknown_app` if the slug doesn't exist |
+| `GET` | `/v1/auth/app-users?app={slug}` | 200, 401, 403, 404 | Users with access to the app, minus the caller |
+| `POST` | `/v1/auth/logout` | 200 | Revoke the session, clear the cookie |
+
+User-facing pages (`/login`, `/register`, `/authorize`, `/account`) are served directly at `identity.{org}.local` — your app never renders them.
+
+## Limits & gotchas
+
+- **No `localhost` auth.** The session cookie is scoped to `.{org}.local` and is never sent from Vite's dev server. Develop UI with mocked state; test the real flow on your deployed app at `{app}.{org}.local`.
+- **Mobile Safari** drops the cross-subdomain cookie (`.local` isn't a registrable TLD for it). SDK ≥ 0.1.1 handles this automatically via a Bearer-token fallback — nothing to do on your side. Details in [Sessions & SSO](/NubleStation/docs/concepts/sessions-and-sso).
+- **Granting access is manual.** Self-registration works, but a new user sees `forbidden` on every app until an admin grants a role in the Console. There is no self-serve access request yet.
+- **`404 unknown_app`** from any call means your `app` slug doesn't match the Console — check `VITE_NUBLESTATION_APP`.
+
+## Go deeper
 
 <CardGrid>
-  <LinkCard title="Full SDK reference" href="/docs/sdk/auth" description="All methods, the IdentityUser type, error codes, the React gate component." />
-  <LinkCard title="Row-Level Security" href="/docs/security/row-level-security" description="How resolved identity flows into per-tenant data access." />
+  <LinkCard title="Sessions & SSO" href="/NubleStation/docs/concepts/sessions-and-sso" description="The session model, the /authorize flow, cookie attributes, and the Safari fallback explained." />
+  <LinkCard title="Apps & API Keys" href="/NubleStation/docs/concepts/apps-and-api-keys" description="The user_app_access table, key lifecycle, and the default-deny model." />
+  <LinkCard title="@nublestation/identity" href="/NubleStation/docs/sdk/auth" description="Full SDK reference — types, error codes, and the React hook + gate." />
 </CardGrid>

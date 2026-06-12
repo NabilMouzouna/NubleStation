@@ -11,6 +11,7 @@ import {
   Users,
   Settings,
   LogOut,
+  BookOpen,
 } from "lucide-react";
 import { NubleSidebarHeader } from "@/components/brand";
 import { NavItem } from "@/components/nav-item";
@@ -56,6 +57,15 @@ export default async function ShellLayout({ children }: { children: ReactNode })
 
         <div className="border-t border-border px-5 py-4">
           <p className="text-xs font-medium text-foreground">{orgLabel}</p>
+          <a
+            href="https://nabilmouzouna.github.io/NubleStation"
+            target="_blank"
+            rel="noreferrer"
+            className="mt-3 flex items-center gap-2 text-xs text-muted-foreground transition-colors hover:text-foreground"
+          >
+            <BookOpen size={13} />
+            Documentation
+          </a>
           <div className="mt-3 flex items-center justify-between">
             <form action="/auth/logout" method="POST">
               <button
