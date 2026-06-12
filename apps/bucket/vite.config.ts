@@ -1,7 +1,6 @@
 import { defineConfig, loadEnv } from 'vite'
 import react, { reactCompilerPreset } from '@vitejs/plugin-react'
 import babel from '@rolldown/plugin-babel'
-import { resolve } from 'node:path'
 
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => {
@@ -25,13 +24,6 @@ export default defineConfig(({ mode }) => {
     'import.meta.env.VITE_NUBLESTATION_API_KEY':       JSON.stringify(NUBLE_KEY),
     'import.meta.env.VITE_NUBLESTATION_IDENTITY_URL':  JSON.stringify(IDENTITY_URL),
     'import.meta.env.VITE_NUBLESTATION_APP':           JSON.stringify(APP_SLUG),
-  },
-  resolve: {
-    alias: {
-      '@nublestation/vault':    resolve(__dirname, '../../packages/vault/dist/index.js'),
-      '@nublestation/identity': resolve(__dirname, '../../packages/identity/dist/index.js'),
-      '@nublestation/client':   resolve(__dirname, '../../packages/client/dist/index.js'),
-    },
   },
   server: {
     // Proxy all /v1/* requests to the NubleStation gateway so the browser
