@@ -64,6 +64,8 @@ proxy.all("/v1/auth/*", async (c) => {
   const headers: Record<string, string> = {};
   const cookie = c.req.header("cookie");
   if (cookie) headers.cookie = cookie;
+  const authorization = c.req.header("authorization");
+  if (authorization) headers.authorization = authorization;
   const contentType = c.req.header("content-type");
   if (contentType) headers["content-type"] = contentType;
 
