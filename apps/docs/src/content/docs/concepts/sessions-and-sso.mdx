@@ -1,0 +1,95 @@
+---
+title: Sessions & SSO
+description: How one login signs a user into every app — the shared-cookie session model, the /authorize flow, and the mobile Safari Bearer fallback.
+---
+
+
+
+## One login, every app
+
+NubleStation gives an organization **cross-app user accounts**: one identity per human, recognized by every app on the platform. A user signs in once at `identity.{org}.local`, and from then on every `*.{org}.local` app knows who they are.
+
+The mechanism is **shared-cookie SSO**. When a user authenticates, Identity sets a session cookie scoped to the *parent* domain (`Domain=.{org}.local`). Because the cookie lives on the parent domain, the browser automatically sends it on requests to **any** subdomain — `tasks.{org}.local`, `console.{org}.local`, and crucially `api.{org}.local`, where apps call `/v1/auth/me` to resolve the user.
+
+There are **no browser-side tokens** in the primary path. This was chosen over a full OIDC flow because every app is first-party under one parent domain: shared cookies deliver the same SSO outcome while eliminating OAuth's browser-token attack surface (open redirects, authorization-code interception, `localStorage` token theft).
+
+## The session model
+
+A session is a **server-side, revocable record** in `platform.sessions` (`id`, `user_id`, `token_hash`, `expires_at`, `created_at`). The cookie is only a reference to it:
+
+- The cookie carries a **32-byte CSPRNG token**; the database stores only its **sha256 hash**. Someone reading the DB cannot reconstruct a usable cookie.
+- **Revocable** — logout deletes the row. An admin can force-log-out a user everywhere by deleting their session rows.
+- **Token rotation on login** — every login mints a fresh token, so a pre-planted (fixated) token is never elevated to an authenticated session.
+- **TTL** — sessions expire after `SESSION_TTL_HOURS` (default 8 hours).
+
+### Cookie attributes
+
+| Attribute | Value | Why |
+|---|---|---|
+| `HttpOnly` | on | JavaScript can never read the cookie — blocks XSS theft |
+| `SameSite` | `Lax` | CSRF backstop, while still letting the `/authorize` top-level redirect carry the cookie |
+| `Domain` | `.{org}.local` | Sent to every app subdomain — the SSO backbone |
+| `Secure` | off for now | Requires HTTPS; flipped via `SECURE_COOKIES=true` once TLS lands |
+
+<Aside type="caution" title="HTTP-era limitation">
+  Without TLS, a same-LAN sniffer could capture the session cookie. This is the one accepted trade-off of the current HTTP deployment; it disappears the moment Caddy HTTPS (internal CA) is enabled — only `SECURE_COOKIES` changes. Every other control stays at maximum.
+</Aside>
+
+Because the cookie is `HttpOnly`, "am I signed in?" is always answered by asking the server (`GET /v1/auth/me`), never by inspecting `document.cookie`.
+
+## The `/authorize` SSO flow
+
+When an app's "Login" button is clicked, the browser navigates to Identity's authorize endpoint. The whole flow:
+
+```
+tasks.{org}.local  ──"Login"──▶  identity.{org}.local/authorize?app=tasks&redirect_uri=http://tasks.{org}.local/
+                                       │
+                       session cookie on .{org}.local?
+                        ├─ no  ▶ render login/register ▶ on success ▼
+                        └─ yes ▼
+                       role for (user, tasks)?
+                        │   admin if user is super_admin/admin, else user_app_access lookup
+                        ├─ has role ▶ 302 redirect_uri   (validated: host ends with .{org}.local)
+                        └─ none     ▶ "No access" page (default-deny)
+                                       │
+tasks.{org}.local  ◀──redirect──  app calls GET api.{org}.local/v1/auth/me?app=tasks
+                                   ▶ { id, email, displayName, avatarUrl, role }   (403 if no access)
+```
+
+Two properties worth noting:
+
+- `redirect_uri` is **allow-listed**: its host must be `{org}.local` or a `*.{org}.local` subdomain. Identity will never redirect a fresh session to an arbitrary host, which blocks open-redirect attacks.
+- The role check happens **before** the redirect back. A signed-in user with no role on the app lands on a "No access" page at Identity, not back in the app.
+
+## The mobile Safari caveat (and the Bearer fallback)
+
+Shared-cookie SSO assumes the browser treats `.{org}.local` as one site with subdomains. Safari on iOS does not: `.local` is not in the **Public Suffix List**, so Safari does not recognize `{org}.local` as a registrable domain and may drop the `SameSite=Lax` cookie on cross-subdomain `fetch` calls — the app on `tasks.{org}.local` calls `api.{org}.local` and arrives with no cookie, looking signed out.
+
+The platform handles this with a parallel **Bearer-token path**:
+
+1. On a successful `/authorize`, Identity appends a one-time `nuble_token` query parameter to the redirect back to the app.
+2. The `@nublestation/identity` SDK **drains** the token on load: it stores it in `sessionStorage` and immediately scrubs the parameter from the URL (so it never lingers in the address bar or history).
+3. From then on, the SDK sends it as an `Authorization: Bearer` header on every API call, alongside `credentials: "include"`.
+
+Server-side, the two paths are **equivalent**: Identity accepts the session token from either the cookie or the `Authorization` header, hashes it, and resolves the same session row. Browsers where the cookie works simply ignore the redundant header; Safari rides the header. App developers do nothing — the fallback is built into the SDK.
+
+## Authorization: default-deny
+
+Authentication ("who is this?") and authorization ("may they use *this* app?") are deliberately separate. Having a valid session grants access to **nothing** by default.
+
+Role resolution for `(user, app)` works in two steps:
+
+1. If the user's platform role is `super_admin` or `admin`, they are implicitly **`admin` on every app** — no per-app row needed. Console admins never hit a "no access" wall.
+2. Otherwise, their role comes from the `platform.user_app_access` table for that specific app — or **`null`**, which means denied.
+
+A freshly registered user therefore has **zero** app access until an admin grants a role in the Console (App → **Users** tab; every grant, revoke, and role change is written to `platform.audit_log`). The SDK surfaces this state as `forbidden` — distinct from `unauthenticated` — so apps can show "ask an admin" instead of a pointless login loop.
+
+The `user_app_access` table itself, and how it interacts with API keys and tenant data, is covered in [Apps & API Keys](/NubleStation/docs/concepts/apps-and-api-keys).
+
+## Where to go next
+
+<CardGrid>
+  <LinkCard title="Identity — Auth Service" href="/NubleStation/docs/services/auth" description="Usage-first guide: install the SDK, gate your app, reference tables." />
+  <LinkCard title="@nublestation/identity" href="/NubleStation/docs/sdk/auth" description="Full SDK reference — every method, types, error codes, React wrappers." />
+  <LinkCard title="Apps & API Keys" href="/NubleStation/docs/concepts/apps-and-api-keys" description="What an app is, key format and lifecycle, the user_app_access table." />
+</CardGrid>

@@ -3,7 +3,7 @@ title: "Vault — Access Control & Sharing"
 description: File ownership, per-user sharing, and visibility — how Vault decides who can see and touch a file.
 ---
 
-This page describes Vault's **access-control model**: how files become *owned* by a user, how owners share them, and how the platform decides — server-side — who is allowed to read, edit, or delete a file. The model is Cognito + S3 in spirit: [Identity](/docs/services/auth) supplies *who you are*, Vault enforces *what you can touch*.
+This page describes Vault's **access-control model**: how files become *owned* by a user, how owners share them, and how the platform decides — server-side — who is allowed to read, edit, or delete a file. The model is Cognito + S3 in spirit: [Identity](/NubleStation/docs/services/auth) supplies *who you are*, Vault enforces *what you can touch*.
 
 <Aside type="tip" title="Shipped">
   This model is live (ADR 016). The **Bucket** app is built on it end-to-end — the snippets below are taken from its source.
@@ -162,7 +162,7 @@ The SDK is a thin client — every rule above is enforced in Vault, not the brow
 ## See also
 
 <CardGrid>
-  <LinkCard title="Vault — Storage Service" href="/docs/services/storage" description="The current storage API: collections, upload/download, public URLs." />
-  <LinkCard title="Identity — Auth Service" href="/docs/services/auth" description="Where 'who you are' comes from — sessions, SSO, app access." />
-  <LinkCard title="@nublestation/vault" href="/docs/sdk/storage" description="The storage SDK." />
+  <LinkCard title="Vault — Storage Service" href="/NubleStation/docs/services/storage" description="The current storage API: collections, upload/download, public URLs." />
+  <LinkCard title="Identity — Auth Service" href="/NubleStation/docs/services/auth" description="Where 'who you are' comes from — sessions, SSO, app access." />
+  <LinkCard title="@nublestation/vault" href="/NubleStation/docs/sdk/storage" description="The storage SDK." />
 </CardGrid>
