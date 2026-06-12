@@ -10,11 +10,11 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@nublestation/blaze": "^0.1.0",
+    "@nublestation/identity": "^0.1.1",
+    "@nublestation/vault": "^0.1.0",
     "react": "^19.2.6",
-    "react-dom": "^19.2.6",
-    "@nublestation/vault": "workspace:*",
-    "@nublestation/identity": "workspace:*",
-    "@nublestation/blaze": "workspace:*"
+    "react-dom": "^19.2.6"
   },
   "devDependencies": {
     "@babel/core": "^7.29.0",
