@@ -10,18 +10,22 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# Run all JS actions on Node 24 — Node 20 runners are deprecated (removed Sept 2026).
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   lint:
     name: Lint + check-types
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - uses: pnpm/action-setup@v4
         with:
           version: 9.0.0
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: pnpm
@@ -54,17 +58,17 @@ jobs:
     env:
       DATABASE_URL: postgres://nuble:nuble@localhost:5432/nuble_test
       DATABASE_URL_TEST: postgres://nuble:nuble@localhost:5432/nuble_test
-      INTERNAL_HMAC_SECRET: ci-hmac-secret-min-16-chars-ok
+      INTERNAL_HMAC_SECRET: ci-hmac-secret-with-at-least-32-characters-ok
       NODE_ENV: test
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - uses: pnpm/action-setup@v4
         with:
           version: 9.0.0
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: pnpm
