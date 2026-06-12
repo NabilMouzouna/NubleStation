@@ -1,0 +1,422 @@
+<!DOCTYPE html><html lang="en"> <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="description" content="Visual reference for NubleStation's architecture — components, request lifecycle, auth flows, and database schema. All diagrams are Mermaid-compatible and can be pasted directly into Eraser.io."><title>System Design Diagrams — NubleStation</title><link rel="icon" type="image/svg+xml" href="/NubleStation/favicon.svg"><script>
+    (function() {
+      try {
+        const t = localStorage.getItem('theme');
+        const d = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        if (t === 'dark' || (!t && d)) document.documentElement.classList.add('dark');
+      } catch(e) {}
+    })();
+  </script><link rel="stylesheet" href="/NubleStation/_astro/NubleIcon.BaIo4B0m.css">
+<style>.steps[data-astro-cid-cebdnmq4] h3,.steps[data-astro-cid-cebdnmq4] h4{position:relative;font-size:.9375rem;font-weight:600;margin-bottom:.5rem;margin-top:1.5rem;color:var(--text)}.steps[data-astro-cid-cebdnmq4] h3:before,.steps[data-astro-cid-cebdnmq4] h4:before{content:counter(step);counter-increment:step;position:absolute;left:-2.375rem;top:50%;transform:translateY(-50%);width:1.5rem;height:1.5rem;background:var(--accent);color:#fff;font-size:.7rem;font-weight:700;border-radius:50%;display:flex;align-items:center;justify-content:center}.steps[data-astro-cid-cebdnmq4]{counter-reset:step}
+</style></head> <body class="min-h-screen font-sans">  <header class="fixed top-0 left-0 right-0 z-50 h-14 border-b" style="background:var(--bg);border-color:var(--border);"> <div class="flex items-center justify-between h-full px-4 max-w-screen-2xl mx-auto"> <!-- Logo --> <a href="/NubleStation/" class="flex items-center gap-2.5 group"> <svg class="h-7 w-auto" viewBox="0 0 155 95" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"> <defs> <linearGradient id="nuble-icon-g" x1="0%" y1="0%" x2="100%" y2="100%"> <stop offset="0%" stop-color="#1F4FE0"></stop> <stop offset="100%" stop-color="#9B5BFF"></stop> </linearGradient> </defs> <g transform="translate(0, -8)"> <path d="M 30 75 C 8 75, 5 50, 25 45 C 18 18, 55 10, 72 32 C 85 12, 120 18, 120 48 C 142 48, 148 75, 128 75 Z" fill="url(#nuble-icon-g)"></path> <line x1="5" y1="98" x2="148" y2="98" stroke="url(#nuble-icon-g)" stroke-width="6" stroke-linecap="round"></line> <line x1="40" y1="78" x2="40" y2="98" stroke="url(#nuble-icon-g)" stroke-width="3" stroke-linecap="round"></line> <line x1="110" y1="78" x2="110" y2="98" stroke="url(#nuble-icon-g)" stroke-width="3" stroke-linecap="round"></line> </g> </svg> <span class="font-semibold text-sm tracking-tight" style="color:var(--text)">NubleStation</span> </a> <!-- Right --> <div class="flex items-center gap-2"> <!-- Docs link --> <a href="/NubleStation/docs/getting-started/introduction" class="hidden sm:flex items-center text-sm px-3 py-1.5 rounded-md transition-colors" style="color:var(--text-muted)" onmouseover="this.style.background='var(--surface-raised)';this.style.color='var(--text)'" onmouseout="this.style.background='';this.style.color='var(--text-muted)'">
+Docs
+</a> <!-- GitHub --> <a href="https://github.com/NabilMouzouna/NubleStation" target="_blank" rel="noopener" class="flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-md transition-colors" style="color:var(--text-muted)" onmouseover="this.style.background='var(--surface-raised)';this.style.color='var(--text)'" onmouseout="this.style.background='';this.style.color='var(--text-muted)'"> <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"> <path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"></path> </svg>
+GitHub
+</a> <!-- Theme toggle --> <button id="theme-toggle" class="flex items-center justify-center w-9 h-9 rounded-md transition-colors" style="color:var(--text-muted)" onmouseover="this.style.background='var(--surface-raised)';this.style.color='var(--text)'" onmouseout="this.style.background='';this.style.color='var(--text-muted)'" aria-label="Toggle theme"> <!-- Sun icon (shown in dark mode) --> <svg id="icon-sun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="hidden dark:block"> <circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line> </svg> <!-- Moon icon (shown in light mode) --> <svg id="icon-moon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="block dark:hidden"> <path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"></path> </svg> </button> </div> </div> </header> <script type="module">document.getElementById("theme-toggle")?.addEventListener("click",()=>{const e=document.documentElement.classList.toggle("dark");localStorage.setItem("theme",e?"dark":"light")});</script> <div class="pt-14 flex min-h-screen max-w-screen-2xl mx-auto"> <!-- Sidebar --> <aside class="hidden md:flex flex-col fixed top-14 bottom-0 overflow-y-auto z-30" style="width:var(--sidebar-width);border-right:1px solid var(--border);background:var(--bg);"> <nav class="sidebar py-6 px-3" aria-label="Docs navigation"> <div class="mb-6"> <p class="px-3 mb-2 text-xs font-semibold uppercase tracking-widest" style="color:var(--text-muted)"> AI Agents </p> <ul> <li> <a href="/NubleStation/docs/agent" class="flex items-center justify-between px-3 py-1.5 rounded-md text-sm transition-all " style="color:var(--text-muted)" onmouseover="this.style.background='var(--surface-raised)';this.style.color='var(--text)';" onmouseout="this.style.background='';this.style.color='var(--text-muted)';"> <span>AGENT.md</span> <span class="text-xs px-1.5 py-0.5 rounded font-medium" style="background:#7c3aed18;color:#7c3aed;"> AI </span> </a> </li> </ul> </div><div class="mb-6"> <p class="px-3 mb-2 text-xs font-semibold uppercase tracking-widest" style="color:var(--text-muted)"> Getting Started </p> <ul> <li> <a href="/NubleStation/docs/getting-started/introduction" class="flex items-center justify-between px-3 py-1.5 rounded-md text-sm transition-all " style="color:var(--text-muted)" onmouseover="this.style.background='var(--surface-raised)';this.style.color='var(--text)';" onmouseout="this.style.background='';this.style.color='var(--text-muted)';"> <span>Introduction</span>  </a> </li><li> <a href="/NubleStation/docs/getting-started/installation" class="flex items-center justify-between px-3 py-1.5 rounded-md text-sm transition-all " style="color:var(--text-muted)" onmouseover="this.style.background='var(--surface-raised)';this.style.color='var(--text)';" onmouseout="this.style.background='';this.style.color='var(--text-muted)';"> <span>Installation</span>  </a> </li><li> <a href="/NubleStation/docs/getting-started/quick-start" class="flex items-center justify-between px-3 py-1.5 rounded-md text-sm transition-all " style="color:var(--text-muted)" onmouseover="this.style.background='var(--surface-raised)';this.style.color='var(--text)';" onmouseout="this.style.background='';this.style.color='var(--text-muted)';"> <span>Quick Start</span>  </a> </li> </ul> </div><div class="mb-6"> <p class="px-3 mb-2 text-xs font-semibold uppercase tracking-widest" style="color:var(--text-muted)"> Services </p> <ul> <li> <a href="/NubleStation/docs/services/gateway" class="flex items-center justify-between px-3 py-1.5 rounded-md text-sm transition-all " style="color:var(--text-muted)" onmouseover="this.style.background='var(--surface-raised)';this.style.color='var(--text)';" onmouseout="this.style.background='';this.style.color='var(--text-muted)';"> <span>Gateway</span>  </a> </li><li> <a href="/NubleStation/docs/services/deploy" class="flex items-center justify-between px-3 py-1.5 rounded-md text-sm transition-all " style="color:var(--text-muted)" onmouseover="this.style.background='var(--surface-raised)';this.style.color='var(--text)';" onmouseout="this.style.background='';this.style.color='var(--text-muted)';"> <span>Orbit — Deploy</span> <span class="text-xs px-1.5 py-0.5 rounded font-medium" style="background:#05966918;color:#059669;"> Live </span> </a> </li><li> <a href="/NubleStation/docs/services/database" class="flex items-center justify-between px-3 py-1.5 rounded-md text-sm transition-all " style="color:var(--text-muted)" onmouseover="this.style.background='var(--surface-raised)';this.style.color='var(--text)';" onmouseout="this.style.background='';this.style.color='var(--text-muted)';"> <span>Blaze — Database</span> <span class="text-xs px-1.5 py-0.5 rounded font-medium" style="background:#05966918;color:#059669;"> Live </span> </a> </li><li> <a href="/NubleStation/docs/services/storage" class="flex items-center justify-between px-3 py-1.5 rounded-md text-sm transition-all " style="color:var(--text-muted)" onmouseover="this.style.background='var(--surface-raised)';this.style.color='var(--text)';" onmouseout="this.style.background='';this.style.color='var(--text-muted)';"> <span>Vault — Storage</span> <span class="text-xs px-1.5 py-0.5 rounded font-medium" style="background:#05966918;color:#059669;"> Live </span> </a> </li><li> <a href="/NubleStation/docs/services/storage-access" class="flex items-center justify-between px-3 py-1.5 rounded-md text-sm transition-all " style="color:var(--text-muted)" onmouseover="this.style.background='var(--surface-raised)';this.style.color='var(--text)';" onmouseout="this.style.background='';this.style.color='var(--text-muted)';"> <span>Vault — Access Control</span> <span class="text-xs px-1.5 py-0.5 rounded font-medium" style="background:#05966918;color:#059669;"> Live </span> </a> </li><li> <a href="/NubleStation/docs/services/auth" class="flex items-center justify-between px-3 py-1.5 rounded-md text-sm transition-all " style="color:var(--text-muted)" onmouseover="this.style.background='var(--surface-raised)';this.style.color='var(--text)';" onmouseout="this.style.background='';this.style.color='var(--text-muted)';"> <span>Identity — Auth</span> <span class="text-xs px-1.5 py-0.5 rounded font-medium" style="background:#05966918;color:#059669;"> Live </span> </a> </li> </ul> </div><div class="mb-6"> <p class="px-3 mb-2 text-xs font-semibold uppercase tracking-widest" style="color:var(--text-muted)"> CLI </p> <ul> <li> <a href="/NubleStation/docs/cli/commands" class="flex items-center justify-between px-3 py-1.5 rounded-md text-sm transition-all " style="color:var(--text-muted)" onmouseover="this.style.background='var(--surface-raised)';this.style.color='var(--text)';" onmouseout="this.style.background='';this.style.color='var(--text-muted)';"> <span>Commands</span>  </a> </li> </ul> </div><div class="mb-6"> <p class="px-3 mb-2 text-xs font-semibold uppercase tracking-widest" style="color:var(--text-muted)"> Core Concepts </p> <ul> <li> <a href="/NubleStation/docs/concepts/architecture" class="flex items-center justify-between px-3 py-1.5 rounded-md text-sm transition-all " style="color:var(--text-muted)" onmouseover="this.style.background='var(--surface-raised)';this.style.color='var(--text)';" onmouseout="this.style.background='';this.style.color='var(--text-muted)';"> <span>Architecture</span>  </a> </li><li> <a href="/NubleStation/docs/concepts/networking" class="flex items-center justify-between px-3 py-1.5 rounded-md text-sm transition-all " style="color:var(--text-muted)" onmouseover="this.style.background='var(--surface-raised)';this.style.color='var(--text)';" onmouseout="this.style.background='';this.style.color='var(--text-muted)';"> <span>Networking</span>  </a> </li><li> <a href="/NubleStation/docs/concepts/multi-tenancy" class="flex items-center justify-between px-3 py-1.5 rounded-md text-sm transition-all " style="color:var(--text-muted)" onmouseover="this.style.background='var(--surface-raised)';this.style.color='var(--text)';" onmouseout="this.style.background='';this.style.color='var(--text-muted)';"> <span>Multi-tenancy</span>  </a> </li><li> <a href="/NubleStation/docs/concepts/apps-and-api-keys" class="flex items-center justify-between px-3 py-1.5 rounded-md text-sm transition-all " style="color:var(--text-muted)" onmouseover="this.style.background='var(--surface-raised)';this.style.color='var(--text)';" onmouseout="this.style.background='';this.style.color='var(--text-muted)';"> <span>Apps &amp; API Keys</span>  </a> </li><li> <a href="/NubleStation/docs/concepts/sessions-and-sso" class="flex items-center justify-between px-3 py-1.5 rounded-md text-sm transition-all " style="color:var(--text-muted)" onmouseover="this.style.background='var(--surface-raised)';this.style.color='var(--text)';" onmouseout="this.style.background='';this.style.color='var(--text-muted)';"> <span>Sessions &amp; SSO</span>  </a> </li> </ul> </div><div class="mb-6"> <p class="px-3 mb-2 text-xs font-semibold uppercase tracking-widest" style="color:var(--text-muted)"> Infrastructure </p> <ul> <li> <a href="/NubleStation/docs/infrastructure/docker-compose" class="flex items-center justify-between px-3 py-1.5 rounded-md text-sm transition-all " style="color:var(--text-muted)" onmouseover="this.style.background='var(--surface-raised)';this.style.color='var(--text)';" onmouseout="this.style.background='';this.style.color='var(--text-muted)';"> <span>Docker Compose</span>  </a> </li><li> <a href="/NubleStation/docs/infrastructure/caddy" class="flex items-center justify-between px-3 py-1.5 rounded-md text-sm transition-all " style="color:var(--text-muted)" onmouseover="this.style.background='var(--surface-raised)';this.style.color='var(--text)';" onmouseout="this.style.background='';this.style.color='var(--text-muted)';"> <span>Caddy</span>  </a> </li><li> <a href="/NubleStation/docs/infrastructure/coredns" class="flex items-center justify-between px-3 py-1.5 rounded-md text-sm transition-all " style="color:var(--text-muted)" onmouseover="this.style.background='var(--surface-raised)';this.style.color='var(--text)';" onmouseout="this.style.background='';this.style.color='var(--text-muted)';"> <span>CoreDNS</span>  </a> </li><li> <a href="/NubleStation/docs/infrastructure/dns-doctor" class="flex items-center justify-between px-3 py-1.5 rounded-md text-sm transition-all " style="color:var(--text-muted)" onmouseover="this.style.background='var(--surface-raised)';this.style.color='var(--text)';" onmouseout="this.style.background='';this.style.color='var(--text-muted)';"> <span>DNS Doctor</span>  </a> </li> </ul> </div><div class="mb-6"> <p class="px-3 mb-2 text-xs font-semibold uppercase tracking-widest" style="color:var(--text-muted)"> Security </p> <ul> <li> <a href="/NubleStation/docs/security/hmac-signing" class="flex items-center justify-between px-3 py-1.5 rounded-md text-sm transition-all " style="color:var(--text-muted)" onmouseover="this.style.background='var(--surface-raised)';this.style.color='var(--text)';" onmouseout="this.style.background='';this.style.color='var(--text-muted)';"> <span>HMAC Signing</span>  </a> </li><li> <a href="/NubleStation/docs/security/row-level-security" class="flex items-center justify-between px-3 py-1.5 rounded-md text-sm transition-all " style="color:var(--text-muted)" onmouseover="this.style.background='var(--surface-raised)';this.style.color='var(--text)';" onmouseout="this.style.background='';this.style.color='var(--text-muted)';"> <span>Row-Level Security</span>  </a> </li> </ul> </div><div class="mb-6"> <p class="px-3 mb-2 text-xs font-semibold uppercase tracking-widest" style="color:var(--text-muted)"> SDK </p> <ul> <li> <a href="/NubleStation/docs/sdk/overview" class="flex items-center justify-between px-3 py-1.5 rounded-md text-sm transition-all " style="color:var(--text-muted)" onmouseover="this.style.background='var(--surface-raised)';this.style.color='var(--text)';" onmouseout="this.style.background='';this.style.color='var(--text-muted)';"> <span>Overview</span>  </a> </li><li> <a href="/NubleStation/docs/sdk/client" class="flex items-center justify-between px-3 py-1.5 rounded-md text-sm transition-all " style="color:var(--text-muted)" onmouseover="this.style.background='var(--surface-raised)';this.style.color='var(--text)';" onmouseout="this.style.background='';this.style.color='var(--text-muted)';"> <span>@nublestation/client</span> <span class="text-xs px-1.5 py-0.5 rounded font-medium" style="background:#05966918;color:#059669;"> Live </span> </a> </li><li> <a href="/NubleStation/docs/sdk/storage" class="flex items-center justify-between px-3 py-1.5 rounded-md text-sm transition-all " style="color:var(--text-muted)" onmouseover="this.style.background='var(--surface-raised)';this.style.color='var(--text)';" onmouseout="this.style.background='';this.style.color='var(--text-muted)';"> <span>@nublestation/vault</span> <span class="text-xs px-1.5 py-0.5 rounded font-medium" style="background:#05966918;color:#059669;"> Live </span> </a> </li><li> <a href="/NubleStation/docs/sdk/auth" class="flex items-center justify-between px-3 py-1.5 rounded-md text-sm transition-all " style="color:var(--text-muted)" onmouseover="this.style.background='var(--surface-raised)';this.style.color='var(--text)';" onmouseout="this.style.background='';this.style.color='var(--text-muted)';"> <span>@nublestation/identity</span> <span class="text-xs px-1.5 py-0.5 rounded font-medium" style="background:#05966918;color:#059669;"> Live </span> </a> </li><li> <a href="/NubleStation/docs/sdk/database" class="flex items-center justify-between px-3 py-1.5 rounded-md text-sm transition-all " style="color:var(--text-muted)" onmouseover="this.style.background='var(--surface-raised)';this.style.color='var(--text)';" onmouseout="this.style.background='';this.style.color='var(--text-muted)';"> <span>@nublestation/blaze</span> <span class="text-xs px-1.5 py-0.5 rounded font-medium" style="background:#05966918;color:#059669;"> Live </span> </a> </li> </ul> </div><div class="mb-6"> <p class="px-3 mb-2 text-xs font-semibold uppercase tracking-widest" style="color:var(--text-muted)"> Reference </p> <ul> <li> <a href="/NubleStation/docs/reference/platform-schema" class="flex items-center justify-between px-3 py-1.5 rounded-md text-sm transition-all " style="color:var(--text-muted)" onmouseover="this.style.background='var(--surface-raised)';this.style.color='var(--text)';" onmouseout="this.style.background='';this.style.color='var(--text-muted)';"> <span>Platform Schema</span>  </a> </li><li> <a href="/NubleStation/docs/reference/troubleshooting" class="flex items-center justify-between px-3 py-1.5 rounded-md text-sm transition-all " style="color:var(--text-muted)" onmouseover="this.style.background='var(--surface-raised)';this.style.color='var(--text)';" onmouseout="this.style.background='';this.style.color='var(--text-muted)';"> <span>Troubleshooting</span>  </a> </li><li> <a href="/NubleStation/docs/reference/roadmap" class="flex items-center justify-between px-3 py-1.5 rounded-md text-sm transition-all " style="color:var(--text-muted)" onmouseover="this.style.background='var(--surface-raised)';this.style.color='var(--text)';" onmouseout="this.style.background='';this.style.color='var(--text-muted)';"> <span>Roadmap</span>  </a> </li> </ul> </div> </nav> </aside> <!-- Main content --> <main class="flex-1 min-w-0" id="main-content"> <div class="flex"> <!-- Spacer for sidebar on md+ --> <div class="hidden md:block flex-shrink-0" style="width:var(--sidebar-width)"></div> <!-- Article --> <article class="flex-1 min-w-0 px-6 md:px-10 lg:px-16 py-10 pb-20"> <div class="prose max-w-3xl mx-auto xl:max-w-none">  <p>Four diagrams covering every layer of the system. Paste any block into <a href="https://eraser.io">Eraser.io</a> (select the <strong>Mermaid</strong> renderer) or any Mermaid-compatible viewer.</p>
+<hr/>
+<h2 id="diagram-1--full-system-architecture">Diagram 1 — Full System Architecture</h2>
+<p>The complete topology: LAN clients, DNS, reverse proxy, all services, data layer, volumes, and the npm packages that developers use.</p>
+<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8;overflow-x:auto" tabindex="0" data-language="mermaid"><code><span class="line"><span style="color:#E1E4E8">graph TB</span></span>
+<span class="line"><span style="color:#E1E4E8">    classDef client  fill:#4A90D9,stroke:#2C5F8A,color:#fff,rx:6</span></span>
+<span class="line"><span style="color:#E1E4E8">    classDef exposed fill:#E07B39,stroke:#A85A1E,color:#fff,rx:6</span></span>
+<span class="line"><span style="color:#E1E4E8">    classDef service fill:#3A7D44,stroke:#245C2F,color:#fff,rx:6</span></span>
+<span class="line"><span style="color:#E1E4E8">    classDef admin   fill:#6B4C9A,stroke:#4A2F77,color:#fff,rx:6</span></span>
+<span class="line"><span style="color:#E1E4E8">    classDef data    fill:#7B5EA7,stroke:#593D84,color:#fff,rx:6</span></span>
+<span class="line"><span style="color:#E1E4E8">    classDef vol     fill:#8A6B3C,stroke:#5C4527,color:#fff,rx:6</span></span>
+<span class="line"><span style="color:#E1E4E8">    classDef pkg     fill:#2A7FA5,stroke:#1A5A7A,color:#fff,rx:6</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#E1E4E8">    subgraph LAN[&quot;Local Area Network  ·  *.{org}.local&quot;]</span></span>
+<span class="line"><span style="color:#E1E4E8">        subgraph Clients[&quot;Client Devices&quot;]</span></span>
+<span class="line"><span style="color:#E1E4E8">            Browser[&quot;Browser\nNurse / end-user&quot;]:::client</span></span>
+<span class="line"><span style="color:#E1E4E8">            Dev[&quot;Developer machine\nnuble CLI  ·  @nublestation/sdk&quot;]:::client</span></span>
+<span class="line"><span style="color:#E1E4E8">        end</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#E1E4E8">        subgraph Host[&quot;Single Host Machine  (Ubuntu)&quot;]</span></span>
+<span class="line"><span style="color:#E1E4E8">            subgraph Compose[&quot;Docker Compose Stack  —  bridge network: nuble&quot;]</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#E1E4E8">                subgraph Edge[&quot;── LAN Edge  (reachable on host IP) ──&quot;]</span></span>
+<span class="line"><span style="color:#E1E4E8">                    CoreDNS[&quot;CoreDNS :53\n*.{org}.local → host IP\nforwards other queries upstream&quot;]:::exposed</span></span>
+<span class="line"><span style="color:#E1E4E8">                    Caddy[&quot;Caddy :80/:443\nReverse proxy · subdomain routing\ntry_files SPA fallback&quot;]:::exposed</span></span>
+<span class="line"><span style="color:#E1E4E8">                end</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#E1E4E8">                subgraph Svcs[&quot;── Internal Services  (Docker network only) ──&quot;]</span></span>
+<span class="line"><span style="color:#E1E4E8">                    GW[&quot;Gateway :3000\n━━━━━━━━━━━━━━━━━━━━━━\n① Parse Bearer nbl_keyId.secret\n② Argon2id verify → (appId, appSlug)\n③ Resolve session cookie → userId\n④ HMAC-sign + forward\n─ Only LAN-exposed API service ─&quot;]:::service</span></span>
+<span class="line"><span style="color:#E1E4E8">                    ID[&quot;Identity :3004\n━━━━━━━━━━━━━━━━━━\nLogin · Register · Authorize\nArgon2id passwords\nServer-side sessions\nShared-cookie SSO\n(ADR 014)&quot;]:::service</span></span>
+<span class="line"><span style="color:#E1E4E8">                    BL[&quot;Blaze :3001\n━━━━━━━━━━━━━━\nAuto-REST (Phase 3)\nRLS tenant isolation\nSET LOCAL app.current_tenant\nDrizzle ORM · pg-query-parser&quot;]:::service</span></span>
+<span class="line"><span style="color:#E1E4E8">                    VT[&quot;Vault :3003\n━━━━━━━━━━━━━━━━━━━\nFile CRUD + streaming\nOwnership · sharing grants\nMagic-byte MIME detection\npublic / private / shared\n(ADR 016)&quot;]:::service</span></span>
+<span class="line"><span style="color:#E1E4E8">                    OR[&quot;Orbit :3002\n━━━━━━━━━━━━━━━━━━\nMultipart zip upload\nAtomic bundle swap\ncurrent/ ↔ .previous/\nrecord in deployments\n(ADR 007)&quot;]:::service</span></span>
+<span class="line"><span style="color:#E1E4E8">                    CS[&quot;Console :3000\n━━━━━━━━━━━━━━━━━\nNext.js 14 App Router\nAdmin dashboard\nDirect SQL + HMAC\nno Gateway hop&quot;]:::admin</span></span>
+<span class="line"><span style="color:#E1E4E8">                end</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#E1E4E8">                subgraph Data[&quot;── Shared Infrastructure ──&quot;]</span></span>
+<span class="line"><span style="color:#E1E4E8">                    PG[&quot;PostgreSQL 16\nschema: platform\n  organizations · users · sessions\n  apps · api_keys · user_app_access\n  storage_files · vault_grants\n  deployments · audit_log\nschema: tenant_data  (RLS ON)\n  custom app tables&quot;]:::data</span></span>
+<span class="line"><span style="color:#E1E4E8">                    RD[&quot;Redis 7\nAPI-key hot cache\n(planned — sub-ms lookup)&quot;]:::data</span></span>
+<span class="line"><span style="color:#E1E4E8">                end</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#E1E4E8">                subgraph Vols[&quot;── Named Volumes ──&quot;]</span></span>
+<span class="line"><span style="color:#E1E4E8">                    AppVol[&quot;/var/nuble/apps\n{slug}/current/\n{slug}/.previous/&quot;]:::vol</span></span>
+<span class="line"><span style="color:#E1E4E8">                    StgVol[&quot;/var/nuble/storage\n{slug}/{collection}/{file}&quot;]:::vol</span></span>
+<span class="line"><span style="color:#E1E4E8">                end</span></span>
+<span class="line"><span style="color:#E1E4E8">            end</span></span>
+<span class="line"><span style="color:#E1E4E8">        end</span></span>
+<span class="line"><span style="color:#E1E4E8">    end</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#E1E4E8">    subgraph Pkgs[&quot;npm packages  (@nublestation/*)&quot;]</span></span>
+<span class="line"><span style="color:#E1E4E8">        SDK[&quot;sdk\napp-developer client\nauth · db · storage · deploy&quot;]:::pkg</span></span>
+<span class="line"><span style="color:#E1E4E8">        CLI[&quot;cli  (nuble)\ninit · deploy · status · server&quot;]:::pkg</span></span>
+<span class="line"><span style="color:#E1E4E8">        SH[&quot;shared\nhmac.ts · headers.ts\napi-key.ts&quot;]:::pkg</span></span>
+<span class="line"><span style="color:#E1E4E8">    end</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#E1E4E8">    %% DNS + HTTP entry</span></span>
+<span class="line"><span style="color:#E1E4E8">    Browser  --&gt;|&quot;DNS :53&quot;| CoreDNS</span></span>
+<span class="line"><span style="color:#E1E4E8">    Browser  --&gt;|&quot;HTTP :80  (app UI, Console login)&quot;| Caddy</span></span>
+<span class="line"><span style="color:#E1E4E8">    Dev      --&gt;|&quot;DNS :53&quot;| CoreDNS</span></span>
+<span class="line"><span style="color:#E1E4E8">    Dev      --&gt;|&quot;nuble deploy  POST api.{org}.local&quot;| Caddy</span></span>
+<span class="line"><span style="color:#E1E4E8">    Dev      -. &quot;SDK runtime calls  Bearer nbl_*&quot; .-&gt; Caddy</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#E1E4E8">    %% Caddy routing</span></span>
+<span class="line"><span style="color:#E1E4E8">    Caddy --&gt;|&quot;api.{org}.local&quot;| GW</span></span>
+<span class="line"><span style="color:#E1E4E8">    Caddy --&gt;|&quot;console.{org}.local&quot;| CS</span></span>
+<span class="line"><span style="color:#E1E4E8">    Caddy --&gt;|&quot;identity.{org}.local  (login page)&quot;| ID</span></span>
+<span class="line"><span style="color:#E1E4E8">    Caddy --&gt;|&quot;{app}.{org}.local\nfile_server + try_files&quot;| AppVol</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#E1E4E8">    %% Gateway → internal (HMAC signed)</span></span>
+<span class="line"><span style="color:#E1E4E8">    GW --&gt;|&quot;HMAC  x-nuble-{app-id,user-id,timestamp,sig}&quot;| BL</span></span>
+<span class="line"><span style="color:#E1E4E8">    GW --&gt;|&quot;HMAC  + x-nuble-app-slug&quot;| OR</span></span>
+<span class="line"><span style="color:#E1E4E8">    GW --&gt;|&quot;HMAC  + x-nuble-app-slug&quot;| VT</span></span>
+<span class="line"><span style="color:#E1E4E8">    GW --&gt;|&quot;cookie forward  (no HMAC)&quot;| ID</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#E1E4E8">    %% Console admin path (direct, bypasses Gateway)</span></span>
+<span class="line"><span style="color:#E1E4E8">    CS --&gt;|&quot;HMAC direct  (userId=console-admin)&quot;| VT</span></span>
+<span class="line"><span style="color:#E1E4E8">    CS --&gt;|&quot;HMAC direct  (userId=console-admin)&quot;| OR</span></span>
+<span class="line"><span style="color:#E1E4E8">    CS --&gt;|&quot;direct SQL  PLATFORM_DB_URL&quot;| PG</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#E1E4E8">    %% Services → data</span></span>
+<span class="line"><span style="color:#E1E4E8">    GW  -. &quot;api_key lookup\n(direct DB, bypass pool)&quot; .-&gt; PG</span></span>
+<span class="line"><span style="color:#E1E4E8">    GW  -.-&gt;|planned| RD</span></span>
+<span class="line"><span style="color:#E1E4E8">    BL  --&gt; PG</span></span>
+<span class="line"><span style="color:#E1E4E8">    VT  --&gt; PG</span></span>
+<span class="line"><span style="color:#E1E4E8">    ID  --&gt; PG</span></span>
+<span class="line"><span style="color:#E1E4E8">    OR  --&gt; PG</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#E1E4E8">    %% Services → volumes</span></span>
+<span class="line"><span style="color:#E1E4E8">    VT --&gt; StgVol</span></span>
+<span class="line"><span style="color:#E1E4E8">    OR --&gt; AppVol</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#E1E4E8">    %% Packages</span></span>
+<span class="line"><span style="color:#E1E4E8">    SDK -. &quot;app developer uses&quot; .-&gt; Dev</span></span>
+<span class="line"><span style="color:#E1E4E8">    CLI -. &quot;app developer uses&quot; .-&gt; Dev</span></span>
+<span class="line"><span style="color:#E1E4E8">    SH  -. &quot;imported by all services&quot; .-&gt; GW</span></span>
+<span class="line"><span style="color:#E1E4E8">    SH  -. &quot;imported by all services&quot; .-&gt; BL</span></span>
+<span class="line"><span style="color:#E1E4E8">    SH  -. &quot;imported by all services&quot; .-&gt; VT</span></span>
+<span class="line"><span style="color:#E1E4E8">    SH  -. &quot;imported by all services&quot; .-&gt; OR</span></span></code></pre>
+<hr/>
+<h2 id="diagram-2--end-to-end-request-lifecycle">Diagram 2 — End-to-End Request Lifecycle</h2>
+<p>A single SDK or CLI call, traced from DNS resolution through Gateway auth, HMAC signing, and the tenant-isolated database transaction.</p>
+<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8;overflow-x:auto" tabindex="0" data-language="mermaid"><code><span class="line"><span style="color:#E1E4E8">sequenceDiagram</span></span>
+<span class="line"><span style="color:#E1E4E8">    autonumber</span></span>
+<span class="line"><span style="color:#E1E4E8">    participant Dev  as Developer App&lt;br/&gt;(SDK / nuble CLI)</span></span>
+<span class="line"><span style="color:#E1E4E8">    participant DNS  as CoreDNS :53</span></span>
+<span class="line"><span style="color:#E1E4E8">    participant Cad  as Caddy :80</span></span>
+<span class="line"><span style="color:#E1E4E8">    participant GW   as Gateway :3000</span></span>
+<span class="line"><span style="color:#E1E4E8">    participant DB   as PostgreSQL&lt;br/&gt;platform schema</span></span>
+<span class="line"><span style="color:#E1E4E8">    participant Svc  as Internal Service&lt;br/&gt;(Blaze / Vault / Orbit)</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#E1E4E8">    Note over Dev,DNS: Phase 0 — DNS resolution (once per device)</span></span>
+<span class="line"><span style="color:#E1E4E8">    Dev  -&gt;&gt; DNS: A record?  api.clinic.local</span></span>
+<span class="line"><span style="color:#E1E4E8">    DNS  --&gt;&gt; Dev: 192.168.1.100  (host IP)</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#E1E4E8">    Note over Dev,GW: Phase 1 — API key auth (every request)</span></span>
+<span class="line"><span style="color:#E1E4E8">    Dev  -&gt;&gt; Cad: POST /v1/vault/files/docs/report.pdf&lt;br/&gt;Authorization: Bearer nbl_keyId.secret</span></span>
+<span class="line"><span style="color:#E1E4E8">    Cad  -&gt;&gt; GW:  forward to Gateway container</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#E1E4E8">    GW   -&gt;&gt; DB:  SELECT key_id, app_id, secret_hash, expires_at, revoked_at&lt;br/&gt;FROM platform.api_keys WHERE key_id = $1</span></span>
+<span class="line"><span style="color:#E1E4E8">    DB   --&gt;&gt; GW: row  (O(1) index scan on key_id)</span></span>
+<span class="line"><span style="color:#E1E4E8">    GW   -&gt;&gt; GW:  argon2Verify(secret, row.secret_hash)</span></span>
+<span class="line"><span style="color:#E1E4E8">    GW   -&gt;&gt; GW:  check revoked_at IS NULL  AND  expires_at &gt; now()</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#E1E4E8">    alt Key invalid / expired / revoked</span></span>
+<span class="line"><span style="color:#E1E4E8">        GW --&gt;&gt; Dev: 401  { code: &quot;unauthorized&quot; }</span></span>
+<span class="line"><span style="color:#E1E4E8">    end</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#E1E4E8">    Note over GW,Svc: Phase 2 — HMAC signing (Gateway → Service)</span></span>
+<span class="line"><span style="color:#E1E4E8">    GW   -&gt;&gt; GW:  bodyHash = sha256Hex(requestBody)</span></span>
+<span class="line"><span style="color:#E1E4E8">    GW   -&gt;&gt; GW:  canonical =&lt;br/&gt;  &quot;POST\n/v1/vault/files/docs/report.pdf\n{bodyHash}\n{timestamp}\n&quot;&lt;br/&gt;  + &quot;x-nuble-app-id:{appId}\n&quot;&lt;br/&gt;  + &quot;x-nuble-app-slug:{slug}\n&quot;&lt;br/&gt;  + &quot;x-nuble-user-id:{userId}\n&quot;</span></span>
+<span class="line"><span style="color:#E1E4E8">    GW   -&gt;&gt; GW:  sig = HMAC-SHA256(INTERNAL_HMAC_SECRET, canonical)</span></span>
+<span class="line"><span style="color:#E1E4E8">    GW   -&gt;&gt; Svc: POST /v1/vault/files/docs/report.pdf&lt;br/&gt;x-nuble-app-id: uuid&lt;br/&gt;x-nuble-app-slug: tasks&lt;br/&gt;x-nuble-user-id: uuid&lt;br/&gt;x-nuble-timestamp: 1716134400000&lt;br/&gt;x-nuble-sig: hex</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#E1E4E8">    Note over Svc: Phase 3 — HMAC verification (service middleware)</span></span>
+<span class="line"><span style="color:#E1E4E8">    Svc  -&gt;&gt; Svc:  |Δt| = |now - timestamp| ≤ 30 s ?</span></span>
+<span class="line"><span style="color:#E1E4E8">    Svc  -&gt;&gt; Svc:  rebuild canonical from incoming headers</span></span>
+<span class="line"><span style="color:#E1E4E8">    Svc  -&gt;&gt; Svc:  expected = HMAC-SHA256(INTERNAL_HMAC_SECRET, canonical)</span></span>
+<span class="line"><span style="color:#E1E4E8">    Svc  -&gt;&gt; Svc:  timingSafeEqual(expected, presented sig)  ✓</span></span>
+<span class="line"><span style="color:#E1E4E8">    Svc  -&gt;&gt; Svc:  c.var.appId = header value  (routes never read raw headers)</span></span>
+<span class="line"><span style="color:#E1E4E8">    Svc  -&gt;&gt; Svc:  c.var.userId = header value</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#E1E4E8">    Note over Svc,DB: Phase 4 — Tenant-isolated DB query (Blaze only)</span></span>
+<span class="line"><span style="color:#E1E4E8">    Svc  -&gt;&gt; DB:  BEGIN</span></span>
+<span class="line"><span style="color:#E1E4E8">    Svc  -&gt;&gt; DB:  SET LOCAL ROLE blaze_app  (drop superuser → RLS enforced)</span></span>
+<span class="line"><span style="color:#E1E4E8">    Svc  -&gt;&gt; DB:  SELECT set_config(&#39;app.current_tenant&#39;, &#39;appId&#39;, true)</span></span>
+<span class="line"><span style="color:#E1E4E8">    Svc  -&gt;&gt; DB:  SELECT * FROM tenant_data.tasks&lt;br/&gt;  RLS silently adds: WHERE app_id = current_setting(...)</span></span>
+<span class="line"><span style="color:#E1E4E8">    DB   --&gt;&gt; Svc: rows</span></span>
+<span class="line"><span style="color:#E1E4E8">    Svc  -&gt;&gt; DB:  COMMIT  (local variable auto-cleared — pool-safe)</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#E1E4E8">    Svc  --&gt;&gt; GW:  200  { data: [...] }</span></span>
+<span class="line"><span style="color:#E1E4E8">    GW   --&gt;&gt; Cad: relay response</span></span>
+<span class="line"><span style="color:#E1E4E8">    Cad  --&gt;&gt; Dev: 200  { data: [...] }</span></span></code></pre>
+<hr/>
+<h2 id="diagram-3--auth-flows">Diagram 3 — Auth Flows</h2>
+<p>Three distinct authentication paths: end-user session login (SSO), developer API key, and Console admin direct access.</p>
+<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8;overflow-x:auto" tabindex="0" data-language="mermaid"><code><span class="line"><span style="color:#E1E4E8">sequenceDiagram</span></span>
+<span class="line"><span style="color:#E1E4E8">    autonumber</span></span>
+<span class="line"><span style="color:#E1E4E8">    participant App   as Browser / App</span></span>
+<span class="line"><span style="color:#E1E4E8">    participant Cad   as Caddy</span></span>
+<span class="line"><span style="color:#E1E4E8">    participant GW    as Gateway</span></span>
+<span class="line"><span style="color:#E1E4E8">    participant ID    as Identity :3004</span></span>
+<span class="line"><span style="color:#E1E4E8">    participant Redis as Redis (planned)</span></span>
+<span class="line"><span style="color:#E1E4E8">    participant DB    as PostgreSQL</span></span>
+<span class="line"><span style="color:#E1E4E8">    participant CS    as Console</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#E1E4E8">    rect rgb(30, 60, 90)</span></span>
+<span class="line"><span style="color:#E1E4E8">        Note over App,DB: Path A — End-user session login (SSO)</span></span>
+<span class="line"><span style="color:#E1E4E8">        App  -&gt;&gt; Cad:  GET identity.{org}.local/login</span></span>
+<span class="line"><span style="color:#E1E4E8">        Cad  -&gt;&gt; ID:   forward</span></span>
+<span class="line"><span style="color:#E1E4E8">        ID   --&gt;&gt; App: HTML login form</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#E1E4E8">        App  -&gt;&gt; ID:   POST /login  { email, password }</span></span>
+<span class="line"><span style="color:#E1E4E8">        ID   -&gt;&gt; DB:   SELECT * FROM platform.users WHERE email = $1</span></span>
+<span class="line"><span style="color:#E1E4E8">        DB   --&gt;&gt; ID:  user row  (password_hash argon2id)</span></span>
+<span class="line"><span style="color:#E1E4E8">        ID   -&gt;&gt; ID:   argon2Verify(password, hash)  ✓</span></span>
+<span class="line"><span style="color:#E1E4E8">        ID   -&gt;&gt; DB:   INSERT INTO platform.sessions (id, user_id, token_hash, expires_at)</span></span>
+<span class="line"><span style="color:#E1E4E8">        ID   --&gt;&gt; App: Set-Cookie: nuble_session=token&lt;br/&gt;Domain=.{org}.local; HttpOnly; SameSite=Lax</span></span>
+<span class="line"><span style="color:#E1E4E8">        Note over App: Cookie auto-sent to ALL *.{org}.local subdomains (SSO)</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#E1E4E8">        App  -&gt;&gt; Cad:  GET tasks.{org}.local  (subsequent request)</span></span>
+<span class="line"><span style="color:#E1E4E8">        Cad  -&gt;&gt; GW:   forward  Cookie: nuble_session=token</span></span>
+<span class="line"><span style="color:#E1E4E8">        GW   -&gt;&gt; DB:   SELECT user_id FROM platform.sessions&lt;br/&gt;WHERE token_hash = sha256(token) AND expires_at &gt; now()</span></span>
+<span class="line"><span style="color:#E1E4E8">        DB   --&gt;&gt; GW:  { userId }</span></span>
+<span class="line"><span style="color:#E1E4E8">        GW   -&gt;&gt; GW:   proceed to HMAC-sign and forward</span></span>
+<span class="line"><span style="color:#E1E4E8">    end</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#E1E4E8">    rect rgb(20, 70, 40)</span></span>
+<span class="line"><span style="color:#E1E4E8">        Note over App,DB: Path B — API key auth (SDK / CLI)</span></span>
+<span class="line"><span style="color:#E1E4E8">        App  -&gt;&gt; GW:   any request&lt;br/&gt;Authorization: Bearer nbl_keyId.secret</span></span>
+<span class="line"><span style="color:#E1E4E8">        GW   -&gt;&gt; Redis: GET key:keyId  (planned hot-path)</span></span>
+<span class="line"><span style="color:#E1E4E8">        Redis --&gt;&gt; GW:  MISS</span></span>
+<span class="line"><span style="color:#E1E4E8">        GW   -&gt;&gt; DB:   SELECT id, app_id, secret_hash, expires_at, revoked_at&lt;br/&gt;FROM platform.api_keys JOIN platform.apps WHERE key_id = $1</span></span>
+<span class="line"><span style="color:#E1E4E8">        DB   --&gt;&gt; GW:  row</span></span>
+<span class="line"><span style="color:#E1E4E8">        GW   -&gt;&gt; GW:   argon2Verify(secret, row.secret_hash)  ✓</span></span>
+<span class="line"><span style="color:#E1E4E8">        GW   -&gt;&gt; Redis: SET key:keyId {appId,appSlug}  EX 300  (planned)</span></span>
+<span class="line"><span style="color:#E1E4E8">        GW   -&gt;&gt; GW:   proceed to HMAC-sign and forward</span></span>
+<span class="line"><span style="color:#E1E4E8">    end</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#E1E4E8">    rect rgb(70, 35, 15)</span></span>
+<span class="line"><span style="color:#E1E4E8">        Note over CS,DB: Path C — Console admin (direct HMAC, no Gateway hop)</span></span>
+<span class="line"><span style="color:#E1E4E8">        CS   -&gt;&gt; DB:   SELECT * FROM platform.storage_files  (direct SQL)</span></span>
+<span class="line"><span style="color:#E1E4E8">        CS   -&gt;&gt; VT:   POST /v1/vault/grants&lt;br/&gt;x-nuble-app-id: uuid&lt;br/&gt;x-nuble-user-id: console-admin&lt;br/&gt;x-nuble-sig: HMAC(INTERNAL_HMAC_SECRET, canonical)</span></span>
+<span class="line"><span style="color:#E1E4E8">        Note over CS: Console signs with the same INTERNAL_HMAC_SECRET.&lt;br/&gt;Services cannot distinguish Console from Gateway requests.</span></span>
+<span class="line"><span style="color:#E1E4E8">    end</span></span></code></pre>
+<hr/>
+<h2 id="diagram-4--platform-database-schema">Diagram 4 — Platform Database Schema</h2>
+<p>All tables in the <code>platform</code> schema and their relationships. The <code>tenant_data</code> schema holds developer-defined tables (with RLS ON) and is not shown here — every table in it gets an <code>app_id</code> column and an auto-generated RLS policy.</p>
+<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8;overflow-x:auto" tabindex="0" data-language="mermaid"><code><span class="line"><span style="color:#E1E4E8">erDiagram</span></span>
+<span class="line"><span style="color:#E1E4E8">    organizations {</span></span>
+<span class="line"><span style="color:#E1E4E8">        uuid   id              PK</span></span>
+<span class="line"><span style="color:#E1E4E8">        string name</span></span>
+<span class="line"><span style="color:#E1E4E8">        string subdomain_root</span></span>
+<span class="line"><span style="color:#E1E4E8">        string admin_email</span></span>
+<span class="line"><span style="color:#E1E4E8">        ts     created_at</span></span>
+<span class="line"><span style="color:#E1E4E8">    }</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#E1E4E8">    users {</span></span>
+<span class="line"><span style="color:#E1E4E8">        uuid   id              PK</span></span>
+<span class="line"><span style="color:#E1E4E8">        string email           UK</span></span>
+<span class="line"><span style="color:#E1E4E8">        string password_hash</span></span>
+<span class="line"><span style="color:#E1E4E8">        string display_name</span></span>
+<span class="line"><span style="color:#E1E4E8">        string avatar_url</span></span>
+<span class="line"><span style="color:#E1E4E8">        enum   role            &quot;super_admin | admin | end_user&quot;</span></span>
+<span class="line"><span style="color:#E1E4E8">        bool   is_active</span></span>
+<span class="line"><span style="color:#E1E4E8">        ts     created_at</span></span>
+<span class="line"><span style="color:#E1E4E8">    }</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#E1E4E8">    sessions {</span></span>
+<span class="line"><span style="color:#E1E4E8">        uuid   id              PK</span></span>
+<span class="line"><span style="color:#E1E4E8">        uuid   user_id         FK</span></span>
+<span class="line"><span style="color:#E1E4E8">        string token_hash      UK</span></span>
+<span class="line"><span style="color:#E1E4E8">        ts     expires_at</span></span>
+<span class="line"><span style="color:#E1E4E8">        ts     created_at</span></span>
+<span class="line"><span style="color:#E1E4E8">    }</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#E1E4E8">    apps {</span></span>
+<span class="line"><span style="color:#E1E4E8">        uuid   id              PK</span></span>
+<span class="line"><span style="color:#E1E4E8">        string name            UK &quot;slug — kebab-case&quot;</span></span>
+<span class="line"><span style="color:#E1E4E8">        string display_name</span></span>
+<span class="line"><span style="color:#E1E4E8">        uuid   owner_id        FK</span></span>
+<span class="line"><span style="color:#E1E4E8">        ts     created_at</span></span>
+<span class="line"><span style="color:#E1E4E8">    }</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#E1E4E8">    api_keys {</span></span>
+<span class="line"><span style="color:#E1E4E8">        uuid   id              PK</span></span>
+<span class="line"><span style="color:#E1E4E8">        uuid   app_id          FK</span></span>
+<span class="line"><span style="color:#E1E4E8">        string key_id          UK &quot;O(1) index — never secret&quot;</span></span>
+<span class="line"><span style="color:#E1E4E8">        string secret_hash        &quot;Argon2id&quot;</span></span>
+<span class="line"><span style="color:#E1E4E8">        string label</span></span>
+<span class="line"><span style="color:#E1E4E8">        ts     expires_at</span></span>
+<span class="line"><span style="color:#E1E4E8">        ts     revoked_at</span></span>
+<span class="line"><span style="color:#E1E4E8">        ts     created_at</span></span>
+<span class="line"><span style="color:#E1E4E8">    }</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#E1E4E8">    user_app_access {</span></span>
+<span class="line"><span style="color:#E1E4E8">        uuid   id              PK</span></span>
+<span class="line"><span style="color:#E1E4E8">        uuid   user_id         FK</span></span>
+<span class="line"><span style="color:#E1E4E8">        uuid   app_id          FK</span></span>
+<span class="line"><span style="color:#E1E4E8">        enum   role            &quot;admin | end_user&quot;</span></span>
+<span class="line"><span style="color:#E1E4E8">        ts     created_at</span></span>
+<span class="line"><span style="color:#E1E4E8">    }</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#E1E4E8">    app_tables {</span></span>
+<span class="line"><span style="color:#E1E4E8">        uuid   id              PK</span></span>
+<span class="line"><span style="color:#E1E4E8">        uuid   app_id          FK</span></span>
+<span class="line"><span style="color:#E1E4E8">        string table_name      UK &quot;org-wide unique&quot;</span></span>
+<span class="line"><span style="color:#E1E4E8">        json   schema_json        &quot;DSL definition&quot;</span></span>
+<span class="line"><span style="color:#E1E4E8">        ts     created_at</span></span>
+<span class="line"><span style="color:#E1E4E8">    }</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#E1E4E8">    deployments {</span></span>
+<span class="line"><span style="color:#E1E4E8">        uuid   id              PK</span></span>
+<span class="line"><span style="color:#E1E4E8">        uuid   app_id          FK</span></span>
+<span class="line"><span style="color:#E1E4E8">        string version            &quot;timestamp-based&quot;</span></span>
+<span class="line"><span style="color:#E1E4E8">        string file_path          &quot;/var/nuble/apps/{slug}/current&quot;</span></span>
+<span class="line"><span style="color:#E1E4E8">        uuid   deployed_by     FK</span></span>
+<span class="line"><span style="color:#E1E4E8">        ts     deployed_at</span></span>
+<span class="line"><span style="color:#E1E4E8">    }</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#E1E4E8">    storage_files {</span></span>
+<span class="line"><span style="color:#E1E4E8">        uuid   id              PK</span></span>
+<span class="line"><span style="color:#E1E4E8">        uuid   app_id          FK</span></span>
+<span class="line"><span style="color:#E1E4E8">        uuid   owner_id        FK</span></span>
+<span class="line"><span style="color:#E1E4E8">        string collection</span></span>
+<span class="line"><span style="color:#E1E4E8">        string filename</span></span>
+<span class="line"><span style="color:#E1E4E8">        string storage_path</span></span>
+<span class="line"><span style="color:#E1E4E8">        string mime_type</span></span>
+<span class="line"><span style="color:#E1E4E8">        int    size_bytes</span></span>
+<span class="line"><span style="color:#E1E4E8">        bool   is_public</span></span>
+<span class="line"><span style="color:#E1E4E8">        ts     created_at</span></span>
+<span class="line"><span style="color:#E1E4E8">    }</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#E1E4E8">    vault_grants {</span></span>
+<span class="line"><span style="color:#E1E4E8">        uuid   id              PK</span></span>
+<span class="line"><span style="color:#E1E4E8">        uuid   app_id          FK</span></span>
+<span class="line"><span style="color:#E1E4E8">        uuid   owner_id        FK</span></span>
+<span class="line"><span style="color:#E1E4E8">        uuid   grantee_user_id FK</span></span>
+<span class="line"><span style="color:#E1E4E8">        string collection</span></span>
+<span class="line"><span style="color:#E1E4E8">        string filename           &quot;null = entire collection&quot;</span></span>
+<span class="line"><span style="color:#E1E4E8">        enum   role            &quot;viewer | editor&quot;</span></span>
+<span class="line"><span style="color:#E1E4E8">        ts     created_at</span></span>
+<span class="line"><span style="color:#E1E4E8">    }</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#E1E4E8">    vault_settings {</span></span>
+<span class="line"><span style="color:#E1E4E8">        uuid     app_id        PK &quot;FK apps&quot;</span></span>
+<span class="line"><span style="color:#E1E4E8">        string[] allowed_ext</span></span>
+<span class="line"><span style="color:#E1E4E8">        int      max_file_bytes</span></span>
+<span class="line"><span style="color:#E1E4E8">    }</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#E1E4E8">    audit_log {</span></span>
+<span class="line"><span style="color:#E1E4E8">        uuid   id              PK</span></span>
+<span class="line"><span style="color:#E1E4E8">        uuid   actor_user_id   FK</span></span>
+<span class="line"><span style="color:#E1E4E8">        uuid   app_id          FK</span></span>
+<span class="line"><span style="color:#E1E4E8">        string action</span></span>
+<span class="line"><span style="color:#E1E4E8">        json   payload</span></span>
+<span class="line"><span style="color:#E1E4E8">        ts     created_at</span></span>
+<span class="line"><span style="color:#E1E4E8">    }</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#E1E4E8">    users            ||--o{ sessions          : &quot;has&quot;</span></span>
+<span class="line"><span style="color:#E1E4E8">    users            ||--o{ apps              : &quot;owns&quot;</span></span>
+<span class="line"><span style="color:#E1E4E8">    users            ||--o{ user_app_access   : &quot;granted to&quot;</span></span>
+<span class="line"><span style="color:#E1E4E8">    apps             ||--o{ user_app_access   : &quot;grants access&quot;</span></span>
+<span class="line"><span style="color:#E1E4E8">    apps             ||--o{ api_keys          : &quot;has&quot;</span></span>
+<span class="line"><span style="color:#E1E4E8">    apps             ||--o{ app_tables        : &quot;defines&quot;</span></span>
+<span class="line"><span style="color:#E1E4E8">    apps             ||--o{ deployments       : &quot;tracks&quot;</span></span>
+<span class="line"><span style="color:#E1E4E8">    apps             ||--|| vault_settings    : &quot;configures&quot;</span></span>
+<span class="line"><span style="color:#E1E4E8">    apps             ||--o{ storage_files     : &quot;contains&quot;</span></span>
+<span class="line"><span style="color:#E1E4E8">    users            ||--o{ storage_files     : &quot;owns&quot;</span></span>
+<span class="line"><span style="color:#E1E4E8">    storage_files    ||--o{ vault_grants      : &quot;shared via&quot;</span></span>
+<span class="line"><span style="color:#E1E4E8">    users            ||--o{ vault_grants      : &quot;grants (owner)&quot;</span></span>
+<span class="line"><span style="color:#E1E4E8">    users            ||--o{ vault_grants      : &quot;receives (grantee)&quot;</span></span>
+<span class="line"><span style="color:#E1E4E8">    users            ||--o{ audit_log         : &quot;actor&quot;</span></span>
+<span class="line"><span style="color:#E1E4E8">    apps             ||--o{ audit_log         : &quot;context&quot;</span></span></code></pre>
+<hr/>
+<h2 id="hmac-canonical-request-format">HMAC canonical request format</h2>
+<p>All four services (Blaze, Vault, Orbit, Identity) use the same signing contract defined in <code>packages/shared/src/hmac.ts</code>.</p>
+<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8;overflow-x:auto" tabindex="0" data-language="plaintext"><code><span class="line"><span>METHOD\n</span></span>
+<span class="line"><span>PATH\n</span></span>
+<span class="line"><span>BODY_SHA256_HEX\n</span></span>
+<span class="line"><span>TIMESTAMP_MS\n</span></span>
+<span class="line"><span>x-nuble-app-id:uuid\n</span></span>
+<span class="line"><span>x-nuble-app-slug:slug\n       ← Orbit and Vault only</span></span>
+<span class="line"><span>x-nuble-user-id:uuid\n</span></span></code></pre>
+<p>Context headers are sorted <strong>lexicographically</strong> before signing. Timestamp skew tolerance is <strong>±30 seconds</strong> (<code>HMAC_MAX_SKEW_MS = 30_000</code>).</p>
+<h2 id="eraserio-native-dsl-flowchart">Eraser.io native DSL (flowchart)</h2>
+<p>If you prefer Eraser’s own diagram language over Mermaid import, paste the block below into a new <strong>Flowchart</strong> diagram on Eraser.io:</p>
+<pre class="astro-code github-dark" style="background-color:#24292e;color:#e1e4e8;overflow-x:auto" tabindex="0" data-language="plaintext"><code><span class="line"><span>direction right</span></span>
+<span class="line"><span>title NubleStation — System Architecture</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>// LAN edge</span></span>
+<span class="line"><span>CoreDNS [icon: dns, color: orange, label: &quot;CoreDNS :53\n*.{org}.local → host IP&quot;]</span></span>
+<span class="line"><span>Caddy [icon: server, color: orange, label: &quot;Caddy :80/443\nReverse proxy&quot;]</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>// Internal services</span></span>
+<span class="line"><span>Gateway [icon: api-gateway, color: green, label: &quot;Gateway :3000\nKey auth · HMAC sign · Route&quot;]</span></span>
+<span class="line"><span>Identity [icon: shield, color: blue, label: &quot;Identity :3004\nSSO · Sessions · Login&quot;]</span></span>
+<span class="line"><span>Blaze [icon: database, color: green, label: &quot;Blaze :3001\nPostgres + RLS tenant isolation&quot;]</span></span>
+<span class="line"><span>Vault [icon: folder, color: green, label: &quot;Vault :3003\nFile storage · Ownership · Sharing&quot;]</span></span>
+<span class="line"><span>Orbit [icon: rocket, color: green, label: &quot;Orbit :3002\nAtomic bundle deploy&quot;]</span></span>
+<span class="line"><span>Console [icon: monitor, color: purple, label: &quot;Console :3000\nNext.js admin dashboard&quot;]</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>// Data</span></span>
+<span class="line"><span>PostgreSQL [icon: postgresql, color: purple, label: &quot;PostgreSQL 16\nplatform + tenant_data schemas&quot;]</span></span>
+<span class="line"><span>Redis [icon: redis, color: red, label: &quot;Redis (planned)\nAPI-key hot cache&quot;]</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>// Volumes</span></span>
+<span class="line"><span>AppVol [icon: hard-drive, label: &quot;/var/nuble/apps\n{slug}/current/&quot;]</span></span>
+<span class="line"><span>StgVol [icon: hard-drive, label: &quot;/var/nuble/storage\n{slug}/{collection}/{file}&quot;]</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>// Clients</span></span>
+<span class="line"><span>Browser [icon: globe, label: &quot;Browser\nNurse / end-user&quot;]</span></span>
+<span class="line"><span>Developer [icon: user, label: &quot;Developer\nCLI + SDK&quot;]</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>// DNS + HTTP</span></span>
+<span class="line"><span>Browser -&gt; CoreDNS: DNS :53</span></span>
+<span class="line"><span>Browser -&gt; Caddy: HTTP :80</span></span>
+<span class="line"><span>Developer -&gt; CoreDNS: DNS :53</span></span>
+<span class="line"><span>Developer -&gt; Caddy: nuble deploy</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>// Caddy routing</span></span>
+<span class="line"><span>Caddy -&gt; Gateway: api.{org}.local</span></span>
+<span class="line"><span>Caddy -&gt; Console: console.{org}.local</span></span>
+<span class="line"><span>Caddy -&gt; Identity: identity.{org}.local</span></span>
+<span class="line"><span>Caddy -&gt; AppVol: {app}.{org}.local (static SPA)</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>// Gateway → internal (HMAC signed)</span></span>
+<span class="line"><span>Gateway -&gt; Blaze: HMAC x-nuble-*</span></span>
+<span class="line"><span>Gateway -&gt; Vault: HMAC + x-nuble-app-slug</span></span>
+<span class="line"><span>Gateway -&gt; Orbit: HMAC + x-nuble-app-slug</span></span>
+<span class="line"><span>Gateway -&gt; Identity: cookie forward (no HMAC)</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>// Console admin (direct, no Gateway)</span></span>
+<span class="line"><span>Console -&gt; Vault: direct HMAC (userId=console-admin)</span></span>
+<span class="line"><span>Console -&gt; Orbit: direct HMAC (userId=console-admin)</span></span>
+<span class="line"><span>Console -&gt; PostgreSQL: direct SQL (PLATFORM_DB_URL)</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>// Services → data</span></span>
+<span class="line"><span>Blaze -&gt; PostgreSQL</span></span>
+<span class="line"><span>Vault -&gt; PostgreSQL</span></span>
+<span class="line"><span>Identity -&gt; PostgreSQL</span></span>
+<span class="line"><span>Orbit -&gt; PostgreSQL</span></span>
+<span class="line"><span>Gateway ..&gt; Redis: planned hot-path</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>// Services → volumes</span></span>
+<span class="line"><span>Vault -&gt; StgVol</span></span>
+<span class="line"><span>Orbit -&gt; AppVol</span></span></code></pre>  </div> <!-- Footer link --> <div class="mt-16 pt-6 flex justify-between gap-4 text-sm max-w-3xl mx-auto" style="border-top:1px solid var(--border)"> <span></span> <a href="https://github.com/NabilMouzouna/NubleStation/issues" target="_blank" rel="noopener" class="flex items-center gap-1.5 transition-colors" style="color:var(--text-muted)" onmouseover="this.style.color='var(--text)'" onmouseout="this.style.color='var(--text-muted)'">
+Edit on GitHub →
+</a> </div> </article> <!-- TOC --> <div class="hidden xl:block flex-shrink-0" style="width:var(--toc-width)"> <aside class="toc hidden xl:block" aria-label="Table of contents"><div class="sticky top-20 py-4"><p class="text-xs font-semibold uppercase tracking-widest mb-3 px-1" style="color:var(--text-muted)">On this page</p><ul class="space-y-0.5"><li><a href="#diagram-1--full-system-architecture" class="block text-sm py-1 px-1 rounded transition-colors truncate" style="color:var(--text-muted);padding-left:0.25rem" onmouseover="this.style.color='var(--text)'" onmouseout="this.style.color='var(--text-muted)'">Diagram 1 — Full System Architecture</a></li><li><a href="#diagram-2--end-to-end-request-lifecycle" class="block text-sm py-1 px-1 rounded transition-colors truncate" style="color:var(--text-muted);padding-left:0.25rem" onmouseover="this.style.color='var(--text)'" onmouseout="this.style.color='var(--text-muted)'">Diagram 2 — End-to-End Request Lifecycle</a></li><li><a href="#diagram-3--auth-flows" class="block text-sm py-1 px-1 rounded transition-colors truncate" style="color:var(--text-muted);padding-left:0.25rem" onmouseover="this.style.color='var(--text)'" onmouseout="this.style.color='var(--text-muted)'">Diagram 3 — Auth Flows</a></li><li><a href="#diagram-4--platform-database-schema" class="block text-sm py-1 px-1 rounded transition-colors truncate" style="color:var(--text-muted);padding-left:0.25rem" onmouseover="this.style.color='var(--text)'" onmouseout="this.style.color='var(--text-muted)'">Diagram 4 — Platform Database Schema</a></li><li><a href="#hmac-canonical-request-format" class="block text-sm py-1 px-1 rounded transition-colors truncate" style="color:var(--text-muted);padding-left:0.25rem" onmouseover="this.style.color='var(--text)'" onmouseout="this.style.color='var(--text-muted)'">HMAC canonical request format</a></li><li><a href="#eraserio-native-dsl-flowchart" class="block text-sm py-1 px-1 rounded transition-colors truncate" style="color:var(--text-muted);padding-left:0.25rem" onmouseover="this.style.color='var(--text)'" onmouseout="this.style.color='var(--text-muted)'">Eraser.io native DSL (flowchart)</a></li></ul></div></aside> </div> </div> </main> </div>  <button id="mobile-menu-btn" class="md:hidden fixed bottom-5 right-5 z-50 w-12 h-12 rounded-full shadow-lg flex items-center justify-center" style="background:var(--accent);color:white;" aria-label="Toggle menu"> <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"> <line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="18" x2="21" y2="18"></line> </svg> </button>  <div id="mobile-overlay" class="md:hidden fixed inset-0 z-40 hidden" style="background:rgba(0,0,0,0.5)"> <aside class="fixed top-0 left-0 bottom-0 overflow-y-auto w-72 shadow-2xl" style="background:var(--bg)"> <div class="flex items-center justify-between p-4 border-b" style="border-color:var(--border)"> <span class="font-semibold text-sm" style="color:var(--text)">Navigation</span> <button id="mobile-close" style="color:var(--text-muted)">✕</button> </div> <nav class="sidebar py-6 px-3" aria-label="Docs navigation"> <div class="mb-6"> <p class="px-3 mb-2 text-xs font-semibold uppercase tracking-widest" style="color:var(--text-muted)"> AI Agents </p> <ul> <li> <a href="/NubleStation/docs/agent" class="flex items-center justify-between px-3 py-1.5 rounded-md text-sm transition-all " style="color:var(--text-muted)" onmouseover="this.style.background='var(--surface-raised)';this.style.color='var(--text)';" onmouseout="this.style.background='';this.style.color='var(--text-muted)';"> <span>AGENT.md</span> <span class="text-xs px-1.5 py-0.5 rounded font-medium" style="background:#7c3aed18;color:#7c3aed;"> AI </span> </a> </li> </ul> </div><div class="mb-6"> <p class="px-3 mb-2 text-xs font-semibold uppercase tracking-widest" style="color:var(--text-muted)"> Getting Started </p> <ul> <li> <a href="/NubleStation/docs/getting-started/introduction" class="flex items-center justify-between px-3 py-1.5 rounded-md text-sm transition-all " style="color:var(--text-muted)" onmouseover="this.style.background='var(--surface-raised)';this.style.color='var(--text)';" onmouseout="this.style.background='';this.style.color='var(--text-muted)';"> <span>Introduction</span>  </a> </li><li> <a href="/NubleStation/docs/getting-started/installation" class="flex items-center justify-between px-3 py-1.5 rounded-md text-sm transition-all " style="color:var(--text-muted)" onmouseover="this.style.background='var(--surface-raised)';this.style.color='var(--text)';" onmouseout="this.style.background='';this.style.color='var(--text-muted)';"> <span>Installation</span>  </a> </li><li> <a href="/NubleStation/docs/getting-started/quick-start" class="flex items-center justify-between px-3 py-1.5 rounded-md text-sm transition-all " style="color:var(--text-muted)" onmouseover="this.style.background='var(--surface-raised)';this.style.color='var(--text)';" onmouseout="this.style.background='';this.style.color='var(--text-muted)';"> <span>Quick Start</span>  </a> </li> </ul> </div><div class="mb-6"> <p class="px-3 mb-2 text-xs font-semibold uppercase tracking-widest" style="color:var(--text-muted)"> Services </p> <ul> <li> <a href="/NubleStation/docs/services/gateway" class="flex items-center justify-between px-3 py-1.5 rounded-md text-sm transition-all " style="color:var(--text-muted)" onmouseover="this.style.background='var(--surface-raised)';this.style.color='var(--text)';" onmouseout="this.style.background='';this.style.color='var(--text-muted)';"> <span>Gateway</span>  </a> </li><li> <a href="/NubleStation/docs/services/deploy" class="flex items-center justify-between px-3 py-1.5 rounded-md text-sm transition-all " style="color:var(--text-muted)" onmouseover="this.style.background='var(--surface-raised)';this.style.color='var(--text)';" onmouseout="this.style.background='';this.style.color='var(--text-muted)';"> <span>Orbit — Deploy</span> <span class="text-xs px-1.5 py-0.5 rounded font-medium" style="background:#05966918;color:#059669;"> Live </span> </a> </li><li> <a href="/NubleStation/docs/services/database" class="flex items-center justify-between px-3 py-1.5 rounded-md text-sm transition-all " style="color:var(--text-muted)" onmouseover="this.style.background='var(--surface-raised)';this.style.color='var(--text)';" onmouseout="this.style.background='';this.style.color='var(--text-muted)';"> <span>Blaze — Database</span> <span class="text-xs px-1.5 py-0.5 rounded font-medium" style="background:#05966918;color:#059669;"> Live </span> </a> </li><li> <a href="/NubleStation/docs/services/storage" class="flex items-center justify-between px-3 py-1.5 rounded-md text-sm transition-all " style="color:var(--text-muted)" onmouseover="this.style.background='var(--surface-raised)';this.style.color='var(--text)';" onmouseout="this.style.background='';this.style.color='var(--text-muted)';"> <span>Vault — Storage</span> <span class="text-xs px-1.5 py-0.5 rounded font-medium" style="background:#05966918;color:#059669;"> Live </span> </a> </li><li> <a href="/NubleStation/docs/services/storage-access" class="flex items-center justify-between px-3 py-1.5 rounded-md text-sm transition-all " style="color:var(--text-muted)" onmouseover="this.style.background='var(--surface-raised)';this.style.color='var(--text)';" onmouseout="this.style.background='';this.style.color='var(--text-muted)';"> <span>Vault — Access Control</span> <span class="text-xs px-1.5 py-0.5 rounded font-medium" style="background:#05966918;color:#059669;"> Live </span> </a> </li><li> <a href="/NubleStation/docs/services/auth" class="flex items-center justify-between px-3 py-1.5 rounded-md text-sm transition-all " style="color:var(--text-muted)" onmouseover="this.style.background='var(--surface-raised)';this.style.color='var(--text)';" onmouseout="this.style.background='';this.style.color='var(--text-muted)';"> <span>Identity — Auth</span> <span class="text-xs px-1.5 py-0.5 rounded font-medium" style="background:#05966918;color:#059669;"> Live </span> </a> </li> </ul> </div><div class="mb-6"> <p class="px-3 mb-2 text-xs font-semibold uppercase tracking-widest" style="color:var(--text-muted)"> CLI </p> <ul> <li> <a href="/NubleStation/docs/cli/commands" class="flex items-center justify-between px-3 py-1.5 rounded-md text-sm transition-all " style="color:var(--text-muted)" onmouseover="this.style.background='var(--surface-raised)';this.style.color='var(--text)';" onmouseout="this.style.background='';this.style.color='var(--text-muted)';"> <span>Commands</span>  </a> </li> </ul> </div><div class="mb-6"> <p class="px-3 mb-2 text-xs font-semibold uppercase tracking-widest" style="color:var(--text-muted)"> Core Concepts </p> <ul> <li> <a href="/NubleStation/docs/concepts/architecture" class="flex items-center justify-between px-3 py-1.5 rounded-md text-sm transition-all " style="color:var(--text-muted)" onmouseover="this.style.background='var(--surface-raised)';this.style.color='var(--text)';" onmouseout="this.style.background='';this.style.color='var(--text-muted)';"> <span>Architecture</span>  </a> </li><li> <a href="/NubleStation/docs/concepts/networking" class="flex items-center justify-between px-3 py-1.5 rounded-md text-sm transition-all " style="color:var(--text-muted)" onmouseover="this.style.background='var(--surface-raised)';this.style.color='var(--text)';" onmouseout="this.style.background='';this.style.color='var(--text-muted)';"> <span>Networking</span>  </a> </li><li> <a href="/NubleStation/docs/concepts/multi-tenancy" class="flex items-center justify-between px-3 py-1.5 rounded-md text-sm transition-all " style="color:var(--text-muted)" onmouseover="this.style.background='var(--surface-raised)';this.style.color='var(--text)';" onmouseout="this.style.background='';this.style.color='var(--text-muted)';"> <span>Multi-tenancy</span>  </a> </li><li> <a href="/NubleStation/docs/concepts/apps-and-api-keys" class="flex items-center justify-between px-3 py-1.5 rounded-md text-sm transition-all " style="color:var(--text-muted)" onmouseover="this.style.background='var(--surface-raised)';this.style.color='var(--text)';" onmouseout="this.style.background='';this.style.color='var(--text-muted)';"> <span>Apps &amp; API Keys</span>  </a> </li><li> <a href="/NubleStation/docs/concepts/sessions-and-sso" class="flex items-center justify-between px-3 py-1.5 rounded-md text-sm transition-all " style="color:var(--text-muted)" onmouseover="this.style.background='var(--surface-raised)';this.style.color='var(--text)';" onmouseout="this.style.background='';this.style.color='var(--text-muted)';"> <span>Sessions &amp; SSO</span>  </a> </li> </ul> </div><div class="mb-6"> <p class="px-3 mb-2 text-xs font-semibold uppercase tracking-widest" style="color:var(--text-muted)"> Infrastructure </p> <ul> <li> <a href="/NubleStation/docs/infrastructure/docker-compose" class="flex items-center justify-between px-3 py-1.5 rounded-md text-sm transition-all " style="color:var(--text-muted)" onmouseover="this.style.background='var(--surface-raised)';this.style.color='var(--text)';" onmouseout="this.style.background='';this.style.color='var(--text-muted)';"> <span>Docker Compose</span>  </a> </li><li> <a href="/NubleStation/docs/infrastructure/caddy" class="flex items-center justify-between px-3 py-1.5 rounded-md text-sm transition-all " style="color:var(--text-muted)" onmouseover="this.style.background='var(--surface-raised)';this.style.color='var(--text)';" onmouseout="this.style.background='';this.style.color='var(--text-muted)';"> <span>Caddy</span>  </a> </li><li> <a href="/NubleStation/docs/infrastructure/coredns" class="flex items-center justify-between px-3 py-1.5 rounded-md text-sm transition-all " style="color:var(--text-muted)" onmouseover="this.style.background='var(--surface-raised)';this.style.color='var(--text)';" onmouseout="this.style.background='';this.style.color='var(--text-muted)';"> <span>CoreDNS</span>  </a> </li><li> <a href="/NubleStation/docs/infrastructure/dns-doctor" class="flex items-center justify-between px-3 py-1.5 rounded-md text-sm transition-all " style="color:var(--text-muted)" onmouseover="this.style.background='var(--surface-raised)';this.style.color='var(--text)';" onmouseout="this.style.background='';this.style.color='var(--text-muted)';"> <span>DNS Doctor</span>  </a> </li> </ul> </div><div class="mb-6"> <p class="px-3 mb-2 text-xs font-semibold uppercase tracking-widest" style="color:var(--text-muted)"> Security </p> <ul> <li> <a href="/NubleStation/docs/security/hmac-signing" class="flex items-center justify-between px-3 py-1.5 rounded-md text-sm transition-all " style="color:var(--text-muted)" onmouseover="this.style.background='var(--surface-raised)';this.style.color='var(--text)';" onmouseout="this.style.background='';this.style.color='var(--text-muted)';"> <span>HMAC Signing</span>  </a> </li><li> <a href="/NubleStation/docs/security/row-level-security" class="flex items-center justify-between px-3 py-1.5 rounded-md text-sm transition-all " style="color:var(--text-muted)" onmouseover="this.style.background='var(--surface-raised)';this.style.color='var(--text)';" onmouseout="this.style.background='';this.style.color='var(--text-muted)';"> <span>Row-Level Security</span>  </a> </li> </ul> </div><div class="mb-6"> <p class="px-3 mb-2 text-xs font-semibold uppercase tracking-widest" style="color:var(--text-muted)"> SDK </p> <ul> <li> <a href="/NubleStation/docs/sdk/overview" class="flex items-center justify-between px-3 py-1.5 rounded-md text-sm transition-all " style="color:var(--text-muted)" onmouseover="this.style.background='var(--surface-raised)';this.style.color='var(--text)';" onmouseout="this.style.background='';this.style.color='var(--text-muted)';"> <span>Overview</span>  </a> </li><li> <a href="/NubleStation/docs/sdk/client" class="flex items-center justify-between px-3 py-1.5 rounded-md text-sm transition-all " style="color:var(--text-muted)" onmouseover="this.style.background='var(--surface-raised)';this.style.color='var(--text)';" onmouseout="this.style.background='';this.style.color='var(--text-muted)';"> <span>@nublestation/client</span> <span class="text-xs px-1.5 py-0.5 rounded font-medium" style="background:#05966918;color:#059669;"> Live </span> </a> </li><li> <a href="/NubleStation/docs/sdk/storage" class="flex items-center justify-between px-3 py-1.5 rounded-md text-sm transition-all " style="color:var(--text-muted)" onmouseover="this.style.background='var(--surface-raised)';this.style.color='var(--text)';" onmouseout="this.style.background='';this.style.color='var(--text-muted)';"> <span>@nublestation/vault</span> <span class="text-xs px-1.5 py-0.5 rounded font-medium" style="background:#05966918;color:#059669;"> Live </span> </a> </li><li> <a href="/NubleStation/docs/sdk/auth" class="flex items-center justify-between px-3 py-1.5 rounded-md text-sm transition-all " style="color:var(--text-muted)" onmouseover="this.style.background='var(--surface-raised)';this.style.color='var(--text)';" onmouseout="this.style.background='';this.style.color='var(--text-muted)';"> <span>@nublestation/identity</span> <span class="text-xs px-1.5 py-0.5 rounded font-medium" style="background:#05966918;color:#059669;"> Live </span> </a> </li><li> <a href="/NubleStation/docs/sdk/database" class="flex items-center justify-between px-3 py-1.5 rounded-md text-sm transition-all " style="color:var(--text-muted)" onmouseover="this.style.background='var(--surface-raised)';this.style.color='var(--text)';" onmouseout="this.style.background='';this.style.color='var(--text-muted)';"> <span>@nublestation/blaze</span> <span class="text-xs px-1.5 py-0.5 rounded font-medium" style="background:#05966918;color:#059669;"> Live </span> </a> </li> </ul> </div><div class="mb-6"> <p class="px-3 mb-2 text-xs font-semibold uppercase tracking-widest" style="color:var(--text-muted)"> Reference </p> <ul> <li> <a href="/NubleStation/docs/reference/platform-schema" class="flex items-center justify-between px-3 py-1.5 rounded-md text-sm transition-all " style="color:var(--text-muted)" onmouseover="this.style.background='var(--surface-raised)';this.style.color='var(--text)';" onmouseout="this.style.background='';this.style.color='var(--text-muted)';"> <span>Platform Schema</span>  </a> </li><li> <a href="/NubleStation/docs/reference/troubleshooting" class="flex items-center justify-between px-3 py-1.5 rounded-md text-sm transition-all " style="color:var(--text-muted)" onmouseover="this.style.background='var(--surface-raised)';this.style.color='var(--text)';" onmouseout="this.style.background='';this.style.color='var(--text-muted)';"> <span>Troubleshooting</span>  </a> </li><li> <a href="/NubleStation/docs/reference/roadmap" class="flex items-center justify-between px-3 py-1.5 rounded-md text-sm transition-all " style="color:var(--text-muted)" onmouseover="this.style.background='var(--surface-raised)';this.style.color='var(--text)';" onmouseout="this.style.background='';this.style.color='var(--text-muted)';"> <span>Roadmap</span>  </a> </li> </ul> </div> </nav> </aside> </div> <script type="module">const o=document.getElementById("mobile-menu-btn"),n=document.getElementById("mobile-overlay"),d=document.getElementById("mobile-close");o?.addEventListener("click",()=>n?.classList.toggle("hidden"));d?.addEventListener("click",()=>n?.classList.add("hidden"));n?.addEventListener("click",t=>{t.target===n&&n.classList.add("hidden")});document.querySelectorAll(".prose pre").forEach(t=>{const e=document.createElement("button");e.className="copy-btn",e.textContent="Copy",t.appendChild(e),e.addEventListener("click",async()=>{const c=t.querySelector("code")?.innerText??t.innerText;try{await navigator.clipboard.writeText(c),e.textContent="Copied!",e.classList.add("copied")}catch{e.textContent="Failed"}setTimeout(()=>{e.textContent="Copy",e.classList.remove("copied")},2e3)})});</script>  </body></html>
