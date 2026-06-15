@@ -22,6 +22,18 @@
 
 ---
 
+## Watch the intro
+
+<div align="center">
+
+https://github.com/NabilMouzouna/NubleStation/raw/main/packages/assets/introducing%20Nublestation.mp4
+
+</div>
+
+> If the player doesn't load, [download the video](packages/assets/introducing%20Nublestation.mp4).
+
+---
+
 ## Services
 
 <table>
