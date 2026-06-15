@@ -26,11 +26,13 @@
 
 <div align="center">
 
-<video src="https://github.com/NabilMouzouna/NubleStation/raw/main/packages/assets/introducing%20Nublestation.mp4" controls width="720"></video>
+<a href="https://github.com/NabilMouzouna/NubleStation/raw/main/packages/assets/introducing%20Nublestation.mp4">
+  <img src="packages/assets/intro-thumbnail.jpg" width="720" alt="Introducing NubleStation — watch the intro video" />
+</a>
+
+<p><strong>▶ Click to watch the intro</strong> · 0:48</p>
 
 </div>
-
-> If the player doesn't load, [download the video](packages/assets/introducing%20Nublestation.mp4).
 
 ---
 
