@@ -26,7 +26,7 @@
 
 <div align="center">
 
-<a href="https://github.com/NabilMouzouna/NubleStation/raw/main/packages/assets/introducing%20Nublestation.mp4">
+<a href="https://github.com/NabilMouzouna/NubleStation/blob/main/packages/assets/introducing%20Nublestation.mp4">
   <img src="packages/assets/intro-thumbnail.jpg" width="720" alt="Introducing NubleStation — watch the intro video" />
 </a>
 
