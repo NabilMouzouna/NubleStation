@@ -19,7 +19,13 @@
     </a>
   </p>
 </div>
-
+<div>
+  <p>This Project is my Graduation project as a Network and Telecommunications Engineer, which was passed <strong>Successfully</strong></p>
+  <ul>
+    <li><a href="https://www.youtube.com/watch?v=3_BBOhN8AHE">Introducting NubleStation</a></li>
+    <li><a href="https://canva.link/6ge0832qdm04rvj">Nublestation - Graduation presentation</a></li>
+  </ul>
+</div>
 ---
 
 ## Watch the intro
